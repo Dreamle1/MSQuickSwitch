@@ -4,9 +4,10 @@ WinQuickSwitch is a small Windows 11 utility for reaching common display,
 audio, microphone, Bluetooth, and wired-device controls without digging through
 Settings.
 
-This repository contains the product plan, technical design, and the first
-functional slice. The four projection-mode controls are wired to Windows;
-audio and device work remains planned.
+This repository contains the product plan, technical design, and working
+display and audio inventory slices. Projection controls are wired to Windows,
+the current display topology is detected, and active audio endpoints and
+application sessions can be inspected.
 
 ## Planned first release
 
@@ -84,9 +85,10 @@ tests/
 
 ## Project status
 
-Display switching is implemented; capability/topology detection and attended
-hardware checks remain before M1 is complete. Read-only audio endpoint and
-session enumeration is the next feature slice.
+Display switching, topology detection, and capability state are implemented.
+Attended display-switch tests remain before M1 is signed off. M2 can enumerate
+playback/recording endpoints, distinguish default roles, and show active
+application sessions; automatic endpoint/session notifications remain next.
 
 ## License
 

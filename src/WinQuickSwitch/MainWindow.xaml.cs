@@ -1,6 +1,8 @@
 using System.Windows;
 using System.Windows.Controls;
+using WinQuickSwitch.Features.Audio;
 using WinQuickSwitch.Features.Display;
+using WinQuickSwitch.Platform.Windows.Audio;
 using WinQuickSwitch.Platform.Windows.Display;
 
 namespace WinQuickSwitch;
@@ -8,15 +10,25 @@ namespace WinQuickSwitch;
 public partial class MainWindow : Window
 {
     private readonly IDisplayModeService _displayModeService;
+    private readonly IDisplayTopologyService _displayTopologyService;
+    private readonly IAudioInventoryService _audioInventoryService;
     private readonly CancellationTokenSource _lifetimeCancellation = new();
 
-    public MainWindow() : this(new WindowsDisplayModeService())
+    public MainWindow() : this(
+        new WindowsDisplayModeService(),
+        new WindowsDisplayTopologyService(),
+        new WindowsAudioInventoryService())
     {
     }
 
-    internal MainWindow(IDisplayModeService displayModeService)
+    internal MainWindow(
+        IDisplayModeService displayModeService,
+        IDisplayTopologyService displayTopologyService,
+        IAudioInventoryService audioInventoryService)
     {
         _displayModeService = displayModeService;
+        _displayTopologyService = displayTopologyService;
+        _audioInventoryService = audioInventoryService;
         InitializeComponent();
     }
 
@@ -25,6 +37,12 @@ public partial class MainWindow : Window
         _lifetimeCancellation.Cancel();
         _lifetimeCancellation.Dispose();
         base.OnClosed(e);
+    }
+
+    private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
+    {
+        RefreshDisplayTopology();
+        await RefreshAudioInventoryAsync();
     }
 
     private async void ApplyDisplayMode_Click(object sender, RoutedEventArgs e)
@@ -52,6 +70,11 @@ public partial class MainWindow : Window
                 _lifetimeCancellation.Token);
 
             DisplayStatusText.Text = result.Message;
+
+            if (result.Succeeded)
+            {
+                RefreshDisplayTopology();
+            }
         }
         catch (OperationCanceledException) when (_lifetimeCancellation.IsCancellationRequested)
         {
@@ -62,6 +85,58 @@ public partial class MainWindow : Window
             if (!_lifetimeCancellation.IsCancellationRequested)
             {
                 DisplayModeButtons.IsEnabled = true;
+            }
+        }
+    }
+
+    private void RefreshDisplayTopology()
+    {
+        DisplayTopologySnapshot snapshot = _displayTopologyService.GetSnapshot();
+        DisplayStatusText.Text = snapshot.Status;
+
+        bool multiDisplayChoiceAvailable =
+            !snapshot.IsReliable || snapshot.SupportsMultipleDisplays;
+
+        DuplicateDisplayButton.IsEnabled = multiDisplayChoiceAvailable;
+        ExtendDisplayButton.IsEnabled = multiDisplayChoiceAvailable;
+    }
+
+    private async void RefreshAudio_Click(object sender, RoutedEventArgs e) =>
+        await RefreshAudioInventoryAsync();
+
+    private async Task RefreshAudioInventoryAsync()
+    {
+        RefreshAudioButton.IsEnabled = false;
+        AudioStatusText.Text = "Reading Windows audio state...";
+
+        try
+        {
+            AudioInventory inventory = await _audioInventoryService.GetInventoryAsync(
+                _lifetimeCancellation.Token);
+
+            PlaybackEndpointsList.ItemsSource = inventory.PlaybackEndpoints;
+            RecordingEndpointsList.ItemsSource = inventory.RecordingEndpoints;
+            AudioSessionsList.ItemsSource = inventory.Sessions;
+
+            AudioStatusText.Text =
+                $"{inventory.PlaybackEndpoints.Count} playback · " +
+                $"{inventory.RecordingEndpoints.Count} recording · " +
+                $"{inventory.Sessions.Count} active sessions · " +
+                $"updated {inventory.CapturedAt.ToLocalTime():t}";
+        }
+        catch (OperationCanceledException) when (_lifetimeCancellation.IsCancellationRequested)
+        {
+            // The window is closing; there is no status left to update.
+        }
+        catch (Exception exception)
+        {
+            AudioStatusText.Text = $"Audio inventory is unavailable: {exception.Message}";
+        }
+        finally
+        {
+            if (!_lifetimeCancellation.IsCancellationRequested)
+            {
+                RefreshAudioButton.IsEnabled = true;
             }
         }
     }

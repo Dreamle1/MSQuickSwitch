@@ -7,6 +7,7 @@
         MinWidth="620"
         MinHeight="480"
         Background="{StaticResource PageBrush}"
+        Loaded="MainWindow_Loaded"
         WindowStartupLocation="CenterScreen">
   <ScrollViewer VerticalScrollBarVisibility="Auto">
     <Grid Margin="24">
@@ -43,11 +44,13 @@
                     Content="PC screen only"
                     ToolTip="Use the primary PC display only" />
             <Button Style="{StaticResource ActionButton}"
+                    x:Name="DuplicateDisplayButton"
                     Tag="Duplicate"
                     Click="ApplyDisplayMode_Click"
                     Content="Duplicate"
                     ToolTip="Show the same desktop on each display" />
             <Button Style="{StaticResource ActionButton}"
+                    x:Name="ExtendDisplayButton"
                     Tag="Extend"
                     Click="ApplyDisplayMode_Click"
                     Content="Extend"
@@ -67,22 +70,80 @@
       </Border>
 
       <Border Grid.Row="2" Style="{StaticResource SectionCard}">
-        <Grid>
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="Auto" />
-          </Grid.ColumnDefinitions>
-          <StackPanel>
-            <TextBlock FontSize="18" FontWeight="SemiBold" Text="Audio" />
-            <TextBlock Margin="0,6,0,0"
-                       Foreground="{StaticResource SecondaryTextBrush}"
-                       Text="App volume, speakers, headphones, and microphones" />
-          </StackPanel>
-          <TextBlock Grid.Column="1"
-                     VerticalAlignment="Center"
+        <StackPanel>
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel>
+              <TextBlock FontSize="18" FontWeight="SemiBold" Text="Audio" />
+              <TextBlock Margin="0,6,0,0"
+                         Foreground="{StaticResource SecondaryTextBrush}"
+                         Text="Active endpoints and application audio sessions" />
+            </StackPanel>
+            <Button x:Name="RefreshAudioButton"
+                    Grid.Column="1"
+                    MinWidth="88"
+                    MinHeight="34"
+                    Padding="12,5"
+                    Click="RefreshAudio_Click"
+                    Content="Refresh" />
+          </Grid>
+
+          <TextBlock x:Name="AudioStatusText"
+                     Margin="0,12,0,0"
                      Foreground="{StaticResource SecondaryTextBrush}"
-                     Text="Milestones 2-3" />
-        </Grid>
+                     Text="Audio inventory has not been loaded." />
+
+          <Grid Margin="0,14,0,0">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="16" />
+              <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0">
+              <TextBlock Margin="0,0,0,6"
+                         FontWeight="SemiBold"
+                         Text="Playback" />
+              <ListBox x:Name="PlaybackEndpointsList"
+                       MinHeight="72"
+                       MaxHeight="130"
+                       DisplayMemberPath="DisplayLabel" />
+            </StackPanel>
+            <StackPanel Grid.Column="2">
+              <TextBlock Margin="0,0,0,6"
+                         FontWeight="SemiBold"
+                         Text="Microphones" />
+              <ListBox x:Name="RecordingEndpointsList"
+                       MinHeight="72"
+                       MaxHeight="130"
+                       DisplayMemberPath="DisplayLabel" />
+            </StackPanel>
+          </Grid>
+
+          <TextBlock Margin="0,14,0,6"
+                     FontWeight="SemiBold"
+                     Text="Active application sessions" />
+          <ListView x:Name="AudioSessionsList" MinHeight="80" MaxHeight="180">
+            <ListView.View>
+              <GridView>
+                <GridViewColumn Width="180"
+                                Header="Application"
+                                DisplayMemberBinding="{Binding ApplicationName}" />
+                <GridViewColumn Width="190"
+                                Header="Output"
+                                DisplayMemberBinding="{Binding EndpointName}" />
+                <GridViewColumn Width="70"
+                                Header="Volume"
+                                DisplayMemberBinding="{Binding VolumeLabel}" />
+                <GridViewColumn Width="60"
+                                Header="Muted"
+                                DisplayMemberBinding="{Binding MuteLabel}" />
+              </GridView>
+            </ListView.View>
+          </ListView>
+        </StackPanel>
       </Border>
 
       <Border Grid.Row="3" Style="{StaticResource SectionCard}">
@@ -107,7 +168,7 @@
       <TextBlock Grid.Row="4"
                  Margin="2,6,0,0"
                  Foreground="{StaticResource SecondaryTextBrush}"
-                 Text="Display controls are active. Audio and device controls are coming next." />
+                 Text="Display controls and read-only audio inventory are active." />
     </Grid>
   </ScrollViewer>
 </Window>

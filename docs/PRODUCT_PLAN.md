@@ -76,7 +76,8 @@ without needing an oral handoff.
 
 - [x] Add an `IDisplayModeService`.
 - [x] Invoke the built-in Windows display switch operation without a shell window.
-- Disable duplicate/extend choices that Windows reports as unavailable.
+- [x] Detect active/available paths and the current global topology.
+- [x] Disable duplicate/extend choices that Windows reports as unavailable.
 - [x] Add focused automated tests around command selection and result handling.
 - Manually test with one monitor and two monitors.
 
@@ -84,10 +85,10 @@ Exit: all four `Win + P` modes can be requested and failures remain recoverable.
 
 ### M2 - read-only audio inventory
 
-- Enumerate active render and capture endpoints.
-- Identify the current default endpoint for console, multimedia, and
+- [x] Enumerate active render and capture endpoints.
+- [x] Identify the current default endpoint for console, multimedia, and
   communications roles.
-- Enumerate active application audio sessions.
+- [x] Enumerate active application audio sessions.
 - Subscribe to device and session change notifications.
 
 Exit: the UI stays accurate while applications and headsets come and go.

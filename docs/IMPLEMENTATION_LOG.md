@@ -76,6 +76,61 @@ Not run automatically. On a machine with two displays, manually verify:
 
 ### Remaining M1 work
 
-- Detect topology/capabilities before enabling choices.
 - Run the attended one- and two-monitor matrix.
-- Add current-topology reporting once `QueryDisplayConfig` mapping is in place.
+
+## 2026-07-24 - display topology and read-only audio inventory
+
+### Implemented
+
+- Added a `QueryDisplayConfig` adapter for active and available display paths.
+- Added classification for PC-screen-only, second-screen-only, duplicate, and
+  extend topologies.
+- Reports hybrid duplicate-plus-extend layouts as custom/mixed instead of
+  inventing a global mode.
+- Disables duplicate and extend when Windows reliably reports fewer than two
+  available displays.
+- Added Core Audio endpoint enumeration for active playback and recording
+  devices.
+- Tracks console, multimedia, and communications default roles separately.
+- Added active application-session inventory with output endpoint, current
+  volume, and mute state.
+- Added a manual audio refresh and populated endpoint/session views.
+- Kept endpoint identifiers and session identifiers in memory; they are not
+  written to diagnostic output.
+
+### Automated verification
+
+Commands:
+
+```powershell
+.\.dotnet\dotnet.exe format .\WinQuickSwitch.sln --verify-no-changes --no-restore
+.\.dotnet\dotnet.exe build .\WinQuickSwitch.sln --configuration Release --no-restore
+.\.dotnet\dotnet.exe run --project .\tests\WinQuickSwitch.Tests\WinQuickSwitch.Tests.csproj --configuration Release --no-build
+.\.dotnet\dotnet.exe run --project .\tests\WinQuickSwitch.Tests\WinQuickSwitch.Tests.csproj --configuration Release --no-build -- --integration
+```
+
+Recorded results:
+
+- Release build: passed with 0 warnings and 0 errors.
+- Isolated checks: 19 passed, 0 failed.
+- Read-only live checks: 21 passed, 0 failed including the isolated checks.
+- Live display snapshot: extend, 3 active, 3 available.
+- Live audio snapshot: 7 playback endpoints, 3 recording endpoints, 1 active
+  session.
+- Display-changing commands invoked by verification: 0.
+- Volume/mute changes invoked by verification: 0.
+- Self-contained single-file publish: passed.
+- Published artifact: `artifacts/win-x64-m2/WinQuickSwitch.exe`
+  (`71,438,528` bytes).
+- Published SHA-256:
+  `09D3D4049D48C483098390D50AE3E09B4940A50135D534579DD03D59C9FCF26A`.
+
+The existing `artifacts/win-x64/WinQuickSwitch.exe` was running and therefore
+locked by Windows during the first publish attempt. It was left running and the
+new milestone build was written to `artifacts/win-x64-m2` instead.
+
+### Remaining work
+
+- M1 still needs attended switching tests on one- and two-monitor systems.
+- M2 still needs endpoint and session change notifications. Until then, use the
+  refresh button after connecting a device or starting/stopping audio.

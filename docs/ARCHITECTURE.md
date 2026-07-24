@@ -52,6 +52,12 @@ If reliable current-topology detection is needed, query the active display
 configuration through `QueryDisplayConfig`; keep that native mapping separate
 from the action request.
 
+The current implementation reads all display paths through
+`QueryDisplayConfig`, counts active and available targets, and classifies the
+four global projection modes. A hybrid topology that combines duplicate and
+extended paths is reported as custom/mixed instead of being forced into one of
+the four modes.
+
 Individual-monitor enable/disable and layout editing are intentionally
 excluded. They require substantially more display-configuration handling and
 are not equivalent to the four global projection modes.
@@ -79,6 +85,12 @@ scatter PolicyConfig declarations through feature code.
 
 Version 1 changes endpoints for explicit roles only. The UI should make clear
 whether it is changing console/multimedia, communications, or both.
+
+The current read-only implementation enumerates active render/capture
+endpoints, separately tracks console, multimedia, and communications defaults,
+and reads active sessions plus their current volume/mute state. Refresh is
+manual for now. Endpoint and session notifications are the remaining M2
+architecture work.
 
 ## Device adapter
 

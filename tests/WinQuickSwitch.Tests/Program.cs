@@ -1,14 +1,16 @@
+using WinQuickSwitch.Features.Audio;
 using WinQuickSwitch.Features.Display;
+using WinQuickSwitch.Platform.Windows.Audio;
 using WinQuickSwitch.Platform.Windows.Display;
 
 namespace WinQuickSwitch.Tests;
 
 internal static class Program
 {
-    public static async Task<int> Main()
+    public static async Task<int> Main(string[] args)
     {
-        var tests = new (string Name, Func<Task> Run)[]
-        {
+        List<(string Name, Func<Task> Run)> tests =
+        [
             ("PC screen only uses /internal", () => MapsMode(DisplayMode.PcScreenOnly, "/internal")),
             ("Duplicate uses /clone", () => MapsMode(DisplayMode.Duplicate, "/clone")),
             ("Extend uses /extend", () => MapsMode(DisplayMode.Extend, "/extend")),
@@ -19,7 +21,22 @@ internal static class Program
             ("Cancellation is preserved", CancellationIsPreserved),
             ("Unknown modes are rejected before process execution", UnknownModeIsRejected),
             ("Hidden process runner returns the process exit code", HiddenProcessRunnerReturnsExitCode),
-        };
+            ("Single internal display is classified as PC screen only", SingleInternalDisplayIsClassified),
+            ("Single external display is classified as second screen only", SingleExternalDisplayIsClassified),
+            ("Shared display source is classified as duplicate", SharedSourceIsClassifiedAsDuplicate),
+            ("Distinct display sources are classified as extend", DistinctSourcesAreClassifiedAsExtend),
+            ("Mixed display sources are not mislabeled", MixedSourcesAreNotMislabeled),
+            ("Inactive available display enables multi-display choices", AvailableInactiveDisplayEnablesChoices),
+            ("No active display produces an unreliable snapshot", NoActiveDisplayIsUnreliable),
+            ("Audio endpoint labels include default roles", AudioEndpointLabelsIncludeRoles),
+            ("Audio session volume is formatted and clamped", AudioSessionVolumeIsFormatted),
+        ];
+
+        if (args.Contains("--integration", StringComparer.OrdinalIgnoreCase))
+        {
+            tests.Add(("Live display topology can be read", LiveDisplayTopologyCanBeRead));
+            tests.Add(("Live Core Audio inventory can be read", LiveAudioInventoryCanBeRead));
+        }
 
         int failed = 0;
 
@@ -39,9 +56,162 @@ internal static class Program
         }
 
         Console.WriteLine();
-        Console.WriteLine($"{tests.Length - failed}/{tests.Length} tests passed.");
+        Console.WriteLine($"{tests.Count - failed}/{tests.Count} tests passed.");
         return failed == 0 ? 0 : 1;
     }
+
+    private static Task SingleInternalDisplayIsClassified()
+    {
+        DisplayTopologySnapshot snapshot = DisplayTopologyClassifier.Classify(
+        [
+            DisplayPath(1, 0, 10, DisplayOutputTechnology.DisplayPortEmbedded, true, true),
+        ]);
+
+        Equal(DisplayMode.PcScreenOnly, snapshot.CurrentMode);
+        True(snapshot.IsReliable, "A reported active path should be reliable.");
+        return Task.CompletedTask;
+    }
+
+    private static Task SingleExternalDisplayIsClassified()
+    {
+        DisplayTopologySnapshot snapshot = DisplayTopologyClassifier.Classify(
+        [
+            DisplayPath(1, 0, 10, DisplayOutputTechnology.Hdmi, true, true),
+        ]);
+
+        Equal(DisplayMode.SecondScreenOnly, snapshot.CurrentMode);
+        return Task.CompletedTask;
+    }
+
+    private static Task SharedSourceIsClassifiedAsDuplicate()
+    {
+        DisplayTopologySnapshot snapshot = DisplayTopologyClassifier.Classify(
+        [
+            DisplayPath(1, 0, 10, DisplayOutputTechnology.DisplayPortEmbedded, true, true),
+            DisplayPath(1, 0, 11, DisplayOutputTechnology.Hdmi, true, true),
+        ]);
+
+        Equal(DisplayMode.Duplicate, snapshot.CurrentMode);
+        Equal(2, snapshot.ActiveDisplayCount);
+        return Task.CompletedTask;
+    }
+
+    private static Task DistinctSourcesAreClassifiedAsExtend()
+    {
+        DisplayTopologySnapshot snapshot = DisplayTopologyClassifier.Classify(
+        [
+            DisplayPath(1, 0, 10, DisplayOutputTechnology.DisplayPortEmbedded, true, true),
+            DisplayPath(1, 1, 11, DisplayOutputTechnology.Hdmi, true, true),
+        ]);
+
+        Equal(DisplayMode.Extend, snapshot.CurrentMode);
+        return Task.CompletedTask;
+    }
+
+    private static Task AvailableInactiveDisplayEnablesChoices()
+    {
+        DisplayTopologySnapshot snapshot = DisplayTopologyClassifier.Classify(
+        [
+            DisplayPath(1, 0, 10, DisplayOutputTechnology.DisplayPortEmbedded, true, true),
+            DisplayPath(1, 1, 11, DisplayOutputTechnology.Hdmi, false, true),
+        ]);
+
+        Equal(1, snapshot.ActiveDisplayCount);
+        Equal(2, snapshot.AvailableDisplayCount);
+        True(snapshot.SupportsMultipleDisplays, "The inactive available target should count.");
+        return Task.CompletedTask;
+    }
+
+    private static Task MixedSourcesAreNotMislabeled()
+    {
+        DisplayTopologySnapshot snapshot = DisplayTopologyClassifier.Classify(
+        [
+            DisplayPath(1, 0, 10, DisplayOutputTechnology.DisplayPortEmbedded, true, true),
+            DisplayPath(1, 0, 11, DisplayOutputTechnology.Hdmi, true, true),
+            DisplayPath(1, 1, 12, DisplayOutputTechnology.DisplayPortExternal, true, true),
+        ]);
+
+        True(snapshot.CurrentMode is null, "A mixed topology should not be called duplicate or extend.");
+        Contains("Custom or mixed", snapshot.Status);
+        return Task.CompletedTask;
+    }
+
+    private static Task NoActiveDisplayIsUnreliable()
+    {
+        DisplayTopologySnapshot snapshot = DisplayTopologyClassifier.Classify(
+        [
+            DisplayPath(1, 0, 10, DisplayOutputTechnology.Hdmi, false, true),
+        ]);
+
+        True(!snapshot.IsReliable, "A snapshot without an active path is not reliable.");
+        True(snapshot.CurrentMode is null, "An unreliable snapshot should not invent a mode.");
+        return Task.CompletedTask;
+    }
+
+    private static Task AudioEndpointLabelsIncludeRoles()
+    {
+        AudioEndpointInfo endpoint = new(
+            "test-id",
+            "USB Headset",
+            AudioEndpointKind.Playback,
+            IsConsoleDefault: true,
+            IsMultimediaDefault: true,
+            IsCommunicationsDefault: true);
+
+        Equal("USB Headset (default, communications)", endpoint.DisplayLabel);
+        return Task.CompletedTask;
+    }
+
+    private static Task AudioSessionVolumeIsFormatted()
+    {
+        AudioSessionInfo normal = new("1", "Player", "Speakers", 0.426f, false);
+        AudioSessionInfo high = new("2", "Player", "Speakers", 1.5f, true);
+
+        Equal("43%", normal.VolumeLabel);
+        Equal("100%", high.VolumeLabel);
+        Equal("Yes", high.MuteLabel);
+        return Task.CompletedTask;
+    }
+
+    private static Task LiveDisplayTopologyCanBeRead()
+    {
+        DisplayTopologySnapshot snapshot = new WindowsDisplayTopologyService().GetSnapshot();
+
+        True(snapshot.IsReliable, snapshot.Status);
+        True(snapshot.ActiveDisplayCount > 0, "Windows should report an active display.");
+        Console.WriteLine(
+            $"     topology={snapshot.CurrentMode}, " +
+            $"active={snapshot.ActiveDisplayCount}, " +
+            $"available={snapshot.AvailableDisplayCount}");
+
+        return Task.CompletedTask;
+    }
+
+    private static async Task LiveAudioInventoryCanBeRead()
+    {
+        AudioInventory inventory = await new WindowsAudioInventoryService().GetInventoryAsync();
+
+        foreach (AudioSessionInfo session in inventory.Sessions)
+        {
+            True(
+                session.Volume is >= 0 and <= 1,
+                $"Session volume for {session.ApplicationName} was outside 0-1.");
+        }
+
+        Console.WriteLine(
+            $"     playback={inventory.PlaybackEndpoints.Count}, " +
+            $"recording={inventory.RecordingEndpoints.Count}, " +
+            $"sessions={inventory.Sessions.Count}");
+    }
+
+    private static DisplayPathDescriptor DisplayPath(
+        long adapterId,
+        uint sourceId,
+        uint targetId,
+        DisplayOutputTechnology technology,
+        bool active,
+        bool available) =>
+        new(adapterId, sourceId, targetId, technology, active, available);
 
     private static async Task MapsMode(DisplayMode mode, string expectedArgument)
     {
