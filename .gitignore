@@ -1,0 +1,33 @@
+# Build output
+[Bb]in/
+[Oo]bj/
+[Aa]rtifacts/
+[Pp]ublish/
+
+# Visual Studio and Rider
+.vs/
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Test and coverage output
+TestResults/
+coverage/
+*.coverage
+*.coveragexml
+
+# Packages and local tooling
+packages/
+.nuget/
+.dotnet/
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Logs and local settings
+*.log
+appsettings.local.json

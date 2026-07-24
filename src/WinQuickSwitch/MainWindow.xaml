@@ -1,0 +1,91 @@
+<Window x:Class="WinQuickSwitch.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="WinQuickSwitch"
+        Width="760"
+        Height="620"
+        MinWidth="620"
+        MinHeight="480"
+        Background="{StaticResource PageBrush}"
+        WindowStartupLocation="CenterScreen">
+  <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <Grid Margin="24">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+      </Grid.RowDefinitions>
+
+      <StackPanel Grid.Row="0" Margin="0,0,0,20">
+        <TextBlock FontSize="28" FontWeight="SemiBold" Text="Quick controls" />
+        <TextBlock Margin="0,6,0,0"
+                   Foreground="{StaticResource SecondaryTextBrush}"
+                   Text="Display, audio, and connected devices in one place." />
+      </StackPanel>
+
+      <Border Grid.Row="1" Style="{StaticResource SectionCard}">
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+          <StackPanel>
+            <TextBlock FontSize="18" FontWeight="SemiBold" Text="Display mode" />
+            <TextBlock Margin="0,6,0,0"
+                       Foreground="{StaticResource SecondaryTextBrush}"
+                       Text="PC screen only, duplicate, extend, or second screen only" />
+          </StackPanel>
+          <TextBlock Grid.Column="1"
+                     VerticalAlignment="Center"
+                     Foreground="{StaticResource SecondaryTextBrush}"
+                     Text="Milestone 1" />
+        </Grid>
+      </Border>
+
+      <Border Grid.Row="2" Style="{StaticResource SectionCard}">
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+          <StackPanel>
+            <TextBlock FontSize="18" FontWeight="SemiBold" Text="Audio" />
+            <TextBlock Margin="0,6,0,0"
+                       Foreground="{StaticResource SecondaryTextBrush}"
+                       Text="App volume, speakers, headphones, and microphones" />
+          </StackPanel>
+          <TextBlock Grid.Column="1"
+                     VerticalAlignment="Center"
+                     Foreground="{StaticResource SecondaryTextBrush}"
+                     Text="Milestones 2-3" />
+        </Grid>
+      </Border>
+
+      <Border Grid.Row="3" Style="{StaticResource SectionCard}">
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+          <StackPanel>
+            <TextBlock FontSize="18" FontWeight="SemiBold" Text="Devices" />
+            <TextBlock Margin="0,6,0,0"
+                       Foreground="{StaticResource SecondaryTextBrush}"
+                       Text="Bluetooth and wired devices currently connected" />
+          </StackPanel>
+          <TextBlock Grid.Column="1"
+                     VerticalAlignment="Center"
+                     Foreground="{StaticResource SecondaryTextBrush}"
+                     Text="Milestone 4" />
+        </Grid>
+      </Border>
+
+      <TextBlock Grid.Row="4"
+                 Margin="2,6,0,0"
+                 Foreground="{StaticResource SecondaryTextBrush}"
+                 Text="Planning shell — hardware-changing controls are not connected yet." />
+    </Grid>
+  </ScrollViewer>
+</Window>
