@@ -4,9 +4,9 @@ WinQuickSwitch is a small Windows 11 utility for reaching common display,
 audio, microphone, Bluetooth, and wired-device controls without digging through
 Settings.
 
-This repository currently contains the product plan, technical design, and a
-minimal WPF application shell. Hardware-changing actions are intentionally not
-wired up yet.
+This repository contains the product plan, technical design, and the first
+functional slice. The four projection-mode controls are wired to Windows;
+audio and device work remains planned.
 
 ## Planned first release
 
@@ -59,23 +59,34 @@ single-file self-contained builds can be offered separately.
    dotnet run --project .\src\WinQuickSwitch\WinQuickSwitch.csproj
    ```
 
-The current machine used to create the repository has a .NET 8 desktop runtime
-but no .NET SDK, so the starter shell has not yet been compiled locally.
+5. Run the dependency-free automated tests:
+
+   ```powershell
+   dotnet run --project .\tests\WinQuickSwitch.Tests\WinQuickSwitch.Tests.csproj
+   ```
+
+A project-local SDK may also be installed in the ignored `.dotnet` directory.
+The implementation and exact verification history are recorded in
+[docs/IMPLEMENTATION_LOG.md](docs/IMPLEMENTATION_LOG.md).
 
 ## Repository layout
 
 ```text
 docs/
   ARCHITECTURE.md     Windows API choices, boundaries, and risks
+  IMPLEMENTATION_LOG.md  Completed work and verification evidence
   PRODUCT_PLAN.md     Scope, milestones, and acceptance criteria
 src/
-  WinQuickSwitch/     Minimal WPF application shell
+  WinQuickSwitch/     WPF application and Windows adapters
+tests/
+  WinQuickSwitch.Tests/  Dependency-free automated checks
 ```
 
 ## Project status
 
-Planning and scaffold complete. The next implementation slice is display-mode
-switching, followed by read-only audio endpoint and session enumeration.
+Display switching is implemented; capability/topology detection and attended
+hardware checks remain before M1 is complete. Read-only audio endpoint and
+session enumeration is the next feature slice.
 
 ## License
 

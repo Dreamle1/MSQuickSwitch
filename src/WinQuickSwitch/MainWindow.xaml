@@ -26,22 +26,44 @@
       </StackPanel>
 
       <Border Grid.Row="1" Style="{StaticResource SectionCard}">
-        <Grid>
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="Auto" />
-          </Grid.ColumnDefinitions>
+        <StackPanel>
           <StackPanel>
             <TextBlock FontSize="18" FontWeight="SemiBold" Text="Display mode" />
             <TextBlock Margin="0,6,0,0"
                        Foreground="{StaticResource SecondaryTextBrush}"
                        Text="PC screen only, duplicate, extend, or second screen only" />
           </StackPanel>
-          <TextBlock Grid.Column="1"
-                     VerticalAlignment="Center"
+
+          <WrapPanel x:Name="DisplayModeButtons"
+                     Margin="0,16,0,4"
+                     KeyboardNavigation.TabNavigation="Continue">
+            <Button Style="{StaticResource ActionButton}"
+                    Tag="PcScreenOnly"
+                    Click="ApplyDisplayMode_Click"
+                    Content="PC screen only"
+                    ToolTip="Use the primary PC display only" />
+            <Button Style="{StaticResource ActionButton}"
+                    Tag="Duplicate"
+                    Click="ApplyDisplayMode_Click"
+                    Content="Duplicate"
+                    ToolTip="Show the same desktop on each display" />
+            <Button Style="{StaticResource ActionButton}"
+                    Tag="Extend"
+                    Click="ApplyDisplayMode_Click"
+                    Content="Extend"
+                    ToolTip="Extend the desktop across displays" />
+            <Button Style="{StaticResource ActionButton}"
+                    Tag="SecondScreenOnly"
+                    Click="ApplyDisplayMode_Click"
+                    Content="Second screen only"
+                    ToolTip="Use the external display only" />
+          </WrapPanel>
+
+          <TextBlock x:Name="DisplayStatusText"
+                     Margin="0,4,0,0"
                      Foreground="{StaticResource SecondaryTextBrush}"
-                     Text="Milestone 1" />
-        </Grid>
+                     Text="Choose a projection mode." />
+        </StackPanel>
       </Border>
 
       <Border Grid.Row="2" Style="{StaticResource SectionCard}">
@@ -85,7 +107,7 @@
       <TextBlock Grid.Row="4"
                  Margin="2,6,0,0"
                  Foreground="{StaticResource SecondaryTextBrush}"
-                 Text="Planning shell — hardware-changing controls are not connected yet." />
+                 Text="Display controls are active. Audio and device controls are coming next." />
     </Grid>
   </ScrollViewer>
 </Window>

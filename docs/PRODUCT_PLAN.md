@@ -74,10 +74,10 @@ without needing an oral handoff.
 
 ### M1 - projection modes
 
-- Add an `IDisplayModeService`.
-- Invoke the built-in Windows display switch operation without a shell window.
+- [x] Add an `IDisplayModeService`.
+- [x] Invoke the built-in Windows display switch operation without a shell window.
 - Disable duplicate/extend choices that Windows reports as unavailable.
-- Add focused unit tests around command selection and result handling.
+- [x] Add focused automated tests around command selection and result handling.
 - Manually test with one monitor and two monitors.
 
 Exit: all four `Win + P` modes can be requested and failures remain recoverable.

@@ -4,6 +4,8 @@ VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WinQuickSwitch", "src\WinQuickSwitch\WinQuickSwitch.csproj", "{7A32F0F4-8A0F-4828-B34B-7EBDAF84972D}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WinQuickSwitch.Tests", "tests\WinQuickSwitch.Tests\WinQuickSwitch.Tests.csproj", "{87C66A97-DD94-4CFF-9D39-E9FAC412606A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -14,6 +16,10 @@ Global
 		{7A32F0F4-8A0F-4828-B34B-7EBDAF84972D}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{7A32F0F4-8A0F-4828-B34B-7EBDAF84972D}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{7A32F0F4-8A0F-4828-B34B-7EBDAF84972D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{87C66A97-DD94-4CFF-9D39-E9FAC412606A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{87C66A97-DD94-4CFF-9D39-E9FAC412606A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{87C66A97-DD94-4CFF-9D39-E9FAC412606A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{87C66A97-DD94-4CFF-9D39-E9FAC412606A}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
