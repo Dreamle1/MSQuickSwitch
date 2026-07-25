@@ -7,7 +7,8 @@ Settings.
 This repository contains the product plan, technical design, and working
 display and audio inventory slices. Projection controls are wired to Windows,
 the current display topology is detected, and active audio endpoints and
-application sessions can be inspected.
+application sessions load at startup and stay current through Windows audio
+notifications.
 
 ## Planned first release
 
@@ -83,7 +84,7 @@ Lite build:
 
 Output: `artifacts\win-x64-lite\WinQuickSwitch.exe`
 
-- Approximately 215 KB.
+- Approximately 229 KB.
 - Requires the .NET 10 Desktop Runtime on the destination computer.
 - Recommended when minimum download and app footprint matter most.
 
@@ -121,8 +122,9 @@ tests/
 Display switching, topology detection, and capability state are implemented.
 Attended display-switch tests remain before M1 is signed off. M2 can enumerate
 playback/recording endpoints, distinguish default roles, and show active
-application sessions on demand through **Refresh**; automatic endpoint/session
-notifications remain next.
+application sessions. It refreshes automatically at startup and when Windows
+reports endpoint, default-device, session, volume, or session-state changes.
+The **Refresh** button remains as a manual fallback. M3 audio controls are next.
 
 ## License
 

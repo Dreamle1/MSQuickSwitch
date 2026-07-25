@@ -3,9 +3,10 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="WinQuickSwitch"
         Width="760"
-        Height="620"
         MinWidth="620"
-        MinHeight="480"
+        MinHeight="680"
+        SizeToContent="Height"
+        MaxHeight="{Binding Source={x:Static SystemParameters.WorkArea}, Path=Height}"
         Background="{StaticResource PageBrush}"
         Loaded="MainWindow_Loaded"
         WindowStartupLocation="CenterScreen">
@@ -108,7 +109,7 @@
                          Text="Playback" />
               <ListBox x:Name="PlaybackEndpointsList"
                        MinHeight="72"
-                       MaxHeight="130"
+                       MaxHeight="190"
                        DisplayMemberPath="DisplayLabel" />
             </StackPanel>
             <StackPanel Grid.Column="2">
@@ -117,7 +118,7 @@
                          Text="Microphones" />
               <ListBox x:Name="RecordingEndpointsList"
                        MinHeight="72"
-                       MaxHeight="130"
+                       MaxHeight="190"
                        DisplayMemberPath="DisplayLabel" />
             </StackPanel>
           </Grid>

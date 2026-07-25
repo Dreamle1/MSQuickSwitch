@@ -93,9 +93,14 @@ whether it is changing console/multimedia, communications, or both.
 
 The current read-only implementation enumerates active render/capture
 endpoints, separately tracks console, multimedia, and communications defaults,
-and reads active sessions plus their current volume/mute state. Refresh is
-manual for now. Endpoint and session notifications are the remaining M2
-architecture work.
+and reads active sessions plus their current volume/mute state. A dedicated
+background MTA thread owns the Core Audio notification registrations. Device
+callbacks request a session-subscription rebuild; session-created, state,
+disconnect, and volume callbacks request an inventory refresh. Callbacks remain
+nonblocking, and a 350 ms debounce collapses Windows notification bursts into a
+single UI refresh. The watcher unregisters every callback before releasing its
+COM objects. The manual Refresh button remains available if registration is
+unsupported or Windows Audio is unavailable.
 
 ## Device adapter
 

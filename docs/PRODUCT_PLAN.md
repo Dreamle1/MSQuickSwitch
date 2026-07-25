@@ -89,7 +89,7 @@ Exit: all four `Win + P` modes can be requested and failures remain recoverable.
 - [x] Identify the current default endpoint for console, multimedia, and
   communications roles.
 - [x] Enumerate active application audio sessions.
-- Subscribe to device and session change notifications.
+- [x] Subscribe to device and session change notifications.
 
 Exit: the UI stays accurate while applications and headsets come and go.
 

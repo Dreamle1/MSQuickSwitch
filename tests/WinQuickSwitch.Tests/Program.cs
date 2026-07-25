@@ -28,14 +28,17 @@ internal static class Program
             ("Mixed display sources are not mislabeled", MixedSourcesAreNotMislabeled),
             ("Inactive available display enables multi-display choices", AvailableInactiveDisplayEnablesChoices),
             ("No active display produces an unreliable snapshot", NoActiveDisplayIsUnreliable),
-            ("Audio endpoint labels include default roles", AudioEndpointLabelsIncludeRoles),
+            ("Audio endpoint labels use the friendly name", AudioEndpointLabelsUseFriendlyName),
             ("Audio session volume is formatted and clamped", AudioSessionVolumeIsFormatted),
+            ("Audio refresh notifications are debounced", AudioRefreshNotificationsAreDebounced),
+            ("Disposed audio debounce cancels pending work", DisposedAudioDebounceCancelsWork),
         ];
 
         if (args.Contains("--integration", StringComparer.OrdinalIgnoreCase))
         {
             tests.Add(("Live display topology can be read", LiveDisplayTopologyCanBeRead));
             tests.Add(("Live Core Audio inventory can be read", LiveAudioInventoryCanBeRead));
+            tests.Add(("Live audio notification watcher starts and stops", LiveAudioWatcherStartsAndStops));
         }
 
         int failed = 0;
@@ -148,7 +151,7 @@ internal static class Program
         return Task.CompletedTask;
     }
 
-    private static Task AudioEndpointLabelsIncludeRoles()
+    private static Task AudioEndpointLabelsUseFriendlyName()
     {
         AudioEndpointInfo endpoint = new(
             "test-id",
@@ -158,7 +161,7 @@ internal static class Program
             IsMultimediaDefault: true,
             IsCommunicationsDefault: true);
 
-        Equal("USB Headset (default, communications)", endpoint.DisplayLabel);
+        Equal("USB Headset", endpoint.DisplayLabel);
         return Task.CompletedTask;
     }
 
@@ -171,6 +174,50 @@ internal static class Program
         Equal("100%", high.VolumeLabel);
         Equal("Yes", high.MuteLabel);
         return Task.CompletedTask;
+    }
+
+    private static async Task AudioRefreshNotificationsAreDebounced()
+    {
+        int callCount = 0;
+        TaskCompletionSource actionCompleted = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        using DebouncedActionScheduler scheduler = new(
+            TimeSpan.FromMilliseconds(40),
+            cancellationToken =>
+            {
+                Interlocked.Increment(ref callCount);
+                actionCompleted.TrySetResult();
+                return Task.CompletedTask;
+            });
+
+        scheduler.Schedule();
+        scheduler.Schedule();
+        scheduler.Schedule();
+
+        await actionCompleted.Task.WaitAsync(TimeSpan.FromSeconds(1));
+        await Task.Delay(80);
+
+        Equal(1, callCount);
+    }
+
+    private static async Task DisposedAudioDebounceCancelsWork()
+    {
+        int callCount = 0;
+        DebouncedActionScheduler scheduler = new(
+            TimeSpan.FromMilliseconds(80),
+            cancellationToken =>
+            {
+                Interlocked.Increment(ref callCount);
+                return Task.CompletedTask;
+            });
+
+        scheduler.Schedule();
+        scheduler.Dispose();
+        scheduler.Schedule();
+
+        await Task.Delay(140);
+        Equal(0, callCount);
     }
 
     private static Task LiveDisplayTopologyCanBeRead()
@@ -202,6 +249,13 @@ internal static class Program
             $"     playback={inventory.PlaybackEndpoints.Count}, " +
             $"recording={inventory.RecordingEndpoints.Count}, " +
             $"sessions={inventory.Sessions.Count}");
+    }
+
+    private static Task LiveAudioWatcherStartsAndStops()
+    {
+        using WindowsAudioChangeWatcher watcher = new();
+        watcher.Start();
+        return Task.CompletedTask;
     }
 
     private static DisplayPathDescriptor DisplayPath(

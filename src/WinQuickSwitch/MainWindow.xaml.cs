@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Threading;
 using WinQuickSwitch.Features.Audio;
 using WinQuickSwitch.Features.Display;
 using WinQuickSwitch.Platform.Windows.Audio;
@@ -12,35 +13,72 @@ public partial class MainWindow : Window
     private readonly IDisplayModeService _displayModeService;
     private readonly IDisplayTopologyService _displayTopologyService;
     private readonly IAudioInventoryService _audioInventoryService;
+    private readonly IAudioChangeWatcher _audioChangeWatcher;
+    private readonly DebouncedActionScheduler _audioRefreshScheduler;
+    private readonly SemaphoreSlim _audioRefreshGate = new(1, 1);
     private readonly CancellationTokenSource _lifetimeCancellation = new();
+    private string? _audioWatcherStatusSuffix;
 
     public MainWindow() : this(
         new WindowsDisplayModeService(),
         new WindowsDisplayTopologyService(),
-        new WindowsAudioInventoryService())
+        new WindowsAudioInventoryService(),
+        new WindowsAudioChangeWatcher())
     {
     }
 
     internal MainWindow(
         IDisplayModeService displayModeService,
         IDisplayTopologyService displayTopologyService,
-        IAudioInventoryService audioInventoryService)
+        IAudioInventoryService audioInventoryService,
+        IAudioChangeWatcher audioChangeWatcher)
     {
         _displayModeService = displayModeService;
         _displayTopologyService = displayTopologyService;
         _audioInventoryService = audioInventoryService;
+        _audioChangeWatcher = audioChangeWatcher;
         InitializeComponent();
+
+        _audioRefreshScheduler = new DebouncedActionScheduler(
+            TimeSpan.FromMilliseconds(350),
+            RefreshAudioFromNotificationAsync);
+        _audioChangeWatcher.Changed += AudioChangeWatcher_Changed;
     }
 
     protected override void OnClosed(EventArgs e)
     {
+        _audioRefreshScheduler.Dispose();
+        _audioChangeWatcher.Changed -= AudioChangeWatcher_Changed;
+        _audioChangeWatcher.Dispose();
         _lifetimeCancellation.Cancel();
         _lifetimeCancellation.Dispose();
         base.OnClosed(e);
     }
 
-    private void MainWindow_Loaded(object sender, RoutedEventArgs e) =>
+    private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
+    {
         RefreshDisplayTopology();
+
+        try
+        {
+            _audioChangeWatcher.Start();
+        }
+        catch (Exception)
+        {
+            _audioWatcherStatusSuffix = " · live updates unavailable; use Refresh";
+        }
+
+        await RefreshAudioInventoryAsync();
+    }
+
+    private void AudioChangeWatcher_Changed(object? sender, EventArgs e) =>
+        _audioRefreshScheduler.Schedule();
+
+    private Task RefreshAudioFromNotificationAsync(CancellationToken cancellationToken) =>
+        Dispatcher.InvokeAsync(
+            RefreshAudioInventoryAsync,
+            DispatcherPriority.Background,
+            cancellationToken).Task.Unwrap();
 
     private async void ApplyDisplayMode_Click(object sender, RoutedEventArgs e)
     {
@@ -103,11 +141,22 @@ public partial class MainWindow : Window
 
     private async Task RefreshAudioInventoryAsync()
     {
-        RefreshAudioButton.IsEnabled = false;
-        AudioStatusText.Text = "Reading Windows audio state...";
+        bool entered = false;
 
         try
         {
+            entered = await _audioRefreshGate.WaitAsync(
+                TimeSpan.Zero,
+                _lifetimeCancellation.Token);
+
+            if (!entered)
+            {
+                return;
+            }
+
+            RefreshAudioButton.IsEnabled = false;
+            AudioStatusText.Text = "Reading Windows audio state...";
+
             AudioInventory inventory = await _audioInventoryService.GetInventoryAsync(
                 _lifetimeCancellation.Token);
 
@@ -119,7 +168,8 @@ public partial class MainWindow : Window
                 $"{inventory.PlaybackEndpoints.Count} playback · " +
                 $"{inventory.RecordingEndpoints.Count} recording · " +
                 $"{inventory.Sessions.Count} active sessions · " +
-                $"updated {inventory.CapturedAt.ToLocalTime():t}";
+                $"updated {inventory.CapturedAt.ToLocalTime():t}" +
+                _audioWatcherStatusSuffix;
         }
         catch (OperationCanceledException) when (_lifetimeCancellation.IsCancellationRequested)
         {
@@ -131,9 +181,14 @@ public partial class MainWindow : Window
         }
         finally
         {
-            if (!_lifetimeCancellation.IsCancellationRequested)
+            if (entered)
             {
-                RefreshAudioButton.IsEnabled = true;
+                _audioRefreshGate.Release();
+
+                if (!_lifetimeCancellation.IsCancellationRequested)
+                {
+                    RefreshAudioButton.IsEnabled = true;
+                }
             }
         }
     }

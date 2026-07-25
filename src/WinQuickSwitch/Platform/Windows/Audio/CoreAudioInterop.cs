@@ -12,6 +12,14 @@ internal static class CoreAudioInterop
 
     public const ushort VariantTypeString = 31;
 
+    public const uint CoInitializeMultithreaded = 0;
+
+    [DllImport("ole32.dll")]
+    public static extern int CoInitializeEx(IntPtr reserved, uint coInitialize);
+
+    [DllImport("ole32.dll")]
+    public static extern void CoUninitialize();
+
     [DllImport("ole32.dll")]
     public static extern int PropVariantClear(ref PropVariant variant);
 }
@@ -51,6 +59,16 @@ internal enum AudioSessionState
     Inactive,
     Active,
     Expired,
+}
+
+internal enum AudioSessionDisconnectReason
+{
+    DeviceRemoval,
+    ServerShutdown,
+    FormatChanged,
+    SessionLogoff,
+    SessionDisconnected,
+    ExclusiveModeOverride,
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -94,9 +112,39 @@ internal interface IMMDeviceEnumerator
         [MarshalAs(UnmanagedType.LPWStr)] string id,
         out IMMDevice device);
 
-    void RegisterEndpointNotificationCallback(IntPtr client);
+    void RegisterEndpointNotificationCallback(
+        [MarshalAs(UnmanagedType.Interface)] IMMNotificationClient client);
 
-    void UnregisterEndpointNotificationCallback(IntPtr client);
+    void UnregisterEndpointNotificationCallback(
+        [MarshalAs(UnmanagedType.Interface)] IMMNotificationClient client);
+}
+
+[ComVisible(true)]
+[Guid("7991EEC9-7E89-4D85-8390-6C703CEC60C0")]
+[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+internal interface IMMNotificationClient
+{
+    [PreserveSig]
+    int OnDeviceStateChanged(
+        [MarshalAs(UnmanagedType.LPWStr)] string deviceId,
+        AudioDeviceState newState);
+
+    [PreserveSig]
+    int OnDeviceAdded([MarshalAs(UnmanagedType.LPWStr)] string deviceId);
+
+    [PreserveSig]
+    int OnDeviceRemoved([MarshalAs(UnmanagedType.LPWStr)] string deviceId);
+
+    [PreserveSig]
+    int OnDefaultDeviceChanged(
+        AudioDataFlow dataFlow,
+        AudioRole role,
+        [MarshalAs(UnmanagedType.LPWStr)] string? defaultDeviceId);
+
+    [PreserveSig]
+    int OnPropertyValueChanged(
+        [MarshalAs(UnmanagedType.LPWStr)] string deviceId,
+        PropertyKey propertyKey);
 }
 
 [ComImport]
@@ -162,15 +210,26 @@ internal interface IAudioSessionManager2
 
     void GetSessionEnumerator(out IAudioSessionEnumerator sessionEnumerator);
 
-    void RegisterSessionNotification(IntPtr sessionNotification);
+    void RegisterSessionNotification(
+        [MarshalAs(UnmanagedType.Interface)] IAudioSessionNotification sessionNotification);
 
-    void UnregisterSessionNotification(IntPtr sessionNotification);
+    void UnregisterSessionNotification(
+        [MarshalAs(UnmanagedType.Interface)] IAudioSessionNotification sessionNotification);
 
     void RegisterDuckNotification(
         [MarshalAs(UnmanagedType.LPWStr)] string sessionId,
         IntPtr duckNotification);
 
     void UnregisterDuckNotification(IntPtr duckNotification);
+}
+
+[ComVisible(true)]
+[Guid("641DD20B-4D41-49CC-ABA3-174B9477BB08")]
+[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+internal interface IAudioSessionNotification
+{
+    [PreserveSig]
+    int OnSessionCreated(IAudioSessionControl newSession);
 }
 
 [ComImport]
@@ -208,9 +267,49 @@ internal interface IAudioSessionControl
 
     void SetGroupingParam(ref Guid groupingId, IntPtr eventContext);
 
-    void RegisterAudioSessionNotification(IntPtr client);
+    void RegisterAudioSessionNotification(
+        [MarshalAs(UnmanagedType.Interface)] IAudioSessionEvents client);
 
-    void UnregisterAudioSessionNotification(IntPtr client);
+    void UnregisterAudioSessionNotification(
+        [MarshalAs(UnmanagedType.Interface)] IAudioSessionEvents client);
+}
+
+[ComVisible(true)]
+[Guid("24918ACC-64B3-37C1-8CA9-74A66E9957A8")]
+[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+internal interface IAudioSessionEvents
+{
+    [PreserveSig]
+    int OnDisplayNameChanged(
+        [MarshalAs(UnmanagedType.LPWStr)] string newDisplayName,
+        ref Guid eventContext);
+
+    [PreserveSig]
+    int OnIconPathChanged(
+        [MarshalAs(UnmanagedType.LPWStr)] string newIconPath,
+        ref Guid eventContext);
+
+    [PreserveSig]
+    int OnSimpleVolumeChanged(
+        float newVolume,
+        [MarshalAs(UnmanagedType.Bool)] bool newMute,
+        ref Guid eventContext);
+
+    [PreserveSig]
+    int OnChannelVolumeChanged(
+        uint channelCount,
+        IntPtr newChannelVolumes,
+        uint changedChannel,
+        ref Guid eventContext);
+
+    [PreserveSig]
+    int OnGroupingParamChanged(ref Guid newGroupingId, ref Guid eventContext);
+
+    [PreserveSig]
+    int OnStateChanged(AudioSessionState newState);
+
+    [PreserveSig]
+    int OnSessionDisconnected(AudioSessionDisconnectReason disconnectReason);
 }
 
 [ComImport]
@@ -236,9 +335,11 @@ internal interface IAudioSessionControl2
 
     void SetGroupingParam(ref Guid groupingId, IntPtr eventContext);
 
-    void RegisterAudioSessionNotification(IntPtr client);
+    void RegisterAudioSessionNotification(
+        [MarshalAs(UnmanagedType.Interface)] IAudioSessionEvents client);
 
-    void UnregisterAudioSessionNotification(IntPtr client);
+    void UnregisterAudioSessionNotification(
+        [MarshalAs(UnmanagedType.Interface)] IAudioSessionEvents client);
 
     void GetSessionIdentifier(
         [MarshalAs(UnmanagedType.LPWStr)] out string sessionIdentifier);
