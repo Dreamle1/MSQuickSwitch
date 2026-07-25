@@ -652,8 +652,63 @@ Outputs:
 
 ### Remaining resident work
 
-- Make the global shortcut configurable and disable-able.
 - Add optional start-with-Windows behavior.
 - Decide whether a tray icon adds enough value beyond the hotkey and visible
   Quit action.
 - Complete high-contrast, screen-reader, and 100-200% DPI validation.
+
+## 2026-07-25 - stable placement, configurable shortcuts, and themes
+
+### Implemented
+
+- Removed the repeated pointer-relative placement calls from reveal and panel
+  changes. The first reveal still uses the pointer's monitor work area; later
+  hide/show cycles retain the last window position.
+- Added an Options panel and `Ctrl + 4` panel shortcut.
+- Added editable global shortcuts for show/hide and direct Display, Audio, and
+  Devices access. A shortcut requires Ctrl, Alt, or Win plus A-Z, 0-9, or
+  F1-F12; Shift is optional.
+- Added duplicate detection and isolated native registration failures. A
+  conflicting direct-panel binding does not disable the show/hide binding or
+  other successful shortcuts.
+- Added a saved dark/light toggle. Dynamic WPF color resources update existing
+  controls immediately, shortcut fields use the app palette, and the native
+  title bar receives the matching DWM colors plus a frame refresh.
+- Added dependency-free JSON persistence at
+  `%LOCALAPPDATA%\WinQuickSwitch\settings.json` with atomic replacement.
+- Added an explicit test-instance identifier for isolated UI/package checks;
+  normal launches continue to use the same per-user singleton names.
+
+### Verification
+
+- Format verification: passed with no changes required.
+- Release build: passed with 0 warnings and 0 errors.
+- Isolated checks: 48 passed, 0 failed.
+- Read-only live checks: 52 passed, 0 failed.
+- Live topology: extend, 2 active displays, 2 available displays.
+- Live audio: 6 output endpoints, 3 input endpoints, 0 active applications.
+- Live audio watcher start, stop, restart, and final disposal: passed.
+- Live normalized device inventory: 13 Bluetooth, 8 wired.
+- Stable-position UI check: the widget remained at `674,434` across hide and
+  second-launch reveal.
+- Direct-panel UI check: a temporary `Ctrl + Alt + F12` binding revealed the
+  hidden widget with Audio active.
+- Visual checks: dark Options fields matched the dark palette; light mode
+  updated the window, controls, selection state, and native title bar.
+- All temporary UI-test settings were removed after verification. A previously
+  running widget process was not stopped or overwritten.
+- Lite and Portable options builds both started and remained resident until
+  their exact isolated test process was stopped.
+- Automated display-changing commands invoked: 0.
+
+Published options variants:
+
+| Variant | Bytes | SHA-256 |
+| --- | ---: | --- |
+| Lite | 314,059 | `30FF09811B6C55F6D00F20E299518357A7DB6D5304E6B469A866F483AFE1AADA` |
+| Portable | 64,858,466 | `86DD123ED7ED8CA4C0B8EAD09A05DFD71356131A2AD769C531263194B5403CB6` |
+
+Outputs:
+
+- `artifacts/win-x64-lite-options/WinQuickSwitch.exe`
+- `artifacts/win-x64-portable-options/WinQuickSwitch.exe`

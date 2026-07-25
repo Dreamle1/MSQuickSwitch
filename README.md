@@ -75,11 +75,12 @@ The implementation and exact verification history are recorded in
 ## Using the resident widget
 
 - Press `Win + Shift + Q` anywhere to show or hide WinQuickSwitch.
-- The widget opens beside the pointer and stays inside that monitor's work
-  area.
-- Select **Display**, **Audio**, or **Devices** to show one compact panel at a
-  time.
-- Press `Ctrl + 1`, `Ctrl + 2`, or `Ctrl + 3` to switch panels.
+- The first reveal opens beside the pointer and stays inside that monitor's
+  work area. Later hide/show cycles keep the same position, including a
+  position you dragged the widget to.
+- Select **Display**, **Audio**, **Devices**, or **Options** to show one compact
+  panel at a time.
+- Press `Ctrl + 1`, `Ctrl + 2`, `Ctrl + 3`, or `Ctrl + 4` to switch panels.
 - In Display, press `1` through `4` to request the corresponding projection
   mode.
 - In Audio, press `O`, `I`, or `A` to focus output, input, or application
@@ -88,10 +89,19 @@ The implementation and exact verification history are recorded in
   **Quit** to exit the resident process.
 - Starting WinQuickSwitch again reveals the existing instance instead of
   starting a second resident process.
+- In Options, select a shortcut field and press a modified letter, number, or
+  function key. Delete clears the field. Separate global shortcuts can toggle
+  the widget or open Display, Audio, or Devices directly.
+- The Options theme toggle changes both the widget and supported Windows title
+  bar colors immediately.
 
 Only the visible panel refreshes. The Core Audio notification watcher stops
 when Audio is not visible, and hidden device events only mark the inventory for
 refresh the next time Devices opens.
+
+Shortcuts and theme choice are saved to
+`%LOCALAPPDATA%\WinQuickSwitch\settings.json`. The app uses no registry setting
+and adds no settings dependency.
 
 ## Publishing
 
@@ -105,7 +115,7 @@ Lite build:
 
 Output: `artifacts\win-x64-lite\WinQuickSwitch.exe`
 
-- Approximately 296 KB for the current resident-widget build.
+- Approximately 314 KB for the current resident-widget build.
 - Requires the .NET 10 Desktop Runtime on the destination computer.
 - Recommended when minimum download and app footprint matter most.
 
@@ -142,13 +152,14 @@ tests/
 
 Display switching, topology detection, audio controls, and connected-device
 inventory are implemented. The resident slice adds a single-instance
-500-pixel widget with a native dark title bar, three mutually exclusive panels,
-pointer-aware multi-monitor placement, and the `Win + Shift + Q` global
-hotkey. Closing or clicking away hides the widget; **Quit** exits it. Hidden
-panels suspend their refresh work and the audio watcher, so residency does not
-turn into continuous polling. Hotkey configuration, startup registration,
-tray integration, accessibility/DPI validation, and release signing remain M5
-work.
+500-pixel widget with a theme-matched native title bar and four mutually
+exclusive panels. It places itself beside the pointer once, then keeps a stable
+position across hide/show. The default `Win + Shift + Q` shortcut and optional
+direct Display/Audio/Devices shortcuts are configurable in Options. Closing or
+clicking away hides the widget; **Quit** exits it. Hidden panels suspend their
+refresh work and the audio watcher, so residency does not turn into continuous
+polling. Startup registration, tray integration, accessibility/DPI validation,
+and release signing remain M5 work.
 
 ## License
 

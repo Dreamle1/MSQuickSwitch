@@ -118,11 +118,13 @@ as connected.
 ### M5 - polish and release
 
 - [x] Add the single-instance resident window lifecycle.
-- [x] Add a fixed `Win + Shift + Q` show/hide shortcut.
+- [x] Add a default `Win + Shift + Q` show/hide shortcut.
 - [x] Open beside the pointer and remain inside the nearest monitor work area.
 - [x] Add direct panel and menu keyboard navigation.
 - [x] Suspend panel refreshes and the Core Audio watcher while hidden.
-- Make the global hotkey configurable, with a conflict-safe disabled option.
+- [x] Make show/hide and direct-panel global shortcuts configurable, with
+  conflict-safe disabled options.
+- [x] Add a persisted dark/light theme option, including the native title bar.
 - Add optional start-with-Windows behavior and decide whether a tray icon adds
   enough value.
 - Complete screen-reader, high-contrast, and 100-200% DPI validation.

@@ -5,11 +5,14 @@ namespace WinQuickSwitch;
 
 public partial class App : Application
 {
-    private const string MutexName = @"Local\WinQuickSwitch.Resident.Singleton.v1";
-    private const string ActivationEventName =
-        @"Local\WinQuickSwitch.Resident.Activate.v1";
+    private const string InstanceIdEnvironmentVariable =
+        "WINQUICKSWITCH_INSTANCE_ID";
 
     private readonly CancellationTokenSource _activationCancellation = new();
+    private readonly string _mutexName = GetScopedName(
+        @"Local\WinQuickSwitch.Resident.Singleton.v1");
+    private readonly string _activationEventName = GetScopedName(
+        @"Local\WinQuickSwitch.Resident.Activate.v1");
     private Mutex? _singleInstanceMutex;
     private EventWaitHandle? _activationEvent;
     private Task? _activationListener;
@@ -21,7 +24,7 @@ public partial class App : Application
 
         _singleInstanceMutex = new Mutex(
             initiallyOwned: true,
-            MutexName,
+            _mutexName,
             out _ownsMutex);
 
         if (!_ownsMutex)
@@ -34,7 +37,7 @@ public partial class App : Application
         _activationEvent = new EventWaitHandle(
             false,
             EventResetMode.AutoReset,
-            ActivationEventName);
+            _activationEventName);
         MainWindow window = new();
         MainWindow = window;
         window.ShowFromExternalRequest();
@@ -89,14 +92,14 @@ public partial class App : Application
         }
     }
 
-    private static void SignalExistingInstance()
+    private void SignalExistingInstance()
     {
         for (int attempt = 0; attempt < 10; attempt++)
         {
             try
             {
                 using EventWaitHandle existing =
-                    EventWaitHandle.OpenExisting(ActivationEventName);
+                    EventWaitHandle.OpenExisting(_activationEventName);
                 existing.Set();
                 return;
             }
@@ -105,5 +108,26 @@ public partial class App : Application
                 Thread.Sleep(50);
             }
         }
+    }
+
+    private static string GetScopedName(string baseName)
+    {
+        string? instanceId =
+            Environment.GetEnvironmentVariable(InstanceIdEnvironmentVariable);
+
+        if (string.IsNullOrWhiteSpace(instanceId))
+        {
+            return baseName;
+        }
+
+        string safeInstanceId = new(
+            instanceId
+                .Where(char.IsLetterOrDigit)
+                .Take(32)
+                .ToArray());
+
+        return string.IsNullOrEmpty(safeInstanceId)
+            ? baseName
+            : $"{baseName}.{safeInstanceId}";
     }
 }

@@ -5,4 +5,5 @@ internal enum WidgetPanel
     Display,
     Audio,
     Devices,
+    Options,
 }

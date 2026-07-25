@@ -7,7 +7,7 @@
         MinHeight="0"
         SizeToContent="Height"
         MaxHeight="{Binding Source={x:Static SystemParameters.WorkArea}, Path=Height}"
-        Background="{StaticResource PageBrush}"
+        Background="{DynamicResource PageBrush}"
         Loaded="MainWindow_Loaded"
         Closing="MainWindow_Closing"
         Deactivated="MainWindow_Deactivated"
@@ -28,7 +28,7 @@
           <ColumnDefinition Width="*" />
           <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
-        <UniformGrid Grid.Column="0" Columns="3">
+        <UniformGrid Grid.Column="0" Columns="4">
           <ToggleButton x:Name="DisplayPanelTab"
                         Style="{StaticResource WidgetTabToggle}"
                         Tag="Display"
@@ -48,6 +48,12 @@
                         Click="PanelTab_Click"
                         Content="Devices"
                         AutomationProperties.Name="Open connected devices" />
+          <ToggleButton x:Name="OptionsPanelTab"
+                        Style="{StaticResource WidgetTabToggle}"
+                        Tag="Options"
+                        Click="PanelTab_Click"
+                        Content="Options"
+                        AutomationProperties.Name="Open widget options" />
         </UniformGrid>
         <Button Grid.Column="1"
                 Style="{StaticResource CompactButton}"
@@ -97,7 +103,7 @@
 
           <TextBlock x:Name="DisplayStatusText"
                      Margin="0,4,0,0"
-                     Foreground="{StaticResource SecondaryTextBrush}"
+                     Foreground="{DynamicResource SecondaryTextBrush}"
                      Text="Choose a projection mode." />
         </StackPanel>
       </Border>
@@ -127,7 +133,7 @@
 
           <TextBlock x:Name="AudioStatusText"
                      Margin="0,8,0,0"
-                     Foreground="{StaticResource SecondaryTextBrush}"
+                     Foreground="{DynamicResource SecondaryTextBrush}"
                      Text="Loading..." />
 
           <Grid Margin="0,10,0,0">
@@ -158,7 +164,7 @@
                                  Text="{Binding Name}"
                                  TextTrimming="CharacterEllipsis" />
                       <Border Grid.Column="1"
-                              Background="{StaticResource DefaultBadgeBrush}">
+                              Background="{DynamicResource DefaultBadgeBrush}">
                         <Border.Style>
                           <Style TargetType="Border"
                                  BasedOn="{StaticResource EndpointBadge}">
@@ -175,7 +181,7 @@
                                    Text="DEFAULT" />
                       </Border>
                       <Border Grid.Column="2"
-                              Background="{StaticResource CallsBadgeBrush}">
+                              Background="{DynamicResource CallsBadgeBrush}">
                         <Border.Style>
                           <Style TargetType="Border"
                                  BasedOn="{StaticResource EndpointBadge}">
@@ -317,7 +323,7 @@
 
           <TextBlock x:Name="DeviceStatusText"
                      Margin="0,8,0,0"
-                     Foreground="{StaticResource SecondaryTextBrush}"
+                     Foreground="{DynamicResource SecondaryTextBrush}"
                      Text="Loading..." />
 
           <ListView x:Name="ConnectedDevicesList"
@@ -353,6 +359,99 @@
                     Content="Devices settings"
                     ToolTip="Manage connected devices in Windows Settings" />
           </WrapPanel>
+        </StackPanel>
+      </Border>
+
+      <Border x:Name="OptionsPanel"
+              Grid.Row="1"
+              Style="{StaticResource SectionCard}"
+              Visibility="Collapsed">
+        <StackPanel>
+          <TextBlock FontSize="17"
+                     FontWeight="SemiBold"
+                     Text="Options" />
+          <TextBlock Margin="0,5,0,0"
+                     Foreground="{DynamicResource SecondaryTextBrush}"
+                     Text="Select a field, then press a shortcut. Delete clears it."
+                     TextWrapping="Wrap" />
+
+          <Grid Margin="0,12,0,0">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="115" />
+              <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <TextBlock Grid.Row="0"
+                       Margin="0,0,8,8"
+                       VerticalAlignment="Center"
+                       Text="Show / hide" />
+            <TextBox x:Name="ToggleShortcutBox"
+                     Grid.Row="0"
+                     Grid.Column="1"
+                     Margin="0,0,0,8"
+                     IsReadOnly="True"
+                     Tag="ToggleWidget"
+                     AutomationProperties.Name="Show or hide shortcut" />
+
+            <TextBlock Grid.Row="1"
+                       Margin="0,0,8,8"
+                       VerticalAlignment="Center"
+                       Text="Open Display" />
+            <TextBox x:Name="DisplayShortcutBox"
+                     Grid.Row="1"
+                     Grid.Column="1"
+                     Margin="0,0,0,8"
+                     IsReadOnly="True"
+                     Tag="Display"
+                     AutomationProperties.Name="Open Display shortcut" />
+
+            <TextBlock Grid.Row="2"
+                       Margin="0,0,8,8"
+                       VerticalAlignment="Center"
+                       Text="Open Audio" />
+            <TextBox x:Name="AudioShortcutBox"
+                     Grid.Row="2"
+                     Grid.Column="1"
+                     Margin="0,0,0,8"
+                     IsReadOnly="True"
+                     Tag="Audio"
+                     AutomationProperties.Name="Open Audio shortcut" />
+
+            <TextBlock Grid.Row="3"
+                       Margin="0,0,8,0"
+                       VerticalAlignment="Center"
+                       Text="Open Devices" />
+            <TextBox x:Name="DevicesShortcutBox"
+                     Grid.Row="3"
+                     Grid.Column="1"
+                     IsReadOnly="True"
+                     Tag="Devices"
+                     AutomationProperties.Name="Open Devices shortcut" />
+          </Grid>
+
+          <CheckBox x:Name="DarkThemeCheckBox"
+                    Margin="0,14,0,0"
+                    Checked="DarkThemeCheckBox_Changed"
+                    Unchecked="DarkThemeCheckBox_Changed"
+                    Content="Use dark theme" />
+
+          <WrapPanel Margin="0,12,0,0">
+            <Button Style="{StaticResource CompactButton}"
+                    Click="ResetShortcuts_Click"
+                    Content="Reset shortcuts" />
+          </WrapPanel>
+
+          <TextBlock x:Name="OptionsStatusText"
+                     Margin="0,10,0,0"
+                     Foreground="{DynamicResource SecondaryTextBrush}"
+                     Text="Settings are saved automatically."
+                     TextWrapping="Wrap" />
         </StackPanel>
       </Border>
     </Grid>

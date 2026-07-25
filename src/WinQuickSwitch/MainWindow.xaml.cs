@@ -27,6 +27,7 @@ public partial class MainWindow : Window
     private readonly IDefaultAudioEndpointService _defaultAudioEndpointService;
     private readonly IDeviceInventoryService _deviceInventoryService;
     private readonly IDeviceSettingsService _deviceSettingsService;
+    private readonly IWidgetSettingsStore _widgetSettingsStore;
     private readonly WindowsGlobalHotkey _globalHotkey = new();
     private readonly WindowsWidgetPlacementService _placementService = new();
     private readonly DebouncedActionScheduler _audioRefreshScheduler;
@@ -36,15 +37,18 @@ public partial class MainWindow : Window
     private readonly CancellationTokenSource _lifetimeCancellation = new();
     private CancellationTokenSource _visibleCancellation = new();
     private HwndSource? _windowSource;
+    private IntPtr _windowHandle;
     private DisplayMode? _currentDisplayMode;
     private WidgetPanel _activePanel = WidgetPanel.Display;
+    private WidgetSettings _widgetSettings;
     private string? _audioWatcherStatusSuffix;
     private string? _hotkeyStatusSuffix;
     private bool _isAudioWatcherRunning;
     private bool _isExiting;
     private bool _suppressAutoHide;
     private bool _deviceInventoryDirty = true;
-    private bool _isLoaded;
+    private bool _hasPositionedWidget;
+    private bool _isApplyingSettingsUi;
     private DateTime _autoHideAllowedAfterUtc;
     private const int WmDeviceChange = 0x0219;
 
@@ -56,7 +60,8 @@ public partial class MainWindow : Window
         new WindowsAudioSessionControlService(),
         new WindowsDefaultAudioEndpointService(),
         new WindowsDeviceInventoryService(),
-        new WindowsDeviceSettingsService())
+        new WindowsDeviceSettingsService(),
+        new JsonWidgetSettingsStore())
     {
     }
 
@@ -68,7 +73,8 @@ public partial class MainWindow : Window
         IAudioSessionControlService audioSessionControlService,
         IDefaultAudioEndpointService defaultAudioEndpointService,
         IDeviceInventoryService deviceInventoryService,
-        IDeviceSettingsService deviceSettingsService)
+        IDeviceSettingsService deviceSettingsService,
+        IWidgetSettingsStore widgetSettingsStore)
     {
         _displayModeService = displayModeService;
         _displayTopologyService = displayTopologyService;
@@ -78,7 +84,11 @@ public partial class MainWindow : Window
         _defaultAudioEndpointService = defaultAudioEndpointService;
         _deviceInventoryService = deviceInventoryService;
         _deviceSettingsService = deviceSettingsService;
+        _widgetSettingsStore = widgetSettingsStore;
+        _widgetSettings = _widgetSettingsStore.Load();
+        WidgetTheme.Apply(_widgetSettings.UseDarkTheme);
         InitializeComponent();
+        UpdateOptionsControls();
 
         _audioRefreshScheduler = new DebouncedActionScheduler(
             TimeSpan.FromMilliseconds(350),
@@ -92,18 +102,16 @@ public partial class MainWindow : Window
     protected override void OnSourceInitialized(EventArgs e)
     {
         base.OnSourceInitialized(e);
-        IntPtr windowHandle = new WindowInteropHelper(this).Handle;
-        WindowsWindowTheme.ApplyDarkTitleBar(windowHandle);
-        _windowSource = HwndSource.FromHwnd(windowHandle);
+        _windowHandle = new WindowInteropHelper(this).Handle;
+        WidgetTheme.Apply(_widgetSettings.UseDarkTheme, _windowHandle);
+        _windowSource = HwndSource.FromHwnd(_windowHandle);
         _windowSource?.AddHook(WindowMessageHook);
+        HotkeyRegistrationResult result = ApplyHotkeyBindings(_widgetSettings);
 
-        try
+        if (!result.Succeeded)
         {
-            _globalHotkey.Register(windowHandle);
-        }
-        catch (Win32Exception exception)
-        {
-            _hotkeyStatusSuffix = $" · {exception.Message}";
+            OptionsStatusText.Text =
+                result.FirstFailure ?? "One or more shortcuts are unavailable.";
         }
     }
 
@@ -124,11 +132,9 @@ public partial class MainWindow : Window
         base.OnClosed(e);
     }
 
-    private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
+    private void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
-        _isLoaded = true;
-        await ActivatePanelAsync(_activePanel);
-        PositionWidgetNearPointer();
+        UpdateOptionsControls();
     }
 
     private void AudioChangeWatcher_Changed(object? sender, EventArgs e)
@@ -159,9 +165,11 @@ public partial class MainWindow : Window
         ref bool handled)
     {
         if (message == WindowsGlobalHotkey.WmHotkey &&
-            wordParameter.ToInt32() == WindowsGlobalHotkey.ToggleWidgetId)
+            _globalHotkey.TryResolveAction(
+                wordParameter.ToInt32(),
+                out WidgetHotkeyAction action))
         {
-            ToggleWidget();
+            HandleGlobalHotkey(action);
             handled = true;
         }
         else if (message == WmDeviceChange)
@@ -175,6 +183,25 @@ public partial class MainWindow : Window
         }
 
         return IntPtr.Zero;
+    }
+
+    private void HandleGlobalHotkey(WidgetHotkeyAction action)
+    {
+        switch (action)
+        {
+            case WidgetHotkeyAction.ToggleWidget:
+                ToggleWidget();
+                break;
+            case WidgetHotkeyAction.Display:
+                ShowWidget(WidgetPanel.Display);
+                break;
+            case WidgetHotkeyAction.Audio:
+                ShowWidget(WidgetPanel.Audio);
+                break;
+            case WidgetHotkeyAction.Devices:
+                ShowWidget(WidgetPanel.Devices);
+                break;
+        }
     }
 
     internal void ShowFromExternalRequest()
@@ -200,7 +227,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private async void ShowWidget()
+    private async void ShowWidget(WidgetPanel? requestedPanel = null)
     {
         if (_isExiting)
         {
@@ -211,9 +238,14 @@ public partial class MainWindow : Window
         ResetVisibleCancellation();
         Show();
         Activate();
-        await ActivatePanelAsync(_activePanel);
+        await ActivatePanelAsync(requestedPanel ?? _activePanel);
         UpdateLayout();
-        PositionWidgetNearPointer();
+
+        if (!_hasPositionedWidget)
+        {
+            PositionWidgetNearPointer();
+            _hasPositionedWidget = true;
+        }
     }
 
     private void HideWidget()
@@ -247,10 +279,13 @@ public partial class MainWindow : Window
             panel == WidgetPanel.Audio ? Visibility.Visible : Visibility.Collapsed;
         DevicesPanel.Visibility =
             panel == WidgetPanel.Devices ? Visibility.Visible : Visibility.Collapsed;
+        OptionsPanel.Visibility =
+            panel == WidgetPanel.Options ? Visibility.Visible : Visibility.Collapsed;
 
         DisplayPanelTab.IsChecked = panel == WidgetPanel.Display;
         AudioPanelTab.IsChecked = panel == WidgetPanel.Audio;
         DevicesPanelTab.IsChecked = panel == WidgetPanel.Devices;
+        OptionsPanelTab.IsChecked = panel == WidgetPanel.Options;
 
         if (panel != WidgetPanel.Audio)
         {
@@ -275,13 +310,10 @@ public partial class MainWindow : Window
 
                 ConnectedDevicesList.Focus();
                 break;
-        }
-
-        if (_isLoaded && IsVisible)
-        {
-            await Dispatcher.InvokeAsync(
-                PositionWidgetNearPointer,
-                DispatcherPriority.Loaded);
+            case WidgetPanel.Options:
+                UpdateOptionsControls();
+                ToggleShortcutBox.Focus();
+                break;
         }
     }
 
@@ -405,12 +437,218 @@ public partial class MainWindow : Window
         Close();
     }
 
+    private HotkeyRegistrationResult ApplyHotkeyBindings(WidgetSettings settings)
+    {
+        HotkeyRegistrationResult result =
+            _globalHotkey.ApplyBindings(_windowHandle, settings);
+
+        if (result.Succeeded)
+        {
+            _hotkeyStatusSuffix = null;
+        }
+        else
+        {
+            _hotkeyStatusSuffix = " · shortcut unavailable; see Options";
+        }
+
+        return result;
+    }
+
+    private void UpdateOptionsControls()
+    {
+        _isApplyingSettingsUi = true;
+
+        try
+        {
+            ToggleShortcutBox.Text = FormatShortcut(
+                _widgetSettings.ToggleWidget);
+            DisplayShortcutBox.Text = FormatShortcut(
+                _widgetSettings.Display);
+            AudioShortcutBox.Text = FormatShortcut(
+                _widgetSettings.Audio);
+            DevicesShortcutBox.Text = FormatShortcut(
+                _widgetSettings.Devices);
+            DarkThemeCheckBox.IsChecked = _widgetSettings.UseDarkTheme;
+        }
+        finally
+        {
+            _isApplyingSettingsUi = false;
+        }
+    }
+
+    private void CaptureShortcut(
+        TextBox shortcutBox,
+        WidgetHotkeyAction action,
+        KeyEventArgs e)
+    {
+        Key key = e.Key == Key.System ? e.SystemKey : e.Key;
+
+        if (key is Key.LeftCtrl or
+            Key.RightCtrl or
+            Key.LeftAlt or
+            Key.RightAlt or
+            Key.LeftShift or
+            Key.RightShift or
+            Key.LWin or
+            Key.RWin)
+        {
+            e.Handled = true;
+            OptionsStatusText.Text =
+                "Keep holding the modifier and press a letter, number, or F-key.";
+            return;
+        }
+
+        if (key is Key.Delete or Key.Back &&
+            Keyboard.Modifiers == ModifierKeys.None)
+        {
+            e.Handled = true;
+            ApplyShortcutChange(action, null);
+            return;
+        }
+
+        WidgetHotkeyModifiers modifiers =
+            ConvertModifiers(Keyboard.Modifiers);
+        int virtualKey = KeyInterop.VirtualKeyFromKey(key);
+
+        e.Handled = true;
+
+        if (!WidgetShortcut.TryCreate(
+            modifiers,
+            virtualKey,
+            out WidgetShortcut? shortcut))
+        {
+            OptionsStatusText.Text =
+                "Use Ctrl, Alt, or Win with A-Z, 0-9, or F1-F12. Shift is optional.";
+            return;
+        }
+
+        if (_widgetSettings.IsShortcutUsedByAnotherAction(action, shortcut!))
+        {
+            OptionsStatusText.Text =
+                $"{shortcut!.DisplayText} is already assigned in WinQuickSwitch.";
+            return;
+        }
+
+        shortcutBox.Text = shortcut!.DisplayText;
+        ApplyShortcutChange(action, shortcut);
+    }
+
+    private void ApplyShortcutChange(
+        WidgetHotkeyAction action,
+        WidgetShortcut? shortcut)
+    {
+        WidgetSettings candidate =
+            _widgetSettings.WithShortcut(action, shortcut);
+        HotkeyRegistrationResult result = ApplyHotkeyBindings(candidate);
+
+        if (result.Failures.TryGetValue(action, out string? failure))
+        {
+            ApplyHotkeyBindings(_widgetSettings);
+            UpdateOptionsControls();
+            OptionsStatusText.Text = failure;
+            return;
+        }
+
+        _widgetSettings = candidate;
+        UpdateOptionsControls();
+        SaveSettings(
+            shortcut is null
+                ? "Shortcut cleared."
+                : $"{shortcut.DisplayText} is active.");
+    }
+
+    private void DarkThemeCheckBox_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_isApplyingSettingsUi)
+        {
+            return;
+        }
+
+        bool useDarkTheme = DarkThemeCheckBox.IsChecked == true;
+        _widgetSettings = _widgetSettings with
+        {
+            UseDarkTheme = useDarkTheme,
+        };
+        WidgetTheme.Apply(useDarkTheme, _windowHandle);
+        SaveSettings(useDarkTheme ? "Dark theme enabled." : "Light theme enabled.");
+    }
+
+    private void ResetShortcuts_Click(object sender, RoutedEventArgs e)
+    {
+        _widgetSettings = WidgetSettings.Default with
+        {
+            UseDarkTheme = _widgetSettings.UseDarkTheme,
+        };
+        HotkeyRegistrationResult result = ApplyHotkeyBindings(_widgetSettings);
+        UpdateOptionsControls();
+        SaveSettings(
+            result.Succeeded
+                ? "Shortcuts reset."
+                : result.FirstFailure ?? "A default shortcut is unavailable.");
+    }
+
+    private void SaveSettings(string successMessage)
+    {
+        if (_widgetSettingsStore.TrySave(
+            _widgetSettings,
+            out string? errorMessage))
+        {
+            OptionsStatusText.Text = successMessage;
+        }
+        else
+        {
+            OptionsStatusText.Text = errorMessage;
+        }
+    }
+
+    private static string FormatShortcut(WidgetShortcut? shortcut) =>
+        shortcut?.DisplayText ?? "Not set";
+
+    private static WidgetHotkeyModifiers ConvertModifiers(
+        ModifierKeys modifiers)
+    {
+        WidgetHotkeyModifiers result = WidgetHotkeyModifiers.None;
+
+        if ((modifiers & ModifierKeys.Alt) != 0)
+        {
+            result |= WidgetHotkeyModifiers.Alt;
+        }
+
+        if ((modifiers & ModifierKeys.Control) != 0)
+        {
+            result |= WidgetHotkeyModifiers.Control;
+        }
+
+        if ((modifiers & ModifierKeys.Shift) != 0)
+        {
+            result |= WidgetHotkeyModifiers.Shift;
+        }
+
+        if ((modifiers & ModifierKeys.Windows) != 0)
+        {
+            result |= WidgetHotkeyModifiers.Win;
+        }
+
+        return result;
+    }
+
     private async void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key == Key.Escape)
         {
             e.Handled = true;
             HideWidget();
+            return;
+        }
+
+        if (_activePanel == WidgetPanel.Options &&
+            e.OriginalSource is TextBox
+            {
+                Tag: string actionName,
+            } shortcutBox &&
+            Enum.TryParse(actionName, out WidgetHotkeyAction action))
+        {
+            CaptureShortcut(shortcutBox, action, e);
             return;
         }
 
@@ -421,6 +659,7 @@ public partial class MainWindow : Window
                 Key.D1 or Key.NumPad1 => WidgetPanel.Display,
                 Key.D2 or Key.NumPad2 => WidgetPanel.Audio,
                 Key.D3 or Key.NumPad3 => WidgetPanel.Devices,
+                Key.D4 or Key.NumPad4 => WidgetPanel.Options,
                 _ => null,
             };
 

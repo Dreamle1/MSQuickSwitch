@@ -61,12 +61,12 @@ another UI package or custom hit-testing layer. The widget itself is
 non-resizable and always-on-top while visible.
 
 The widget is 500 pixels wide and sizes vertically to the active panel's
-content, capped by the working area. Display, Audio, and Devices are mutually
-exclusive panels under a compact tab strip. Outer/card spacing is compact, the
-title bar is the only app-name heading, and endpoint/session/device lists own
-their vertical scrolling. Horizontal scrolling is disabled in the compact
-tables; friendly audio names trim visually while the full name remains in the
-bound model and automation text.
+content, capped by the working area. Display, Audio, Devices, and Options are
+mutually exclusive panels under a compact tab strip. Outer/card spacing is
+compact, the title bar is the only app-name heading, and
+endpoint/session/device lists own their vertical scrolling. Horizontal
+scrolling is disabled in the compact tables; friendly audio names trim visually
+while the full name remains in the bound model and automation text.
 
 ## Resident widget lifecycle
 
@@ -75,23 +75,41 @@ event. A later launch signals that event and exits; the first process reveals
 its existing window. This keeps all native callbacks and mutable Windows state
 inside one process without an IPC framework.
 
-`RegisterHotKey` owns the fixed `Win + Shift + Q` chord with no-repeat
-semantics. `WM_HOTKEY` toggles the window from the existing WPF message hook.
-Registration conflicts leave the app usable and surface a short status
-message; configurable shortcuts remain follow-up work.
+`RegisterHotKey` owns the default `Win + Shift + Q` chord with no-repeat
+semantics. Optional bindings can toggle the window or reveal it directly on
+Display, Audio, or Devices. `WM_HOTKEY` resolves the native identifier back to
+one of those allowlisted actions. Each binding registers independently, so one
+conflict does not disable the others; the Options panel reports the conflict
+and does not save a newly rejected binding.
 
-Showing the widget reads the pointer position, selects the nearest monitor,
-and uses that monitor's work area. A pure placement calculator prefers the
+The first reveal reads the pointer position, selects the nearest monitor, and
+uses that monitor's work area. A pure placement calculator prefers the
 lower-right side of the pointer, flips at the right or bottom edge, and clamps
 the final rectangle. WPF device-independent units are converted to and from
 physical pixels around the Win32 monitor calculation, so negative-coordinate
-and mixed-DPI monitor layouts remain valid.
+and mixed-DPI monitor layouts remain valid. The resulting position is retained
+for later hide/show cycles and panel changes instead of repeatedly anchoring to
+the moving pointer.
 
 The close button, `Esc`, and click-away hide the window. A short activation
 grace prevents the launch or second-instance handoff from being immediately
 undone if Windows is still settling foreground focus. **Quit** is the explicit
 process-exit path. There is no tray icon or start-with-Windows registration in
 this slice.
+
+## Local options
+
+The Options panel captures only modified A-Z, 0-9, and F1-F12 shortcuts. Ctrl,
+Alt, or Win is required; Shift can be added. Duplicate in-app bindings are
+rejected before native registration. Settings use `System.Text.Json` and an
+atomic temporary-file replacement under
+`%LOCALAPPDATA%\WinQuickSwitch\settings.json`; no registry keys or third-party
+configuration package are needed.
+
+Dark and light palettes update WPF brushes through dynamic color resources.
+The same palette is sent to the native caption through `DwmSetWindowAttribute`,
+followed by a frame refresh so the title bar repaints immediately. Unsupported
+DWM attributes remain nonfatal and use the Windows fallback.
 
 ## Display adapter
 
@@ -284,4 +302,4 @@ suites. Mark them as attended hardware tests.
 | Projection changes can make the active display disappear | Use only the four Windows modes and make risky actions explicit |
 | WPF styling can drift from Windows 11 | Keep the UI compact and accessible; avoid recreating the full Settings design |
 | Framework-dependent deployment needs a runtime | Detect the runtime in packaging or provide a larger self-contained artifact |
-| The global hotkey conflicts with another application | Keep the widget usable, show the conflict, and add configurable shortcuts in M5 |
+| A global hotkey conflicts with another application | Keep other bindings active, reject the changed binding, and show the conflict in Options |

@@ -1,3 +1,5 @@
+using System.IO;
+using System.Windows.Media;
 using WinQuickSwitch.Features.Audio;
 using WinQuickSwitch.Features.Devices;
 using WinQuickSwitch.Features.Display;
@@ -54,6 +56,12 @@ internal static class Program
             ("Device status labels are human readable", DeviceStatusLabelsAreHumanReadable),
             ("Device Settings shortcuts use exact Windows URIs", DeviceSettingsShortcutsUseExactUris),
             ("Dark title bar uses the application palette", DarkTitleBarUsesAppPalette),
+            ("Light title bar uses the application palette", LightTitleBarUsesAppPalette),
+            ("Widget shortcuts validate and format supported chords", WidgetShortcutsValidateAndFormat),
+            ("Widget settings remove duplicate shortcuts", WidgetSettingsRemoveDuplicates),
+            ("Widget settings persist without dependencies", WidgetSettingsPersist),
+            ("Global hotkeys register and resolve actions", GlobalHotkeysRegisterAndResolve),
+            ("Global hotkey conflicts stay isolated", GlobalHotkeyConflictsStayIsolated),
             ("Widget opens below and right of the pointer", WidgetOpensBelowPointer),
             ("Widget flips away from monitor edges", WidgetFlipsAtMonitorEdges),
             ("Widget stays inside negative-coordinate work areas", WidgetStaysInsideWorkArea),
@@ -635,10 +643,192 @@ internal static class Program
                 WindowsWindowTheme.TextColor,
                 WindowsWindowTheme.ToColorReference(0xF3, 0xF5, 0xF7)),
             setter.Calls[3]);
+        Equal(1, setter.RefreshCount);
 
         FakeDwmAttributeSetter zeroHandleSetter = new();
         WindowsWindowTheme.ApplyDarkTitleBar(IntPtr.Zero, zeroHandleSetter);
         Equal(0, zeroHandleSetter.Calls.Count);
+        return Task.CompletedTask;
+    }
+
+    private static Task LightTitleBarUsesAppPalette()
+    {
+        FakeDwmAttributeSetter setter = new();
+        IntPtr windowHandle = new(43);
+
+        WindowsWindowTheme.Apply(
+            windowHandle,
+            false,
+            Color.FromRgb(0xF4, 0xF6, 0xF8),
+            Color.FromRgb(0xCC, 0xD3, 0xDC),
+            Color.FromRgb(0x1B, 0x1F, 0x24),
+            setter);
+
+        Equal(4, setter.Calls.Count);
+        Equal(
+            (windowHandle, WindowsWindowTheme.UseImmersiveDarkMode, 0),
+            setter.Calls[0]);
+        Equal(
+            (
+                windowHandle,
+                WindowsWindowTheme.BorderColor,
+                WindowsWindowTheme.ToColorReference(0xCC, 0xD3, 0xDC)),
+            setter.Calls[1]);
+        Equal(
+            (
+                windowHandle,
+                WindowsWindowTheme.CaptionColor,
+                WindowsWindowTheme.ToColorReference(0xF4, 0xF6, 0xF8)),
+            setter.Calls[2]);
+        Equal(
+            (
+                windowHandle,
+                WindowsWindowTheme.TextColor,
+                WindowsWindowTheme.ToColorReference(0x1B, 0x1F, 0x24)),
+            setter.Calls[3]);
+        Equal(1, setter.RefreshCount);
+        return Task.CompletedTask;
+    }
+
+    private static Task WidgetShortcutsValidateAndFormat()
+    {
+        bool shiftOnly = WidgetShortcut.TryCreate(
+            WidgetHotkeyModifiers.Shift,
+            0x51,
+            out WidgetShortcut? invalid);
+        bool valid = WidgetShortcut.TryCreate(
+            WidgetHotkeyModifiers.Win | WidgetHotkeyModifiers.Shift,
+            0x51,
+            out WidgetShortcut? shortcut);
+        bool functionKey = WidgetShortcut.TryCreate(
+            WidgetHotkeyModifiers.Control | WidgetHotkeyModifiers.Alt,
+            0x7B,
+            out WidgetShortcut? f12);
+
+        True(!shiftOnly, "A Shift-only system shortcut should be rejected.");
+        Equal<WidgetShortcut?>(null, invalid);
+        True(valid, "Win + Shift + Q should be accepted.");
+        Equal("Win + Shift + Q", shortcut!.DisplayText);
+        True(functionKey, "Modified function keys should be accepted.");
+        Equal("Ctrl + Alt + F12", f12!.DisplayText);
+        return Task.CompletedTask;
+    }
+
+    private static Task WidgetSettingsRemoveDuplicates()
+    {
+        WidgetShortcut duplicate = new(
+            WidgetHotkeyModifiers.Control | WidgetHotkeyModifiers.Alt,
+            0x41);
+        WidgetSettings settings = WidgetSettings.Default with
+        {
+            Display = duplicate,
+            Audio = duplicate,
+        };
+
+        WidgetSettings normalized = settings.Normalize();
+
+        Equal(duplicate, normalized.Display);
+        Equal<WidgetShortcut?>(null, normalized.Audio);
+        True(
+            normalized.IsShortcutUsedByAnotherAction(
+                WidgetHotkeyAction.Audio,
+                duplicate),
+            "The surviving Display shortcut should be reported as in use.");
+        return Task.CompletedTask;
+    }
+
+    private static Task WidgetSettingsPersist()
+    {
+        string settingsPath = Path.Combine(
+            Path.GetTempPath(),
+            $"WinQuickSwitch.Tests.{Guid.NewGuid():N}.json");
+
+        try
+        {
+            JsonWidgetSettingsStore store = new(settingsPath);
+            WidgetSettings expected = WidgetSettings.Default with
+            {
+                UseDarkTheme = false,
+                Audio = new WidgetShortcut(
+                    WidgetHotkeyModifiers.Control | WidgetHotkeyModifiers.Alt,
+                    0x41),
+            };
+
+            True(
+                store.TrySave(expected, out string? saveError),
+                saveError ?? "Settings save failed.");
+            Equal(expected, store.Load());
+        }
+        finally
+        {
+            File.Delete(settingsPath);
+            File.Delete(settingsPath + ".tmp");
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private static Task GlobalHotkeysRegisterAndResolve()
+    {
+        FakeGlobalHotkeyNative native = new();
+        using WindowsGlobalHotkey hotkeys = new(native);
+        WidgetSettings settings = WidgetSettings.Default with
+        {
+            Audio = new WidgetShortcut(
+                WidgetHotkeyModifiers.Control | WidgetHotkeyModifiers.Alt,
+                0x41),
+        };
+
+        HotkeyRegistrationResult result =
+            hotkeys.ApplyBindings(new IntPtr(44), settings);
+
+        True(result.Succeeded, result.FirstFailure ?? "Registration failed.");
+        Equal(2, native.Registrations.Count);
+        True(
+            hotkeys.TryResolveAction(
+                WindowsGlobalHotkey.GetId(WidgetHotkeyAction.ToggleWidget),
+                out WidgetHotkeyAction toggleAction),
+            "The toggle shortcut was not registered.");
+        Equal(WidgetHotkeyAction.ToggleWidget, toggleAction);
+        True(
+            hotkeys.TryResolveAction(
+                WindowsGlobalHotkey.GetId(WidgetHotkeyAction.Audio),
+                out WidgetHotkeyAction audioAction),
+            "The Audio shortcut was not registered.");
+        Equal(WidgetHotkeyAction.Audio, audioAction);
+        True(
+            (native.Registrations[0].Modifiers & 0x4000) != 0,
+            "MOD_NOREPEAT was not applied.");
+        return Task.CompletedTask;
+    }
+
+    private static Task GlobalHotkeyConflictsStayIsolated()
+    {
+        FakeGlobalHotkeyNative native = new()
+        {
+            FailingVirtualKey = 0x41,
+        };
+        using WindowsGlobalHotkey hotkeys = new(native);
+        WidgetSettings settings = WidgetSettings.Default with
+        {
+            Audio = new WidgetShortcut(
+                WidgetHotkeyModifiers.Control | WidgetHotkeyModifiers.Alt,
+                0x41),
+        };
+
+        HotkeyRegistrationResult result =
+            hotkeys.ApplyBindings(new IntPtr(45), settings);
+
+        True(!result.Succeeded, "The simulated conflict should be reported.");
+        True(
+            result.Failures.ContainsKey(WidgetHotkeyAction.Audio),
+            "The Audio conflict should remain associated with Audio.");
+        True(
+            hotkeys.TryResolveAction(
+                WindowsGlobalHotkey.GetId(WidgetHotkeyAction.ToggleWidget),
+                out WidgetHotkeyAction action),
+            "A conflicting Audio binding should not disable the toggle binding.");
+        Equal(WidgetHotkeyAction.ToggleWidget, action);
         return Task.CompletedTask;
     }
 
@@ -1026,7 +1216,44 @@ internal static class Program
     {
         public List<(IntPtr Handle, int Attribute, int Value)> Calls { get; } = [];
 
+        public int RefreshCount { get; private set; }
+
         public void Set(IntPtr windowHandle, int attribute, int value) =>
             Calls.Add((windowHandle, attribute, value));
+
+        public void RefreshFrame(IntPtr windowHandle) => RefreshCount++;
+    }
+
+    private sealed class FakeGlobalHotkeyNative : IGlobalHotkeyNative
+    {
+        public int? FailingVirtualKey { get; init; }
+
+        public List<(IntPtr Handle, int Id, uint Modifiers, uint VirtualKey)> Registrations
+        {
+            get;
+        } = [];
+
+        public List<(IntPtr Handle, int Id)> Unregistrations { get; } = [];
+
+        public bool Register(
+            IntPtr windowHandle,
+            int id,
+            uint modifiers,
+            uint virtualKey,
+            out int errorCode)
+        {
+            if (virtualKey == FailingVirtualKey)
+            {
+                errorCode = 1409;
+                return false;
+            }
+
+            Registrations.Add((windowHandle, id, modifiers, virtualKey));
+            errorCode = 0;
+            return true;
+        }
+
+        public void Unregister(IntPtr windowHandle, int id) =>
+            Unregistrations.Add((windowHandle, id));
     }
 }
