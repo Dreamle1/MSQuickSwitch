@@ -6,6 +6,7 @@ using System.Windows.Threading;
 using WinQuickSwitch.Features.Audio;
 using WinQuickSwitch.Features.Devices;
 using WinQuickSwitch.Features.Display;
+using WinQuickSwitch.Platform.Windows;
 using WinQuickSwitch.Platform.Windows.Audio;
 using WinQuickSwitch.Platform.Windows.Devices;
 using WinQuickSwitch.Platform.Windows.Display;
@@ -75,7 +76,9 @@ public partial class MainWindow : Window
     protected override void OnSourceInitialized(EventArgs e)
     {
         base.OnSourceInitialized(e);
-        _windowSource = HwndSource.FromHwnd(new WindowInteropHelper(this).Handle);
+        IntPtr windowHandle = new WindowInteropHelper(this).Handle;
+        WindowsWindowTheme.ApplyDarkTitleBar(windowHandle);
+        _windowSource = HwndSource.FromHwnd(windowHandle);
         _windowSource?.AddHook(WindowMessageHook);
     }
 

@@ -1,6 +1,7 @@
 using WinQuickSwitch.Features.Audio;
 using WinQuickSwitch.Features.Devices;
 using WinQuickSwitch.Features.Display;
+using WinQuickSwitch.Platform.Windows;
 using WinQuickSwitch.Platform.Windows.Audio;
 using WinQuickSwitch.Platform.Windows.Devices;
 using WinQuickSwitch.Platform.Windows.Display;
@@ -48,6 +49,7 @@ internal static class Program
             ("Unrelated USB devices remain separate", UnrelatedUsbDevicesRemainSeparate),
             ("Device status labels are human readable", DeviceStatusLabelsAreHumanReadable),
             ("Device Settings shortcuts use exact Windows URIs", DeviceSettingsShortcutsUseExactUris),
+            ("Dark title bar uses the application palette", DarkTitleBarUsesAppPalette),
         ];
 
         if (args.Contains("--integration", StringComparer.OrdinalIgnoreCase))
@@ -523,6 +525,42 @@ internal static class Program
         return Task.CompletedTask;
     }
 
+    private static Task DarkTitleBarUsesAppPalette()
+    {
+        FakeDwmAttributeSetter setter = new();
+        IntPtr windowHandle = new(42);
+
+        WindowsWindowTheme.ApplyDarkTitleBar(windowHandle, setter);
+
+        Equal(4, setter.Calls.Count);
+        Equal(
+            (windowHandle, WindowsWindowTheme.UseImmersiveDarkMode, 1),
+            setter.Calls[0]);
+        Equal(
+            (
+                windowHandle,
+                WindowsWindowTheme.BorderColor,
+                WindowsWindowTheme.ToColorReference(0x2A, 0x30, 0x3A)),
+            setter.Calls[1]);
+        Equal(
+            (
+                windowHandle,
+                WindowsWindowTheme.CaptionColor,
+                WindowsWindowTheme.ToColorReference(0x10, 0x13, 0x18)),
+            setter.Calls[2]);
+        Equal(
+            (
+                windowHandle,
+                WindowsWindowTheme.TextColor,
+                WindowsWindowTheme.ToColorReference(0xF3, 0xF5, 0xF7)),
+            setter.Calls[3]);
+
+        FakeDwmAttributeSetter zeroHandleSetter = new();
+        WindowsWindowTheme.ApplyDarkTitleBar(IntPtr.Zero, zeroHandleSetter);
+        Equal(0, zeroHandleSetter.Calls.Count);
+        return Task.CompletedTask;
+    }
+
     private static Task LiveDisplayTopologyCanBeRead()
     {
         DisplayTopologySnapshot snapshot = new WindowsDisplayTopologyService().GetSnapshot();
@@ -831,5 +869,13 @@ internal static class Program
         public List<string> Uris { get; } = [];
 
         public void Open(string settingsUri) => Uris.Add(settingsUri);
+    }
+
+    private sealed class FakeDwmAttributeSetter : IDwmAttributeSetter
+    {
+        public List<(IntPtr Handle, int Attribute, int Value)> Calls { get; } = [];
+
+        public void Set(IntPtr windowHandle, int attribute, int value) =>
+            Calls.Add((windowHandle, attribute, value));
     }
 }

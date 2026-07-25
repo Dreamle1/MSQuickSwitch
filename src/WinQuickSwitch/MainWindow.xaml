@@ -2,30 +2,25 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="WinQuickSwitch"
-        Width="760"
+        Width="660"
         MinWidth="620"
-        MinHeight="680"
+        MinHeight="560"
         SizeToContent="Height"
         MaxHeight="{Binding Source={x:Static SystemParameters.WorkArea}, Path=Height}"
         Background="{StaticResource PageBrush}"
         Loaded="MainWindow_Loaded"
         WindowStartupLocation="CenterScreen">
   <ScrollViewer VerticalScrollBarVisibility="Auto">
-    <Grid Margin="24">
+    <Grid Margin="16">
       <Grid.RowDefinitions>
-        <RowDefinition Height="Auto" />
         <RowDefinition Height="Auto" />
         <RowDefinition Height="Auto" />
         <RowDefinition Height="Auto" />
       </Grid.RowDefinitions>
 
-      <StackPanel Grid.Row="0" Margin="0,0,0,16">
-        <TextBlock FontSize="28" FontWeight="SemiBold" Text="Quick controls" />
-      </StackPanel>
-
-      <Border Grid.Row="1" Style="{StaticResource SectionCard}">
+      <Border Grid.Row="0" Style="{StaticResource SectionCard}">
         <StackPanel>
-          <TextBlock FontSize="18" FontWeight="SemiBold" Text="Display" />
+          <TextBlock FontSize="17" FontWeight="SemiBold" Text="Display" />
 
           <WrapPanel x:Name="DisplayModeButtons"
                      Margin="0,12,0,2"
@@ -61,22 +56,22 @@
         </StackPanel>
       </Border>
 
-      <Border Grid.Row="2" Style="{StaticResource SectionCard}">
+      <Border Grid.Row="1" Style="{StaticResource SectionCard}">
         <StackPanel>
           <Grid>
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="*" />
               <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <TextBlock FontSize="18"
+            <TextBlock FontSize="17"
                        FontWeight="SemiBold"
                        VerticalAlignment="Center"
                        Text="Audio" />
             <Button x:Name="RefreshAudioButton"
                     Grid.Column="1"
-                    MinWidth="88"
-                    MinHeight="34"
-                    Padding="12,5"
+                    MinWidth="78"
+                    MinHeight="32"
+                    Padding="10,4"
                     Click="RefreshAudio_Click"
                     Content="Refresh" />
           </Grid>
@@ -98,7 +93,8 @@
                          Text="Output" />
               <ListBox x:Name="PlaybackEndpointsList"
                        MinHeight="72"
-                       MaxHeight="190">
+                       MaxHeight="135"
+                       ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                 <ListBox.ItemTemplate>
                   <DataTemplate>
                     <Grid AutomationProperties.Name="{Binding Name}"
@@ -170,7 +166,8 @@
                          Text="Input" />
               <ListBox x:Name="RecordingEndpointsList"
                        MinHeight="72"
-                       MaxHeight="190"
+                       MaxHeight="135"
+                       ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                        ItemTemplate="{Binding ElementName=PlaybackEndpointsList, Path=ItemTemplate}" />
               <WrapPanel Margin="0,8,0,0">
                 <Button Style="{StaticResource CompactButton}"
@@ -190,7 +187,10 @@
           <TextBlock Margin="0,12,0,6"
                      FontWeight="SemiBold"
                      Text="Applications" />
-          <ListView x:Name="AudioSessionsList" MinHeight="80" MaxHeight="180">
+          <ListView x:Name="AudioSessionsList"
+                    MinHeight="72"
+                    MaxHeight="115"
+                    ScrollViewer.HorizontalScrollBarVisibility="Disabled">
             <ListView.View>
               <GridView>
                 <GridViewColumn Width="150"
@@ -243,22 +243,22 @@
         </StackPanel>
       </Border>
 
-      <Border Grid.Row="3" Style="{StaticResource SectionCard}">
+      <Border Grid.Row="2" Style="{StaticResource SectionCard}">
         <StackPanel>
           <Grid>
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="*" />
               <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <TextBlock FontSize="18"
+            <TextBlock FontSize="17"
                        FontWeight="SemiBold"
                        VerticalAlignment="Center"
                        Text="Devices" />
             <Button x:Name="RefreshDevicesButton"
                     Grid.Column="1"
-                    MinWidth="88"
-                    MinHeight="34"
-                    Padding="12,5"
+                    MinWidth="78"
+                    MinHeight="32"
+                    Padding="10,4"
                     Click="RefreshDevices_Click"
                     Content="Refresh" />
           </Grid>
@@ -271,19 +271,20 @@
           <ListView x:Name="ConnectedDevicesList"
                     Margin="0,10,0,0"
                     MinHeight="80"
-                    MaxHeight="200">
+                    MaxHeight="145"
+                    ScrollViewer.HorizontalScrollBarVisibility="Disabled">
             <ListView.View>
               <GridView>
-                <GridViewColumn Width="250"
+                <GridViewColumn Width="225"
                                 Header="Name"
                                 DisplayMemberBinding="{Binding Name}" />
-                <GridViewColumn Width="105"
+                <GridViewColumn Width="90"
                                 Header="Connection"
                                 DisplayMemberBinding="{Binding ConnectionLabel}" />
-                <GridViewColumn Width="120"
+                <GridViewColumn Width="105"
                                 Header="Type"
                                 DisplayMemberBinding="{Binding Category}" />
-                <GridViewColumn Width="110"
+                <GridViewColumn Width="95"
                                 Header="Status"
                                 DisplayMemberBinding="{Binding StatusLabel}" />
               </GridView>

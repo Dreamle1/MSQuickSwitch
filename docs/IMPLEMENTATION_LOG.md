@@ -481,3 +481,61 @@ Published variants:
 | --- | ---: | --- |
 | Lite | 277,195 | `0EDDA47F343133252B2882DECD47C3E0A7C02D600B78BB3A5CB59114A3F1DB2D` |
 | Portable | 64,843,029 | `76886E1E9B614F815A707B4F69C16AC05A433BDA8ADA1ED9D4519A44A5CCB6F6` |
+
+## 2026-07-25 - compact window and native dark title bar
+
+### Implemented
+
+- Reduced the default window from 760 pixels to 660 pixels wide.
+- Removed the duplicate in-app title so the Windows caption is the only
+  application-name heading.
+- Reduced page/card margins, card padding, corner radius, display-button width,
+  refresh-button size, and inventory heights.
+- Reduced the visually verified window height from 1,119 to 900 pixels while
+  keeping Display, Audio, and Devices visible together.
+- Disabled horizontal scrolling in compact tables. Long audio names use
+  ellipsis and the device columns were resized to fit the narrower card.
+- Added a dependency-free `DwmSetWindowAttribute` adapter for immersive dark
+  framing plus app-colored border, caption, and caption text on supported
+  Windows 11 builds.
+- Keeps the standard Windows non-client frame and caption buttons; no custom
+  chrome, hit-testing layer, background process, or UI dependency was added.
+- Treats unsupported DWM attributes as a visual fallback rather than an app
+  startup failure.
+
+### Verification
+
+- Format verification: passed with no changes required.
+- Release build: passed with 0 warnings and 0 errors.
+- Isolated checks: 36 passed, 0 failed.
+- Read-only live checks: 40 passed, 0 failed.
+- DWM attribute order and exact COLORREF palette mapping: passed with a fake
+  native adapter; automated tests made no real window-style mutations.
+- Live topology: extend, 3 active displays, 3 available displays.
+- Live audio: 7 output endpoints, 3 input endpoints, 0 active applications.
+- Live normalized device inventory: 13 Bluetooth, 8 wired.
+- Final WPF visual inspection: 660 x 900 pixels, dark Windows title bar,
+  DEFAULT/CALLS badges visible, no horizontal scrollbars, and vertical
+  scrolling retained for long inventories.
+- Windows 10 22H2 build 19045 used its native dark-frame fallback; supported
+  Windows 11 builds can additionally apply the exact caption, text, and border
+  colors.
+- Compact self-contained Portable executable startup and normal shutdown:
+  passed.
+
+Published compact variants:
+
+| Variant | Bytes | SHA-256 |
+| --- | ---: | --- |
+| Lite | 278,219 | `073BBE17B1AB10E2C1B0DAE3C92C3C41F70FBE8F1ACF04E0D61EE9ADE3156AD3` |
+| Portable | 64,843,565 | `2B106EAC57F03A3FE624DAA04B1C79CF47C425B0FB45F30AFD57A2366BB0642E` |
+
+Outputs:
+
+- `artifacts/win-x64-lite-compact/WinQuickSwitch.exe`
+- `artifacts/win-x64-portable-compact/WinQuickSwitch.exe`
+
+The standard Lite output was open in an existing process and therefore locked.
+That process was not terminated. This revision was published beside it in
+versioned `-compact` folders; accidental duplicate publish folders under the
+source directory were removed after the correct outputs were verified.

@@ -46,6 +46,25 @@ src/WinQuickSwitch/
 Move to multiple projects only if the code or tests need the separation. A
 single project is cheaper to navigate for the initial app.
 
+## Window shell
+
+Keep the normal Windows-managed WPF frame rather than replacing it with a
+custom title-bar implementation. After WPF creates the native handle, the shell
+calls `DwmSetWindowAttribute` with the dark-frame, border, caption, and text
+attributes. Supported Windows 11 builds receive the app palette directly. If
+an attribute is unavailable, its HRESULT is intentionally nonfatal and Windows
+retains its own frame fallback.
+
+This preserves native move, resize, maximize, snap, system-menu, and caption
+button behavior without another UI package or custom hit-testing layer.
+
+The default window is 660 pixels wide and sizes vertically to its content,
+capped by the working area. Outer/card spacing is compact, the title bar is the
+only app-name heading, and endpoint/session/device lists own their vertical
+scrolling. Horizontal scrolling is disabled in the compact tables; friendly
+audio names trim visually while the full name remains in the bound model and
+automation text.
+
 ## Display adapter
 
 Version 1 supports the four global projection topologies exposed by `Win + P`:
