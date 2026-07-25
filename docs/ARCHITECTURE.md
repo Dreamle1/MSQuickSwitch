@@ -82,6 +82,20 @@ four global projection modes. A hybrid topology that combines duplicate and
 extended paths is reported as custom/mixed instead of being forced into one of
 the four modes.
 
+The display choices are persistent toggle controls rather than stateless
+buttons. The current topology is highlighted at startup; selecting that same
+mode again restores the checked state without launching `DisplaySwitch.exe`.
+For a real change, the requested mode highlights immediately and the group
+accepts no second request until the first completes.
+
+After `DisplaySwitch.exe` exits successfully, a transient topology monitor
+checks `QueryDisplayConfig` every 150 ms for at most 18 attempts (2.55 seconds).
+It stops as soon as Windows reports the requested mode. This prevents a stale
+immediate topology read from snapping the selection back during monitor
+retraining. It exists only during a user-requested transition and is not an
+idle polling loop. Physical display blanking and link retraining remain under
+Windows, GPU-driver, and monitor control.
+
 Individual-monitor enable/disable and layout editing are intentionally
 excluded. They require substantially more display-configuration handling and
 are not equivalent to the four global projection modes.

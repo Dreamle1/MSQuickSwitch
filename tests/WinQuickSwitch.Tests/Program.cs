@@ -31,6 +31,9 @@ internal static class Program
             ("Mixed display sources are not mislabeled", MixedSourcesAreNotMislabeled),
             ("Inactive available display enables multi-display choices", AvailableInactiveDisplayEnablesChoices),
             ("No active display produces an unreliable snapshot", NoActiveDisplayIsUnreliable),
+            ("Display transition returns an already-settled mode immediately", DisplayTransitionReturnsImmediately),
+            ("Display transition waits for Windows topology to settle", DisplayTransitionWaitsForExpectedMode),
+            ("Display transition settle checks are bounded", DisplayTransitionChecksAreBounded),
             ("Audio endpoint labels use the friendly name", AudioEndpointLabelsUseFriendlyName),
             ("Audio endpoint roles have clear active descriptions", AudioEndpointRolesAreClear),
             ("Audio session volume is formatted and clamped", AudioSessionVolumeIsFormatted),
@@ -168,6 +171,80 @@ internal static class Program
         True(!snapshot.IsReliable, "A snapshot without an active path is not reliable.");
         True(snapshot.CurrentMode is null, "An unreliable snapshot should not invent a mode.");
         return Task.CompletedTask;
+    }
+
+    private static async Task DisplayTransitionReturnsImmediately()
+    {
+        FakeDisplayTopologyService topology = new(
+            Topology(DisplayMode.Extend));
+        int delayCount = 0;
+
+        DisplayTopologySnapshot snapshot =
+            await DisplayTransitionMonitor.WaitForModeAsync(
+                topology,
+                DisplayMode.Extend,
+                TimeSpan.FromMilliseconds(1),
+                4,
+                CancellationToken.None,
+                (interval, cancellationToken) =>
+                {
+                    delayCount++;
+                    return Task.CompletedTask;
+                });
+
+        Equal(DisplayMode.Extend, snapshot.CurrentMode);
+        Equal(1, topology.CallCount);
+        Equal(0, delayCount);
+    }
+
+    private static async Task DisplayTransitionWaitsForExpectedMode()
+    {
+        FakeDisplayTopologyService topology = new(
+            Topology(DisplayMode.Duplicate),
+            Topology(null),
+            Topology(DisplayMode.Extend));
+        int delayCount = 0;
+
+        DisplayTopologySnapshot snapshot =
+            await DisplayTransitionMonitor.WaitForModeAsync(
+                topology,
+                DisplayMode.Extend,
+                TimeSpan.FromMilliseconds(1),
+                5,
+                CancellationToken.None,
+                (interval, cancellationToken) =>
+                {
+                    delayCount++;
+                    return Task.CompletedTask;
+                });
+
+        Equal(DisplayMode.Extend, snapshot.CurrentMode);
+        Equal(3, topology.CallCount);
+        Equal(2, delayCount);
+    }
+
+    private static async Task DisplayTransitionChecksAreBounded()
+    {
+        FakeDisplayTopologyService topology = new(
+            Topology(DisplayMode.Duplicate));
+        int delayCount = 0;
+
+        DisplayTopologySnapshot snapshot =
+            await DisplayTransitionMonitor.WaitForModeAsync(
+                topology,
+                DisplayMode.Extend,
+                TimeSpan.FromMilliseconds(1),
+                3,
+                CancellationToken.None,
+                (interval, cancellationToken) =>
+                {
+                    delayCount++;
+                    return Task.CompletedTask;
+                });
+
+        Equal(DisplayMode.Duplicate, snapshot.CurrentMode);
+        Equal(3, topology.CallCount);
+        Equal(2, delayCount);
     }
 
     private static Task AudioEndpointLabelsUseFriendlyName()
@@ -646,6 +723,14 @@ internal static class Program
         bool available) =>
         new(adapterId, sourceId, targetId, technology, active, available);
 
+    private static DisplayTopologySnapshot Topology(DisplayMode? mode) =>
+        new(
+            mode,
+            ActiveDisplayCount: mode is DisplayMode.Duplicate or DisplayMode.Extend ? 2 : 1,
+            AvailableDisplayCount: 2,
+            IsReliable: true,
+            Status: mode?.GetDisplayName() ?? "Updating");
+
     private static async Task MapsMode(DisplayMode mode, string expectedArgument)
     {
         FakeDisplaySwitchProcess process = new();
@@ -802,6 +887,27 @@ internal static class Program
             return Exception is null
                 ? Task.FromResult(ExitCode)
                 : Task.FromException<int>(Exception);
+        }
+    }
+
+    private sealed class FakeDisplayTopologyService(
+        params DisplayTopologySnapshot[] snapshots) : IDisplayTopologyService
+    {
+        private readonly Queue<DisplayTopologySnapshot> _snapshots = new(snapshots);
+        private DisplayTopologySnapshot _last = snapshots.First();
+
+        public int CallCount { get; private set; }
+
+        public DisplayTopologySnapshot GetSnapshot()
+        {
+            CallCount++;
+
+            if (_snapshots.TryDequeue(out DisplayTopologySnapshot? snapshot))
+            {
+                _last = snapshot;
+            }
+
+            return _last;
         }
     }
 

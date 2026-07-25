@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Threading;
@@ -29,6 +30,7 @@ public partial class MainWindow : Window
     private readonly SemaphoreSlim _deviceRefreshGate = new(1, 1);
     private readonly CancellationTokenSource _lifetimeCancellation = new();
     private HwndSource? _windowSource;
+    private DisplayMode? _currentDisplayMode;
     private string? _audioWatcherStatusSuffix;
     private const int WmDeviceChange = 0x0219;
 
@@ -145,19 +147,28 @@ public partial class MainWindow : Window
 
     private async void ApplyDisplayMode_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not Button { Tag: string modeName } ||
+        if (sender is not ToggleButton { Tag: string modeName } ||
             !Enum.TryParse(modeName, out DisplayMode mode))
         {
             DisplayStatusText.Text = "That display mode is not recognized.";
             return;
         }
 
-        if (RequiresConfirmation(mode) && !ConfirmDisplayChange(mode))
+        if (_currentDisplayMode == mode)
         {
-            DisplayStatusText.Text = "Display change cancelled.";
+            SetDisplayModeSelection(mode);
             return;
         }
 
+        if (RequiresConfirmation(mode) && !ConfirmDisplayChange(mode))
+        {
+            DisplayStatusText.Text = "Display change cancelled.";
+            SetDisplayModeSelection(_currentDisplayMode);
+            return;
+        }
+
+        DisplayMode? previousMode = _currentDisplayMode;
+        SetDisplayModeSelection(mode);
         DisplayModeButtons.IsEnabled = false;
         DisplayStatusText.Text = $"Switching to {mode.GetDisplayName()}...";
 
@@ -167,11 +178,29 @@ public partial class MainWindow : Window
                 mode,
                 _lifetimeCancellation.Token);
 
-            DisplayStatusText.Text = result.Message;
-
             if (result.Succeeded)
             {
-                RefreshDisplayTopology();
+                DisplayTopologySnapshot snapshot =
+                    await DisplayTransitionMonitor.WaitForModeAsync(
+                        _displayTopologyService,
+                        mode,
+                        TimeSpan.FromMilliseconds(150),
+                        maximumAttempts: 18,
+                        _lifetimeCancellation.Token);
+
+                ApplyDisplayTopologySnapshot(snapshot);
+
+                if (snapshot.CurrentMode != mode)
+                {
+                    DisplayStatusText.Text =
+                        $"{result.Message} Windows is still updating.";
+                    SetDisplayModeSelection(mode);
+                }
+            }
+            else
+            {
+                DisplayStatusText.Text = result.Message;
+                SetDisplayModeSelection(previousMode);
             }
         }
         catch (OperationCanceledException) when (_lifetimeCancellation.IsCancellationRequested)
@@ -190,13 +219,32 @@ public partial class MainWindow : Window
     private void RefreshDisplayTopology()
     {
         DisplayTopologySnapshot snapshot = _displayTopologyService.GetSnapshot();
+        ApplyDisplayTopologySnapshot(snapshot);
+    }
+
+    private void ApplyDisplayTopologySnapshot(DisplayTopologySnapshot snapshot)
+    {
+        _currentDisplayMode = snapshot.CurrentMode;
         DisplayStatusText.Text = snapshot.Status;
+        SetDisplayModeSelection(snapshot.CurrentMode);
 
         bool multiDisplayChoiceAvailable =
             !snapshot.IsReliable || snapshot.SupportsMultipleDisplays;
 
         DuplicateDisplayButton.IsEnabled = multiDisplayChoiceAvailable;
         ExtendDisplayButton.IsEnabled = multiDisplayChoiceAvailable;
+    }
+
+    private void SetDisplayModeSelection(DisplayMode? selectedMode)
+    {
+        foreach (ToggleButton button in
+                 DisplayModeButtons.Children.OfType<ToggleButton>())
+        {
+            button.IsChecked =
+                button.Tag is string modeName &&
+                Enum.TryParse(modeName, out DisplayMode buttonMode) &&
+                buttonMode == selectedMode;
+        }
     }
 
     private async void RefreshAudio_Click(object sender, RoutedEventArgs e) =>

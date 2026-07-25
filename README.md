@@ -128,7 +128,9 @@ present-device inventory for Bluetooth and USB-wired hardware, collapses common
 Windows profile/interface duplicates, refreshes on device-change messages, and
 links to Windows Settings for pairing or removal. The compact 660-pixel window
 uses a native dark title bar and keeps long inventories inside their own
-vertical scrollers. M5 polish and release work is next.
+vertical scrollers. The active display mode stays highlighted, redundant
+requests are ignored, and a short post-change settle check follows Windows'
+real topology without idle polling. M5 polish and release work is next.
 
 ## License
 

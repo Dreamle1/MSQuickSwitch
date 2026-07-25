@@ -539,3 +539,57 @@ The standard Lite output was open in an existing process and therefore locked.
 That process was not terminated. This revision was published beside it in
 versioned `-compact` folders; accidental duplicate publish folders under the
 source directory were removed after the correct outputs were verified.
+
+## 2026-07-25 - smoother display-mode transitions
+
+### Implemented
+
+- Replaced stateless display buttons with visually equivalent toggle controls.
+- Highlights the topology reported by Windows at startup and after refresh.
+- Highlights a newly requested mode immediately while the switch is running.
+- Ignores requests for the already-active mode instead of relaunching
+  `DisplaySwitch.exe`.
+- Continues to serialize real requests by disabling the group until the active
+  request completes; the selected mode remains highlighted while disabled.
+- Restores the previous selection after cancellation or a reported failure.
+- Added a transient `QueryDisplayConfig` settle monitor after successful
+  requests. It checks every 150 ms for up to 18 reads and exits as soon as the
+  requested topology appears.
+- The settle monitor runs only after an explicit display request. No idle
+  polling, service, or resident thread was introduced.
+
+### Verification
+
+- Format verification: passed with no changes required.
+- Release build: passed with 0 warnings and 0 errors.
+- Isolated checks: 39 passed, 0 failed.
+- Read-only live checks: 43 passed, 0 failed.
+- Immediate-settle, delayed-settle, and bounded-timeout behaviors: passed.
+- Live topology: extend, 3 active displays, 3 available displays.
+- Automated display-changing commands invoked: 0.
+- Actual WPF visual inspection: Extend was highlighted from the live topology,
+  the compact 660 x 900 layout remained intact, and normal shutdown passed.
+- Updated compact Portable executable startup and normal shutdown: passed.
+
+Published compact variants:
+
+| Variant | Bytes | SHA-256 |
+| --- | ---: | --- |
+| Lite | 281,803 | `BE87CA174002D1099F225E32528DC9E24A9468AF91A60E943D0D9CECE33AAE29` |
+| Portable | 64,844,832 | `C0EEDF5B8B2CF84011FAAEC62DB7E5940F4797EA1E4C3487C85683FF3903632B` |
+
+### Attended display-transition check
+
+1. Start WinQuickSwitch and confirm the currently active display mode is blue.
+2. Select **Duplicate** or **Extend** once. Confirm the requested mode turns
+   blue immediately and remains selected while Windows changes the displays.
+3. After the displays settle, confirm the status and blue selection agree.
+4. Select the already-active mode again. Confirm there is no new display
+   blanking or rearrangement.
+5. For **PC screen only** and **Second screen only**, select **No** in the
+   warning and confirm the original mode remains selected.
+6. Run the accepted risky-mode checks only when it is safe for one display to
+   turn off, then restore the original topology.
+
+Physical blanking during a real topology change cannot be removed by the app;
+it is controlled by Windows, the graphics driver, and monitor link training.
