@@ -106,10 +106,10 @@ either succeeds or degrades clearly.
 
 ### M4 - connected devices
 
-- Enumerate present Bluetooth and wired Plug and Play devices.
-- Normalize duplicate physical devices that expose several interfaces.
-- Watch for add, remove, and update events.
-- Add Settings deep links; keep pairing and device removal outside the app.
+- [x] Enumerate present Bluetooth and USB-wired Plug and Play devices.
+- [x] Normalize duplicate physical devices that expose several interfaces.
+- [x] Watch for add, remove, and update events.
+- [x] Add Settings deep links; keep pairing and device removal outside the app.
 
 Exit: the list updates live and does not label historical/non-present devices
 as connected.

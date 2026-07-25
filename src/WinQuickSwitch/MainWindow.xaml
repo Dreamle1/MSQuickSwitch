@@ -208,28 +208,71 @@
       </Border>
 
       <Border Grid.Row="3" Style="{StaticResource SectionCard}">
-        <Grid>
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="Auto" />
-          </Grid.ColumnDefinitions>
-          <StackPanel>
-            <TextBlock FontSize="18" FontWeight="SemiBold" Text="Devices" />
-            <TextBlock Margin="0,6,0,0"
-                       Foreground="{StaticResource SecondaryTextBrush}"
-                       Text="Bluetooth and wired devices currently connected" />
-          </StackPanel>
-          <TextBlock Grid.Column="1"
-                     VerticalAlignment="Center"
+        <StackPanel>
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel>
+              <TextBlock FontSize="18" FontWeight="SemiBold" Text="Devices" />
+              <TextBlock Margin="0,6,0,0"
+                         Foreground="{StaticResource SecondaryTextBrush}"
+                         Text="Bluetooth and USB-wired devices currently present" />
+            </StackPanel>
+            <Button x:Name="RefreshDevicesButton"
+                    Grid.Column="1"
+                    MinWidth="88"
+                    MinHeight="34"
+                    Padding="12,5"
+                    Click="RefreshDevices_Click"
+                    Content="Refresh" />
+          </Grid>
+
+          <TextBlock x:Name="DeviceStatusText"
+                     Margin="0,12,0,0"
                      Foreground="{StaticResource SecondaryTextBrush}"
-                     Text="Milestone 4" />
-        </Grid>
+                     Text="Connected devices load automatically." />
+
+          <ListView x:Name="ConnectedDevicesList"
+                    Margin="0,14,0,0"
+                    MinHeight="80"
+                    MaxHeight="200">
+            <ListView.View>
+              <GridView>
+                <GridViewColumn Width="250"
+                                Header="Name"
+                                DisplayMemberBinding="{Binding Name}" />
+                <GridViewColumn Width="105"
+                                Header="Connection"
+                                DisplayMemberBinding="{Binding ConnectionLabel}" />
+                <GridViewColumn Width="120"
+                                Header="Type"
+                                DisplayMemberBinding="{Binding Category}" />
+                <GridViewColumn Width="110"
+                                Header="Status"
+                                DisplayMemberBinding="{Binding StatusLabel}" />
+              </GridView>
+            </ListView.View>
+          </ListView>
+
+          <WrapPanel Margin="0,10,0,0">
+            <Button Style="{StaticResource CompactButton}"
+                    Click="OpenBluetoothSettings_Click"
+                    Content="Bluetooth settings"
+                    ToolTip="Pair, disconnect, or remove a Bluetooth device in Windows Settings" />
+            <Button Style="{StaticResource CompactButton}"
+                    Click="OpenConnectedDevicesSettings_Click"
+                    Content="Devices settings"
+                    ToolTip="Manage connected devices in Windows Settings" />
+          </WrapPanel>
+        </StackPanel>
       </Border>
 
       <TextBlock Grid.Row="4"
                  Margin="2,6,0,0"
                  Foreground="{StaticResource SecondaryTextBrush}"
-                 Text="Display and audio controls are active." />
+                 Text="Display, audio, and connected-device controls are active." />
     </Grid>
   </ScrollViewer>
 </Window>

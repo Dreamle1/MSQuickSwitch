@@ -117,23 +117,38 @@ unsupported or Windows Audio is unavailable.
 
 ## Device adapter
 
-Use Windows device enumeration/Plug and Play information to build a present
-device inventory and a watcher for changes. Query only properties needed for
-the UI:
+The M4 adapter uses SetupAPI to enumerate only Plug and Play devnodes carrying
+the `DIGCF_PRESENT` flag. It reads only properties needed for the UI:
 
 - Stable device/interface identifier retained in memory.
 - Friendly name.
 - Device class.
 - Present/connected and enabled/problem state where exposed.
 - Transport/bus information used to classify Bluetooth versus wired.
-- Battery percentage when a battery property is actually available.
+- Container ID, retained only in memory for grouping.
 
-One physical headset can expose multiple endpoints and device interfaces.
-Normalize cautiously: preserve the raw items internally and group only when a
-container or parent identifier proves that they belong together.
+Interfaces with the same Windows container ID are grouped into one physical
+device. Known hub, enumerator, protocol-service, and generic interface names
+are hidden. Bluetooth takes precedence for a container that exposes both
+Bluetooth and USB interfaces. Common Bluetooth profile prefixes/suffixes
+(`LE_`, `Stereo`, and hands-free audio) are removed, then exact normalized
+names are collapsed to avoid presenting separate Windows profiles as separate
+devices. The tradeoff is that two simultaneously present Bluetooth devices
+with exactly the same friendly name can appear as one row.
+
+Status comes from `CM_Get_DevNode_Status`: started devnodes are shown as
+connected, other present devnodes as present, and nonzero problem codes as
+needing attention. Battery state is not part of M4 because SetupAPI does not
+provide one uniform battery property across Bluetooth device types.
+
+The WPF window listens for `WM_DEVICECHANGE` on its existing native window
+handle. A 450 ms debounce collapses hardware-event bursts before a background
+SetupAPI refresh. The hook and pending refresh are removed on window close;
+there is no polling thread or resident service.
 
 The first release is read-only. Pair, remove, troubleshoot, and driver actions
-open the relevant Windows Settings page.
+open the allowlisted `ms-settings:bluetooth` or
+`ms-settings:connecteddevices` page.
 
 ## Threading and lifetime
 
@@ -162,9 +177,9 @@ Targets for a release, framework-dependent build:
 - No polling loop while idle; use Windows notifications.
 - UI remains responsive while enumerating devices.
 
-Audio enumeration is currently started only when the user selects **Refresh**.
-Future endpoint/session watchers should likewise exist only while the audio
-section is active.
+Audio and device inventory load when the main window starts. Their watchers
+exist only for the lifetime of that window and do no work while Windows emits
+no relevant notifications.
 
 Measure these targets in M5 rather than treating them as guaranteed by the
 framework choice.
@@ -196,7 +211,7 @@ suites. Mark them as attended hardware tests.
 | Risk | Response |
 | --- | --- |
 | Default-audio selection relies on a compatibility-sensitive COM contract | Isolate it, integration-test supported Windows builds, and retain a Settings fallback |
-| Bluetooth headsets expose several profiles and endpoints | Show roles/transports and group only from reliable parent/container data |
+| Bluetooth headsets expose several profiles and endpoints | Group by container first, normalize only known profile labels, and document the identical-name tradeoff |
 | Device enumeration returns historical or duplicate records | Filter for present devices and preserve raw-to-normalized traceability |
 | Projection changes can make the active display disappear | Use only the four Windows modes and make risky actions explicit |
 | WPF styling can drift from Windows 11 | Keep the UI compact and accessible; avoid recreating the full Settings design |

@@ -362,3 +362,82 @@ Settings adapters and never mutate the machine.
 
 - Release solution build: passed with 0 warnings and 0 errors.
 - Automated checks: 19/19 passed.
+
+## 2026-07-25 - connected Bluetooth and wired devices (M4)
+
+### Implemented
+
+- Added a dependency-free SetupAPI adapter that enumerates only present
+  Plug-and-Play devnodes and reads friendly name, class, enumerator, container
+  ID, hardware ID, started state, and problem code.
+- Classifies Bluetooth and USB-wired devices, groups interfaces sharing a
+  physical container, and hides Windows hub/enumerator/protocol infrastructure.
+- Removes known Bluetooth profile labels and collapses exact normalized names,
+  so media, hands-free, and LE profiles do not become misleading duplicate
+  rows.
+- Added a dark device table with friendly name, connection, type, and status.
+- Added manual Refresh plus automatic startup refresh.
+- Hooks the WPF window's `WM_DEVICECHANGE` messages and debounces bursts by
+  450 ms. There is no polling loop, background service, or tray process.
+- Added allowlisted Bluetooth and Connected Devices Settings shortcuts.
+  Pairing, removal, enabling/disabling, troubleshooting, and driver changes
+  remain outside WinQuickSwitch.
+- Cancels pending refreshes and removes the native window hook on close.
+- Keeps PnP instance/container identifiers in memory and out of test output.
+
+### Automated and visual verification
+
+Commands:
+
+```powershell
+.\.dotnet\dotnet.exe format .\WinQuickSwitch.sln --verify-no-changes --no-restore
+.\.dotnet\dotnet.exe build .\WinQuickSwitch.sln --configuration Release --no-restore
+.\.dotnet\dotnet.exe run --project .\tests\WinQuickSwitch.Tests\WinQuickSwitch.Tests.csproj --configuration Release --no-build
+.\.dotnet\dotnet.exe run --project .\tests\WinQuickSwitch.Tests\WinQuickSwitch.Tests.csproj --configuration Release --no-build -- --integration
+```
+
+Recorded results:
+
+- Format verification: passed with no changes required.
+- Release build: passed with 0 warnings and 0 errors.
+- Isolated checks: 34 passed, 0 failed.
+- Read-only live checks: 38 passed, 0 failed.
+- Live topology: extend, 3 active displays, 3 available displays.
+- Live audio: 7 playback endpoints, 3 recording endpoints, 2 active sessions.
+- Live normalized device inventory: 13 Bluetooth, 8 wired.
+- Hardware, audio, or display mutations invoked by automated verification: 0.
+- Actual WPF Release window startup, full-work-area sizing, dark device table,
+  nested device scrolling, and normal shutdown: passed.
+- Published self-contained Portable executable startup and normal shutdown:
+  passed.
+
+Published variants:
+
+| Variant | Bytes | SHA-256 |
+| --- | ---: | --- |
+| Lite | 276,683 | `13207B522FB8264388124271E2D508CC99AF5AEBF8A518E655059DAD4FC290E6` |
+| Portable | 64,842,797 | `3FB0000EF082206A957BAFB5CCBC5779ED695F11E5770357DE69163103BF19E6` |
+
+Outputs:
+
+- `artifacts/win-x64-lite/WinQuickSwitch.exe`
+- `artifacts/win-x64-portable/WinQuickSwitch.exe`
+
+### Attended M4 verification
+
+1. Start WinQuickSwitch and confirm the Devices table fills without selecting
+   **Refresh**.
+2. Plug in and unplug a USB device. Confirm its row appears or disappears
+   within approximately one second without selecting **Refresh**.
+3. Connect and disconnect a Bluetooth device. Confirm the list refreshes and
+   the UI remains responsive.
+4. For a Bluetooth headset, confirm Windows media/communications profiles
+   appear as one friendly device row rather than protocol-service rows.
+5. Select **Bluetooth settings** and **Devices settings** and confirm each
+   opens the expected Windows Settings page. Make any pairing or removal change
+   in Settings, not in WinQuickSwitch.
+6. Close WinQuickSwitch and confirm its process exits without a resident
+   watcher.
+
+These are attended checks because they require physical device changes and
+open external Settings pages. The automated suite only reads live device state.

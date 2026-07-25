@@ -5,10 +5,10 @@ audio, microphone, Bluetooth, and wired-device controls without digging through
 Settings.
 
 This repository contains the product plan, technical design, and working
-display and audio inventory slices. Projection controls are wired to Windows,
-the current display topology is detected, and active audio endpoints and
-application sessions load at startup and stay current through Windows audio
-notifications.
+display, audio, and connected-device slices. Projection controls are wired to
+Windows, active audio endpoints and application sessions stay current through
+Windows audio notifications, and present Bluetooth/USB devices refresh when
+Windows reports a hardware change.
 
 ## Planned first release
 
@@ -84,7 +84,7 @@ Lite build:
 
 Output: `artifacts\win-x64-lite\WinQuickSwitch.exe`
 
-- Approximately 245 KB.
+- Approximately 271 KB.
 - Requires the .NET 10 Desktop Runtime on the destination computer.
 - Recommended when minimum download and app footprint matter most.
 
@@ -120,13 +120,13 @@ tests/
 ## Project status
 
 Display switching, topology detection, and capability state are implemented.
-Attended display-switch tests remain before M1 is signed off. M2 can enumerate
-playback/recording endpoints, distinguish default roles, and show active
-application sessions. It refreshes automatically at startup and when Windows
-reports endpoint, default-device, session, volume, or session-state changes.
-The **Refresh** button remains as a manual fallback. M3 adds per-application
-volume and mute controls plus separate normal-default and communications-device
-selection for playback and recording endpoints. M4 connected devices are next.
+Attended display-switch tests remain before M1 is signed off. Audio inventory
+loads automatically, follows Windows notifications, and supports
+per-application volume/mute plus separate normal and calls defaults. M4 adds a
+present-device inventory for Bluetooth and USB-wired hardware, collapses common
+Windows profile/interface duplicates, refreshes on device-change messages, and
+links to Windows Settings for pairing or removal. M5 polish and release work is
+next.
 
 ## License
 

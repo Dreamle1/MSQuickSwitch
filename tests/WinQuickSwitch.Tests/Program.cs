@@ -1,6 +1,8 @@
 using WinQuickSwitch.Features.Audio;
+using WinQuickSwitch.Features.Devices;
 using WinQuickSwitch.Features.Display;
 using WinQuickSwitch.Platform.Windows.Audio;
+using WinQuickSwitch.Platform.Windows.Devices;
 using WinQuickSwitch.Platform.Windows.Display;
 
 namespace WinQuickSwitch.Tests;
@@ -38,6 +40,13 @@ internal static class Program
             ("General endpoint selection updates both default roles", GeneralEndpointSelectionUpdatesBothRoles),
             ("Communications endpoint selection updates only calls", CommunicationsEndpointSelectionUpdatesCalls),
             ("Unsupported endpoint selection preserves Settings fallback", UnsupportedEndpointSelectionPreservesFallback),
+            ("Physical device interfaces are grouped by container", PhysicalDeviceInterfacesAreGrouped),
+            ("Bluetooth takes precedence for mixed-interface devices", BluetoothTakesPrecedence),
+            ("Bluetooth profile names collapse into one device", BluetoothProfilesCollapse),
+            ("Generic device infrastructure is hidden", GenericDeviceInfrastructureIsHidden),
+            ("Unrelated USB devices remain separate", UnrelatedUsbDevicesRemainSeparate),
+            ("Device status labels are human readable", DeviceStatusLabelsAreHumanReadable),
+            ("Device Settings shortcuts use exact Windows URIs", DeviceSettingsShortcutsUseExactUris),
         ];
 
         if (args.Contains("--integration", StringComparer.OrdinalIgnoreCase))
@@ -45,6 +54,7 @@ internal static class Program
             tests.Add(("Live display topology can be read", LiveDisplayTopologyCanBeRead));
             tests.Add(("Live Core Audio inventory can be read", LiveAudioInventoryCanBeRead));
             tests.Add(("Live audio notification watcher starts and stops", LiveAudioWatcherStartsAndStops));
+            tests.Add(("Live connected-device inventory can be read", LiveDeviceInventoryCanBeRead));
         }
 
         int failed = 0;
@@ -319,6 +329,179 @@ internal static class Program
         Equal("ms-settings:sound", settings.Uris[0]);
     }
 
+    private static Task PhysicalDeviceInterfacesAreGrouped()
+    {
+        Guid containerId = Guid.NewGuid();
+
+        IReadOnlyList<ConnectedDeviceInfo> devices = ConnectedDeviceClassifier.Classify(
+        [
+            PnpDevice(
+                "USB\\COMPOSITE",
+                containerId,
+                "USB Composite Device",
+                "USB",
+                "USB"),
+            PnpDevice(
+                "USB\\KEYBOARD",
+                containerId,
+                "Ergo Keyboard",
+                "Keyboard",
+                "USB"),
+        ]);
+
+        Equal(1, devices.Count);
+        Equal("Ergo Keyboard", devices[0].Name);
+        Equal("Keyboard", devices[0].Category);
+        Equal(DeviceTransport.Wired, devices[0].Transport);
+        return Task.CompletedTask;
+    }
+
+    private static Task BluetoothTakesPrecedence()
+    {
+        Guid containerId = Guid.NewGuid();
+
+        IReadOnlyList<ConnectedDeviceInfo> devices = ConnectedDeviceClassifier.Classify(
+        [
+            PnpDevice(
+                "USB\\DONGLE",
+                containerId,
+                "USB Composite Device",
+                "USB",
+                "USB"),
+            PnpDevice(
+                "BTHENUM\\HEADSET",
+                containerId,
+                "Andrew Headphones",
+                "AudioEndpoint",
+                "BTHENUM"),
+        ]);
+
+        Equal(1, devices.Count);
+        Equal("Andrew Headphones", devices[0].Name);
+        Equal(DeviceTransport.Bluetooth, devices[0].Transport);
+        Equal("Audio", devices[0].Category);
+        return Task.CompletedTask;
+    }
+
+    private static Task GenericDeviceInfrastructureIsHidden()
+    {
+        IReadOnlyList<ConnectedDeviceInfo> devices = ConnectedDeviceClassifier.Classify(
+        [
+            PnpDevice(
+                "USB\\ROOT_HUB",
+                Guid.NewGuid(),
+                "USB Root Hub (USB 3.0)",
+                "USB",
+                "USB"),
+            PnpDevice(
+                "BTH\\ENUMERATOR",
+                Guid.NewGuid(),
+                "Microsoft Bluetooth Enumerator",
+                "Bluetooth",
+                "BTH"),
+            PnpDevice(
+                "BTHENUM\\SERVICE",
+                Guid.NewGuid(),
+                "Device Information Service",
+                "Bluetooth",
+                "BTHENUM"),
+            PnpDevice(
+                "USB\\KEYBOARD",
+                Guid.NewGuid(),
+                "HID Keyboard Device",
+                "Keyboard",
+                "USB"),
+        ]);
+
+        Equal(0, devices.Count);
+        return Task.CompletedTask;
+    }
+
+    private static Task BluetoothProfilesCollapse()
+    {
+        IReadOnlyList<ConnectedDeviceInfo> devices = ConnectedDeviceClassifier.Classify(
+        [
+            PnpDevice(
+                "BTHENUM\\HEADSET",
+                Guid.NewGuid(),
+                "LE_WH-1000XM4",
+                "Bluetooth",
+                "BTHENUM"),
+            PnpDevice(
+                "BTHENUM\\AUDIO",
+                Guid.NewGuid(),
+                "WH-1000XM4 Hands-Free AG Audio",
+                "AudioEndpoint",
+                "BTHENUM"),
+        ]);
+
+        Equal(1, devices.Count);
+        Equal("WH-1000XM4", devices[0].Name);
+        return Task.CompletedTask;
+    }
+
+    private static Task UnrelatedUsbDevicesRemainSeparate()
+    {
+        IReadOnlyList<ConnectedDeviceInfo> devices = ConnectedDeviceClassifier.Classify(
+        [
+            PnpDevice(
+                "USB\\CAMERA",
+                Guid.NewGuid(),
+                "Conference Camera",
+                "Camera",
+                "USB"),
+            PnpDevice(
+                "USB\\DRIVE",
+                Guid.NewGuid(),
+                "Backup Drive",
+                "DiskDrive",
+                "USB"),
+        ]);
+
+        Equal(2, devices.Count);
+        True(
+            devices.Select(device => device.Name).Contains("Conference Camera"),
+            "The camera should remain visible.");
+        True(
+            devices.Select(device => device.Name).Contains("Backup Drive"),
+            "The drive should remain visible.");
+        return Task.CompletedTask;
+    }
+
+    private static Task DeviceStatusLabelsAreHumanReadable()
+    {
+        ConnectedDeviceInfo connected = new(
+            "1",
+            "Device",
+            "USB device",
+            DeviceTransport.Wired,
+            true,
+            0);
+        ConnectedDeviceInfo present = connected with { IsStarted = false };
+        ConnectedDeviceInfo problem = connected with { ProblemCode = 22 };
+
+        Equal("Connected", connected.StatusLabel);
+        Equal("Present", present.StatusLabel);
+        Equal("Needs attention", problem.StatusLabel);
+        return Task.CompletedTask;
+    }
+
+    private static Task DeviceSettingsShortcutsUseExactUris()
+    {
+        FakeDeviceSettingsLauncher launcher = new();
+        WindowsDeviceSettingsService service = new(launcher);
+
+        DeviceActionResult bluetooth = service.OpenBluetoothSettings();
+        DeviceActionResult devices = service.OpenConnectedDevicesSettings();
+
+        True(bluetooth.Succeeded, bluetooth.Message);
+        True(devices.Succeeded, devices.Message);
+        Equal(2, launcher.Uris.Count);
+        Equal("ms-settings:bluetooth", launcher.Uris[0]);
+        Equal("ms-settings:connecteddevices", launcher.Uris[1]);
+        return Task.CompletedTask;
+    }
+
     private static Task LiveDisplayTopologyCanBeRead()
     {
         DisplayTopologySnapshot snapshot = new WindowsDisplayTopologyService().GetSnapshot();
@@ -356,6 +539,44 @@ internal static class Program
         watcher.Start();
         return Task.CompletedTask;
     }
+
+    private static async Task LiveDeviceInventoryCanBeRead()
+    {
+        DeviceInventory inventory =
+            await new WindowsDeviceInventoryService().GetInventoryAsync();
+
+        foreach (ConnectedDeviceInfo device in inventory.Devices)
+        {
+            True(!string.IsNullOrWhiteSpace(device.Id), "A device ID was empty.");
+            True(!string.IsNullOrWhiteSpace(device.Name), "A device name was empty.");
+        }
+
+        Equal(
+            inventory.Devices.Count,
+            inventory.Devices.Select(device => device.Id).Distinct().Count());
+
+        Console.WriteLine(
+            $"     bluetooth={inventory.Devices.Count(device => device.Transport == DeviceTransport.Bluetooth)}, " +
+            $"wired={inventory.Devices.Count(device => device.Transport == DeviceTransport.Wired)}");
+    }
+
+    private static PnpDeviceDescriptor PnpDevice(
+        string instanceId,
+        Guid? containerId,
+        string name,
+        string deviceClass,
+        string enumeratorName,
+        bool isStarted = true,
+        uint problemCode = 0) =>
+        new(
+            instanceId,
+            containerId,
+            name,
+            deviceClass,
+            enumeratorName,
+            $"{enumeratorName}\\TEST",
+            isStarted,
+            problemCode);
 
     private static DisplayPathDescriptor DisplayPath(
         long adapterId,
@@ -578,6 +799,13 @@ internal static class Program
     }
 
     private sealed class FakeWindowsSettingsLauncher : IWindowsSettingsLauncher
+    {
+        public List<string> Uris { get; } = [];
+
+        public void Open(string settingsUri) => Uris.Add(settingsUri);
+    }
+
+    private sealed class FakeDeviceSettingsLauncher : IDeviceSettingsLauncher
     {
         public List<string> Uris { get; } = [];
 
