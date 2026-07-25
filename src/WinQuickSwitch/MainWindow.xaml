@@ -111,6 +111,18 @@
                        MinHeight="72"
                        MaxHeight="190"
                        DisplayMemberPath="DisplayLabel" />
+              <WrapPanel Margin="0,8,0,0">
+                <Button Style="{StaticResource CompactButton}"
+                        Tag="PlaybackGeneral"
+                        Click="SetDefaultAudioEndpoint_Click"
+                        Content="Set default"
+                        ToolTip="Use the selected playback device for normal Windows audio" />
+                <Button Style="{StaticResource CompactButton}"
+                        Tag="PlaybackCommunications"
+                        Click="SetDefaultAudioEndpoint_Click"
+                        Content="Set calls"
+                        ToolTip="Use the selected playback device for communications" />
+              </WrapPanel>
             </StackPanel>
             <StackPanel Grid.Column="2">
               <TextBlock Margin="0,0,0,6"
@@ -120,8 +132,24 @@
                        MinHeight="72"
                        MaxHeight="190"
                        DisplayMemberPath="DisplayLabel" />
+              <WrapPanel Margin="0,8,0,0">
+                <Button Style="{StaticResource CompactButton}"
+                        Tag="RecordingGeneral"
+                        Click="SetDefaultAudioEndpoint_Click"
+                        Content="Set default"
+                        ToolTip="Use the selected microphone for normal recording" />
+                <Button Style="{StaticResource CompactButton}"
+                        Tag="RecordingCommunications"
+                        Click="SetDefaultAudioEndpoint_Click"
+                        Content="Set calls"
+                        ToolTip="Use the selected microphone for communications" />
+              </WrapPanel>
             </StackPanel>
           </Grid>
+
+          <TextBlock Margin="0,8,0,0"
+                     Foreground="{StaticResource SecondaryTextBrush}"
+                     Text="Select a device, then choose whether it is the normal default or the calls device." />
 
           <TextBlock Margin="0,14,0,6"
                      FontWeight="SemiBold"
@@ -129,18 +157,50 @@
           <ListView x:Name="AudioSessionsList" MinHeight="80" MaxHeight="180">
             <ListView.View>
               <GridView>
-                <GridViewColumn Width="180"
+                <GridViewColumn Width="150"
                                 Header="Application"
                                 DisplayMemberBinding="{Binding ApplicationName}" />
-                <GridViewColumn Width="190"
+                <GridViewColumn Width="170"
                                 Header="Output"
                                 DisplayMemberBinding="{Binding EndpointName}" />
-                <GridViewColumn Width="70"
-                                Header="Volume"
-                                DisplayMemberBinding="{Binding VolumeLabel}" />
-                <GridViewColumn Width="60"
-                                Header="Muted"
-                                DisplayMemberBinding="{Binding MuteLabel}" />
+                <GridViewColumn Width="190" Header="Volume">
+                  <GridViewColumn.CellTemplate>
+                    <DataTemplate>
+                      <Grid Margin="0,1">
+                        <Grid.ColumnDefinitions>
+                          <ColumnDefinition Width="135" />
+                          <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Slider Grid.Column="0"
+                                Minimum="0"
+                                Maximum="100"
+                                SmallChange="2"
+                                LargeChange="10"
+                                Tag="{Binding Id}"
+                                Value="{Binding VolumePercent, Mode=OneWay}"
+                                PreviewMouseLeftButtonUp="SessionVolumeSlider_Commit"
+                                KeyUp="SessionVolumeSlider_KeyUp"
+                                AutomationProperties.Name="{Binding ApplicationName, StringFormat=Volume for {0}}" />
+                        <TextBlock Grid.Column="1"
+                                   Width="42"
+                                   Margin="8,0,0,0"
+                                   VerticalAlignment="Center"
+                                   Text="{Binding VolumeLabel}" />
+                      </Grid>
+                    </DataTemplate>
+                  </GridViewColumn.CellTemplate>
+                </GridViewColumn>
+                <GridViewColumn Width="65" Header="Mute">
+                  <GridViewColumn.CellTemplate>
+                    <DataTemplate>
+                      <CheckBox HorizontalAlignment="Center"
+                                Tag="{Binding Id}"
+                                IsChecked="{Binding IsMuted, Mode=OneWay}"
+                                Click="SessionMute_Click"
+                                AutomationProperties.Name="{Binding ApplicationName, StringFormat=Mute {0}}" />
+                    </DataTemplate>
+                  </GridViewColumn.CellTemplate>
+                </GridViewColumn>
               </GridView>
             </ListView.View>
           </ListView>
@@ -169,7 +229,7 @@
       <TextBlock Grid.Row="4"
                  Margin="2,6,0,0"
                  Foreground="{StaticResource SecondaryTextBrush}"
-                 Text="Display controls and read-only audio inventory are active." />
+                 Text="Display and audio controls are active." />
     </Grid>
   </ScrollViewer>
 </Window>

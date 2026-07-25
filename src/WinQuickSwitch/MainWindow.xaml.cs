@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Threading;
 using WinQuickSwitch.Features.Audio;
 using WinQuickSwitch.Features.Display;
@@ -14,6 +15,8 @@ public partial class MainWindow : Window
     private readonly IDisplayTopologyService _displayTopologyService;
     private readonly IAudioInventoryService _audioInventoryService;
     private readonly IAudioChangeWatcher _audioChangeWatcher;
+    private readonly IAudioSessionControlService _audioSessionControlService;
+    private readonly IDefaultAudioEndpointService _defaultAudioEndpointService;
     private readonly DebouncedActionScheduler _audioRefreshScheduler;
     private readonly SemaphoreSlim _audioRefreshGate = new(1, 1);
     private readonly CancellationTokenSource _lifetimeCancellation = new();
@@ -23,7 +26,9 @@ public partial class MainWindow : Window
         new WindowsDisplayModeService(),
         new WindowsDisplayTopologyService(),
         new WindowsAudioInventoryService(),
-        new WindowsAudioChangeWatcher())
+        new WindowsAudioChangeWatcher(),
+        new WindowsAudioSessionControlService(),
+        new WindowsDefaultAudioEndpointService())
     {
     }
 
@@ -31,12 +36,16 @@ public partial class MainWindow : Window
         IDisplayModeService displayModeService,
         IDisplayTopologyService displayTopologyService,
         IAudioInventoryService audioInventoryService,
-        IAudioChangeWatcher audioChangeWatcher)
+        IAudioChangeWatcher audioChangeWatcher,
+        IAudioSessionControlService audioSessionControlService,
+        IDefaultAudioEndpointService defaultAudioEndpointService)
     {
         _displayModeService = displayModeService;
         _displayTopologyService = displayTopologyService;
         _audioInventoryService = audioInventoryService;
         _audioChangeWatcher = audioChangeWatcher;
+        _audioSessionControlService = audioSessionControlService;
+        _defaultAudioEndpointService = defaultAudioEndpointService;
         InitializeComponent();
 
         _audioRefreshScheduler = new DebouncedActionScheduler(
@@ -139,6 +148,155 @@ public partial class MainWindow : Window
     private async void RefreshAudio_Click(object sender, RoutedEventArgs e) =>
         await RefreshAudioInventoryAsync();
 
+    private async void SessionVolumeSlider_Commit(
+        object sender,
+        MouseButtonEventArgs e)
+    {
+        if (sender is Slider slider)
+        {
+            await ApplySessionVolumeAsync(slider);
+        }
+    }
+
+    private async void SessionVolumeSlider_KeyUp(object sender, KeyEventArgs e)
+    {
+        if (sender is Slider slider &&
+            e.Key is Key.Left or Key.Right or Key.Up or Key.Down or
+                Key.PageUp or Key.PageDown or Key.Home or Key.End)
+        {
+            await ApplySessionVolumeAsync(slider);
+        }
+    }
+
+    private async Task ApplySessionVolumeAsync(Slider slider)
+    {
+        if (slider.Tag is not string sessionId)
+        {
+            return;
+        }
+
+        slider.IsEnabled = false;
+
+        try
+        {
+            AudioControlResult result = await _audioSessionControlService.SetVolumeAsync(
+                sessionId,
+                (float)(slider.Value / 100),
+                _lifetimeCancellation.Token);
+
+            AudioStatusText.Text = result.Message;
+            _audioRefreshScheduler.Schedule();
+        }
+        catch (OperationCanceledException) when (_lifetimeCancellation.IsCancellationRequested)
+        {
+            // The window is closing; there is no status left to update.
+        }
+        finally
+        {
+            if (!_lifetimeCancellation.IsCancellationRequested)
+            {
+                slider.IsEnabled = true;
+            }
+        }
+    }
+
+    private async void SessionMute_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not CheckBox { Tag: string sessionId } checkBox)
+        {
+            return;
+        }
+
+        bool requestedMute = checkBox.IsChecked == true;
+        checkBox.IsEnabled = false;
+
+        try
+        {
+            AudioControlResult result = await _audioSessionControlService.SetMuteAsync(
+                sessionId,
+                requestedMute,
+                _lifetimeCancellation.Token);
+
+            AudioStatusText.Text = result.Message;
+
+            if (!result.Succeeded && checkBox.DataContext is AudioSessionInfo session)
+            {
+                checkBox.IsChecked = session.IsMuted;
+            }
+
+            _audioRefreshScheduler.Schedule();
+        }
+        catch (OperationCanceledException) when (_lifetimeCancellation.IsCancellationRequested)
+        {
+            // The window is closing; there is no status left to update.
+        }
+        finally
+        {
+            if (!_lifetimeCancellation.IsCancellationRequested)
+            {
+                checkBox.IsEnabled = true;
+            }
+        }
+    }
+
+    private async void SetDefaultAudioEndpoint_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string action } button)
+        {
+            return;
+        }
+
+        ListBox endpointList = action.StartsWith(
+            "Playback",
+            StringComparison.Ordinal)
+                ? PlaybackEndpointsList
+                : RecordingEndpointsList;
+
+        if (endpointList.SelectedItem is not AudioEndpointInfo endpoint)
+        {
+            AudioStatusText.Text = "Select an audio device first.";
+            return;
+        }
+
+        AudioDefaultRoleSelection roleSelection = action.EndsWith(
+            "Communications",
+            StringComparison.Ordinal)
+                ? AudioDefaultRoleSelection.Communications
+                : AudioDefaultRoleSelection.General;
+
+        button.IsEnabled = false;
+
+        try
+        {
+            AudioControlResult result = await _defaultAudioEndpointService.SetDefaultAsync(
+                endpoint.Id,
+                endpoint.Name,
+                roleSelection,
+                _lifetimeCancellation.Token);
+
+            if (!result.Succeeded)
+            {
+                AudioControlResult fallback = _defaultAudioEndpointService.OpenSoundSettings();
+                AudioStatusText.Text = $"{result.Message} {fallback.Message}";
+                return;
+            }
+
+            AudioStatusText.Text = result.Message;
+            _audioRefreshScheduler.Schedule();
+        }
+        catch (OperationCanceledException) when (_lifetimeCancellation.IsCancellationRequested)
+        {
+            // The window is closing; there is no status left to update.
+        }
+        finally
+        {
+            if (!_lifetimeCancellation.IsCancellationRequested)
+            {
+                button.IsEnabled = true;
+            }
+        }
+    }
+
     private async Task RefreshAudioInventoryAsync()
     {
         bool entered = false;
@@ -163,6 +321,9 @@ public partial class MainWindow : Window
             PlaybackEndpointsList.ItemsSource = inventory.PlaybackEndpoints;
             RecordingEndpointsList.ItemsSource = inventory.RecordingEndpoints;
             AudioSessionsList.ItemsSource = inventory.Sessions;
+
+            SelectAudioEndpoint(PlaybackEndpointsList, inventory.PlaybackEndpoints);
+            SelectAudioEndpoint(RecordingEndpointsList, inventory.RecordingEndpoints);
 
             AudioStatusText.Text =
                 $"{inventory.PlaybackEndpoints.Count} playback · " +
@@ -191,6 +352,18 @@ public partial class MainWindow : Window
                 }
             }
         }
+    }
+
+    private static void SelectAudioEndpoint(
+        ListBox listBox,
+        IReadOnlyList<AudioEndpointInfo> endpoints)
+    {
+        string? selectedId = (listBox.SelectedItem as AudioEndpointInfo)?.Id;
+
+        listBox.SelectedItem = endpoints.FirstOrDefault(endpoint =>
+                string.Equals(endpoint.Id, selectedId, StringComparison.Ordinal))
+            ?? endpoints.FirstOrDefault(endpoint => endpoint.IsDefault)
+            ?? endpoints.FirstOrDefault();
     }
 
     private static bool RequiresConfirmation(DisplayMode mode) =>

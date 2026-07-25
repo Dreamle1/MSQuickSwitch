@@ -32,6 +32,12 @@ internal static class Program
             ("Audio session volume is formatted and clamped", AudioSessionVolumeIsFormatted),
             ("Audio refresh notifications are debounced", AudioRefreshNotificationsAreDebounced),
             ("Disposed audio debounce cancels pending work", DisposedAudioDebounceCancelsWork),
+            ("Session volume delegates the requested level", SessionVolumeDelegatesRequestedLevel),
+            ("Invalid session volume is rejected", InvalidSessionVolumeIsRejected),
+            ("Session mute delegates the requested state", SessionMuteDelegatesRequestedState),
+            ("General endpoint selection updates both default roles", GeneralEndpointSelectionUpdatesBothRoles),
+            ("Communications endpoint selection updates only calls", CommunicationsEndpointSelectionUpdatesCalls),
+            ("Unsupported endpoint selection preserves Settings fallback", UnsupportedEndpointSelectionPreservesFallback),
         ];
 
         if (args.Contains("--integration", StringComparer.OrdinalIgnoreCase))
@@ -218,6 +224,99 @@ internal static class Program
 
         await Task.Delay(140);
         Equal(0, callCount);
+    }
+
+    private static async Task SessionVolumeDelegatesRequestedLevel()
+    {
+        FakeAudioSessionMutationBackend backend = new();
+        WindowsAudioSessionControlService service = new(backend);
+
+        AudioControlResult result = await service.SetVolumeAsync("session-1", 0.42f);
+
+        True(result.Succeeded, result.Message);
+        Equal("session-1", backend.SessionId);
+        Equal(0.42f, backend.Volume);
+        Equal(1, backend.VolumeCallCount);
+    }
+
+    private static async Task InvalidSessionVolumeIsRejected()
+    {
+        FakeAudioSessionMutationBackend backend = new();
+        WindowsAudioSessionControlService service = new(backend);
+
+        AudioControlResult result = await service.SetVolumeAsync("session-1", 1.01f);
+
+        True(!result.Succeeded, "Out-of-range volume should fail.");
+        Equal(0, backend.VolumeCallCount);
+    }
+
+    private static async Task SessionMuteDelegatesRequestedState()
+    {
+        FakeAudioSessionMutationBackend backend = new();
+        WindowsAudioSessionControlService service = new(backend);
+
+        AudioControlResult result = await service.SetMuteAsync("session-2", true);
+
+        True(result.Succeeded, result.Message);
+        Equal("session-2", backend.SessionId);
+        True(backend.IsMuted, "Mute should be delegated as true.");
+        Equal(1, backend.MuteCallCount);
+    }
+
+    private static async Task GeneralEndpointSelectionUpdatesBothRoles()
+    {
+        FakeDefaultAudioEndpointSetter setter = new();
+        FakeWindowsSettingsLauncher settings = new();
+        WindowsDefaultAudioEndpointService service = new(setter, settings);
+
+        AudioControlResult result = await service.SetDefaultAsync(
+            "endpoint-1",
+            "USB Headset",
+            AudioDefaultRoleSelection.General);
+
+        True(result.Succeeded, result.Message);
+        Equal(2, setter.Calls.Count);
+        Equal(("endpoint-1", AudioRole.Console), setter.Calls[0]);
+        Equal(("endpoint-1", AudioRole.Multimedia), setter.Calls[1]);
+        Equal(0, settings.Uris.Count);
+    }
+
+    private static async Task CommunicationsEndpointSelectionUpdatesCalls()
+    {
+        FakeDefaultAudioEndpointSetter setter = new();
+        WindowsDefaultAudioEndpointService service = new(
+            setter,
+            new FakeWindowsSettingsLauncher());
+
+        AudioControlResult result = await service.SetDefaultAsync(
+            "endpoint-2",
+            "Desk microphone",
+            AudioDefaultRoleSelection.Communications);
+
+        True(result.Succeeded, result.Message);
+        Equal(1, setter.Calls.Count);
+        Equal(("endpoint-2", AudioRole.Communications), setter.Calls[0]);
+    }
+
+    private static async Task UnsupportedEndpointSelectionPreservesFallback()
+    {
+        FakeDefaultAudioEndpointSetter setter = new()
+        {
+            Exception = new InvalidOperationException("unsupported"),
+        };
+        FakeWindowsSettingsLauncher settings = new();
+        WindowsDefaultAudioEndpointService service = new(setter, settings);
+
+        AudioControlResult result = await service.SetDefaultAsync(
+            "endpoint-3",
+            "Speakers",
+            AudioDefaultRoleSelection.General);
+        AudioControlResult fallback = service.OpenSoundSettings();
+
+        True(!result.Succeeded, "Unsupported policy calls should fail clearly.");
+        True(fallback.Succeeded, fallback.Message);
+        Equal(1, settings.Uris.Count);
+        Equal("ms-settings:sound", settings.Uris[0]);
     }
 
     private static Task LiveDisplayTopologyCanBeRead()
@@ -424,5 +523,64 @@ internal static class Program
                 ? Task.FromResult(ExitCode)
                 : Task.FromException<int>(Exception);
         }
+    }
+
+    private sealed class FakeAudioSessionMutationBackend : IAudioSessionMutationBackend
+    {
+        public int VolumeCallCount { get; private set; }
+
+        public int MuteCallCount { get; private set; }
+
+        public string SessionId { get; private set; } = string.Empty;
+
+        public float Volume { get; private set; }
+
+        public bool IsMuted { get; private set; }
+
+        public AudioControlResult SetVolume(
+            string sessionId,
+            float volume,
+            CancellationToken cancellationToken)
+        {
+            VolumeCallCount++;
+            SessionId = sessionId;
+            Volume = volume;
+            return AudioControlResult.Success("updated");
+        }
+
+        public AudioControlResult SetMute(
+            string sessionId,
+            bool isMuted,
+            CancellationToken cancellationToken)
+        {
+            MuteCallCount++;
+            SessionId = sessionId;
+            IsMuted = isMuted;
+            return AudioControlResult.Success("updated");
+        }
+    }
+
+    private sealed class FakeDefaultAudioEndpointSetter : IDefaultAudioEndpointSetter
+    {
+        public List<(string EndpointId, AudioRole Role)> Calls { get; } = [];
+
+        public Exception? Exception { get; init; }
+
+        public void SetDefaultEndpoint(string endpointId, AudioRole role)
+        {
+            if (Exception is not null)
+            {
+                throw Exception;
+            }
+
+            Calls.Add((endpointId, role));
+        }
+    }
+
+    private sealed class FakeWindowsSettingsLauncher : IWindowsSettingsLauncher
+    {
+        public List<string> Uris { get; } = [];
+
+        public void Open(string settingsUri) => Uris.Add(settingsUri);
     }
 }

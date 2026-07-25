@@ -249,6 +249,12 @@ No attended step should change display topology or audio volume from inside
 WinQuickSwitch. Use Windows or the test application to create the external
 events.
 
+### Attended verification result
+
+On 2026-07-25, the user reported that the M2 attended notification checks were
+verified. This is user-attested confirmation; the automated log above separately
+records only the read-only checks executed by the test program.
+
 ## 2026-07-24 - automatic audio startup refresh
 
 ### Implemented
@@ -262,6 +268,79 @@ events.
 
 - Release solution build: passed with 0 warnings and 0 errors.
 - Automated checks: 19/19 passed.
+
+## 2026-07-25 - application audio controls and endpoint roles (M3)
+
+### Implemented
+
+- Added per-session volume sliders that commit only after mouse release or a
+  keyboard adjustment; loading and refreshing the UI never writes audio state.
+- Added per-session mute toggles with failure rollback and automatic inventory
+  refresh after each requested change.
+- Resolves every mutation by session-instance identifier across active playback
+  endpoints, avoiding process-name collisions.
+- Added explicit **Set default** and **Set calls** actions for both playback and
+  microphone lists. General selection updates console and multimedia roles;
+  calls selection updates communications only.
+- Isolated the compatibility-sensitive policy COM declaration behind
+  `IDefaultAudioEndpointSetter`.
+- Opens the documented Windows Sound Settings page if direct endpoint selection
+  is unsupported, while keeping the error visible in the app.
+- Added dark, keyboard-focusable Slider and CheckBox templates and screen-reader
+  names for each application control.
+
+### Automated verification
+
+Commands:
+
+```powershell
+.\.dotnet\dotnet.exe format .\WinQuickSwitch.sln --verify-no-changes --no-restore
+.\.dotnet\dotnet.exe build .\WinQuickSwitch.sln --configuration Release --no-restore
+.\.dotnet\dotnet.exe run --project .\tests\WinQuickSwitch.Tests\WinQuickSwitch.Tests.csproj --configuration Release --no-build
+.\.dotnet\dotnet.exe run --project .\tests\WinQuickSwitch.Tests\WinQuickSwitch.Tests.csproj --configuration Release --no-build -- --integration
+```
+
+Recorded results:
+
+- Release build: passed with 0 warnings and 0 errors.
+- Isolated checks: 27 passed, 0 failed.
+- Read-only live checks: 30 passed, 0 failed.
+- Live topology: extend, 3 active displays, 3 available displays.
+- Live audio: 7 playback endpoints, 3 recording endpoints, 1 active session.
+- Non-mutating policy compatibility probe: COM class activation and interface
+  query passed (`HRESULT 0x00000000`); endpoint mutations invoked: 0.
+- Actual WPF Release window startup, layout, and normal shutdown: passed.
+- Audio mutations invoked by automated verification: 0.
+
+Published variants:
+
+| Variant | Bytes | SHA-256 |
+| --- | ---: | --- |
+| Lite | 250,571 | `C0CBF721FC853103501AFF62054E554C6CE3F19228E1C07EA617C84C744AE63F` |
+| Portable | 64,832,388 | `3F1968ACA4DF25CA024711A294A23247E3FECD7E9B435138C107D4AEB5851C30` |
+
+### Attended M3 verification
+
+1. Start an ordinary desktop audio application and note its current Windows
+   mixer volume and mute state.
+2. Move only that application's WinQuickSwitch slider. Confirm the Windows
+   mixer reports the same percentage and other applications do not change.
+3. Toggle Mute on and off. Confirm sound and the Windows mixer follow the toggle,
+   then restore the application's original volume and mute state.
+4. Select a playback endpoint and choose **Set default**. Confirm Windows moves
+   ordinary audio to it, then restore the original default playback endpoint.
+5. Select a playback endpoint and choose **Set calls**. Confirm the
+   communications role changes independently, then restore it.
+6. Repeat steps 4 and 5 for a microphone, restoring both original recording
+   roles afterward.
+7. If direct selection reports unsupported, confirm Sound Settings opens and
+   the same change can be completed there.
+8. Close WinQuickSwitch and confirm the process exits without retaining an audio
+   session or watcher thread.
+
+The endpoint role checks intentionally remain attended because they change the
+user's active Windows audio configuration. Automated tests use fake policy and
+Settings adapters and never mutate the machine.
 - Actual WPF Release window launched with the local .NET 10 runtime and showed
   7 playback devices, 3 microphones, and 2 active application sessions without
   pressing Refresh.

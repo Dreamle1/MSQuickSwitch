@@ -438,18 +438,18 @@ public sealed class WindowsAudioChangeWatcher : IAudioChangeWatcher
     private sealed class SessionEventsClient(WindowsAudioChangeWatcher owner)
         : IAudioSessionEvents
     {
-        public int OnDisplayNameChanged(string newDisplayName, ref Guid eventContext)
+        public int OnDisplayNameChanged(string newDisplayName, IntPtr eventContext)
         {
             owner.NotifyChanged(rebuildSessionSubscriptions: false);
             return 0;
         }
 
-        public int OnIconPathChanged(string newIconPath, ref Guid eventContext)
+        public int OnIconPathChanged(string newIconPath, IntPtr eventContext)
         {
             return 0;
         }
 
-        public int OnSimpleVolumeChanged(float newVolume, bool newMute, ref Guid eventContext)
+        public int OnSimpleVolumeChanged(float newVolume, bool newMute, IntPtr eventContext)
         {
             owner.NotifyChanged(rebuildSessionSubscriptions: false);
             return 0;
@@ -459,12 +459,12 @@ public sealed class WindowsAudioChangeWatcher : IAudioChangeWatcher
             uint channelCount,
             IntPtr newChannelVolumes,
             uint changedChannel,
-            ref Guid eventContext)
+            IntPtr eventContext)
         {
             return 0;
         }
 
-        public int OnGroupingParamChanged(ref Guid newGroupingId, ref Guid eventContext)
+        public int OnGroupingParamChanged(ref Guid newGroupingId, IntPtr eventContext)
         {
             owner.NotifyChanged(rebuildSessionSubscriptions: false);
             return 0;

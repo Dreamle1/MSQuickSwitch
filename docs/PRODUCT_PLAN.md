@@ -95,10 +95,10 @@ Exit: the UI stays accurate while applications and headsets come and go.
 
 ### M3 - audio controls
 
-- Add per-session volume and mute controls.
-- Add endpoint selection through the isolated policy adapter.
-- Treat a communications-default change separately from the general default.
-- Provide a safe fallback that opens the relevant Settings page if endpoint
+- [x] Add per-session volume and mute controls.
+- [x] Add endpoint selection through the isolated policy adapter.
+- [x] Treat a communications-default change separately from the general default.
+- [x] Provide a safe fallback that opens the relevant Settings page if endpoint
   selection is unsupported on a Windows build.
 
 Exit: session controls work for ordinary desktop apps and endpoint switching

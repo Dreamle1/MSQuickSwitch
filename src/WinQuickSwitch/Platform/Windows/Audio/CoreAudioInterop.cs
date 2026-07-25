@@ -282,28 +282,28 @@ internal interface IAudioSessionEvents
     [PreserveSig]
     int OnDisplayNameChanged(
         [MarshalAs(UnmanagedType.LPWStr)] string newDisplayName,
-        ref Guid eventContext);
+        IntPtr eventContext);
 
     [PreserveSig]
     int OnIconPathChanged(
         [MarshalAs(UnmanagedType.LPWStr)] string newIconPath,
-        ref Guid eventContext);
+        IntPtr eventContext);
 
     [PreserveSig]
     int OnSimpleVolumeChanged(
         float newVolume,
         [MarshalAs(UnmanagedType.Bool)] bool newMute,
-        ref Guid eventContext);
+        IntPtr eventContext);
 
     [PreserveSig]
     int OnChannelVolumeChanged(
         uint channelCount,
         IntPtr newChannelVolumes,
         uint changedChannel,
-        ref Guid eventContext);
+        IntPtr eventContext);
 
     [PreserveSig]
-    int OnGroupingParamChanged(ref Guid newGroupingId, ref Guid eventContext);
+    int OnGroupingParamChanged(ref Guid newGroupingId, IntPtr eventContext);
 
     [PreserveSig]
     int OnStateChanged(AudioSessionState newState);

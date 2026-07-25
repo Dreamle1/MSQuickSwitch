@@ -84,7 +84,7 @@ Lite build:
 
 Output: `artifacts\win-x64-lite\WinQuickSwitch.exe`
 
-- Approximately 229 KB.
+- Approximately 245 KB.
 - Requires the .NET 10 Desktop Runtime on the destination computer.
 - Recommended when minimum download and app footprint matter most.
 
@@ -124,7 +124,9 @@ Attended display-switch tests remain before M1 is signed off. M2 can enumerate
 playback/recording endpoints, distinguish default roles, and show active
 application sessions. It refreshes automatically at startup and when Windows
 reports endpoint, default-device, session, volume, or session-state changes.
-The **Refresh** button remains as a manual fallback. M3 audio controls are next.
+The **Refresh** button remains as a manual fallback. M3 adds per-application
+volume and mute controls plus separate normal-default and communications-device
+selection for playback and recording endpoints. M4 connected devices are next.
 
 ## License
 
