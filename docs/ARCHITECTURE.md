@@ -88,8 +88,11 @@ PolicyConfig COM contract. Place it behind `IDefaultAudioEndpointSetter`, add
 Windows-build integration tests, and provide a Settings-page fallback. Never
 scatter PolicyConfig declarations through feature code.
 
-Version 1 changes endpoints for explicit roles only. The UI should make clear
-whether it is changing console/multimedia, communications, or both.
+Version 1 changes endpoints for explicit roles only. Endpoint rows show a
+green **DEFAULT** badge for console/multimedia and a blue **CALLS** badge for
+communications; a row can show both. The visible row text remains the Windows
+friendly device name, and the same role state is exposed as automation help
+text and a tooltip.
 
 M3 exposes session volume through `ISimpleAudioVolume`, always using the
 session-instance identifier rather than process name so multiple sessions and
@@ -97,8 +100,8 @@ short-lived processes remain distinct. Sliders commit only after a mouse or
 keyboard action; binding and inventory refresh never write audio state.
 
 Default endpoint changes stay behind `IDefaultAudioEndpointService` and the
-small `IDefaultAudioEndpointSetter` compatibility boundary. **Set default**
-updates console and multimedia roles together. **Set calls** updates only the
+small `IDefaultAudioEndpointSetter` compatibility boundary. **Default**
+updates console and multimedia roles together. **Calls** updates only the
 communications role. The policy interface is not a documented Windows API, so
 any activation, cast, or call failure returns a normal result and opens the
 documented `ms-settings:sound` page through a separate launcher. No other

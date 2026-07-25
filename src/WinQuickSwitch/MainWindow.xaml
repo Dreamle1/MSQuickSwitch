@@ -17,27 +17,18 @@
         <RowDefinition Height="Auto" />
         <RowDefinition Height="Auto" />
         <RowDefinition Height="Auto" />
-        <RowDefinition Height="Auto" />
       </Grid.RowDefinitions>
 
-      <StackPanel Grid.Row="0" Margin="0,0,0,20">
+      <StackPanel Grid.Row="0" Margin="0,0,0,16">
         <TextBlock FontSize="28" FontWeight="SemiBold" Text="Quick controls" />
-        <TextBlock Margin="0,6,0,0"
-                   Foreground="{StaticResource SecondaryTextBrush}"
-                   Text="Display, audio, and connected devices in one place." />
       </StackPanel>
 
       <Border Grid.Row="1" Style="{StaticResource SectionCard}">
         <StackPanel>
-          <StackPanel>
-            <TextBlock FontSize="18" FontWeight="SemiBold" Text="Display mode" />
-            <TextBlock Margin="0,6,0,0"
-                       Foreground="{StaticResource SecondaryTextBrush}"
-                       Text="PC screen only, duplicate, extend, or second screen only" />
-          </StackPanel>
+          <TextBlock FontSize="18" FontWeight="SemiBold" Text="Display" />
 
           <WrapPanel x:Name="DisplayModeButtons"
-                     Margin="0,16,0,4"
+                     Margin="0,12,0,2"
                      KeyboardNavigation.TabNavigation="Continue">
             <Button Style="{StaticResource ActionButton}"
                     Tag="PcScreenOnly"
@@ -77,12 +68,10 @@
               <ColumnDefinition Width="*" />
               <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <StackPanel>
-              <TextBlock FontSize="18" FontWeight="SemiBold" Text="Audio" />
-              <TextBlock Margin="0,6,0,0"
-                         Foreground="{StaticResource SecondaryTextBrush}"
-                         Text="Active endpoints and application audio sessions" />
-            </StackPanel>
+            <TextBlock FontSize="18"
+                       FontWeight="SemiBold"
+                       VerticalAlignment="Center"
+                       Text="Audio" />
             <Button x:Name="RefreshAudioButton"
                     Grid.Column="1"
                     MinWidth="88"
@@ -93,11 +82,11 @@
           </Grid>
 
           <TextBlock x:Name="AudioStatusText"
-                     Margin="0,12,0,0"
+                     Margin="0,8,0,0"
                      Foreground="{StaticResource SecondaryTextBrush}"
-                     Text="Select Refresh to load audio devices and active sessions." />
+                     Text="Loading..." />
 
-          <Grid Margin="0,14,0,0">
+          <Grid Margin="0,10,0,0">
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="*" />
               <ColumnDefinition Width="16" />
@@ -106,54 +95,101 @@
             <StackPanel Grid.Column="0">
               <TextBlock Margin="0,0,0,6"
                          FontWeight="SemiBold"
-                         Text="Playback" />
+                         Text="Output" />
               <ListBox x:Name="PlaybackEndpointsList"
                        MinHeight="72"
-                       MaxHeight="190"
-                       DisplayMemberPath="DisplayLabel" />
+                       MaxHeight="190">
+                <ListBox.ItemTemplate>
+                  <DataTemplate>
+                    <Grid AutomationProperties.Name="{Binding Name}"
+                          AutomationProperties.HelpText="{Binding ActiveRoleDescription}"
+                          ToolTip="{Binding ActiveRoleDescription}">
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                      </Grid.ColumnDefinitions>
+                      <TextBlock VerticalAlignment="Center"
+                                 Text="{Binding Name}"
+                                 TextTrimming="CharacterEllipsis" />
+                      <Border Grid.Column="1"
+                              Background="{StaticResource DefaultBadgeBrush}">
+                        <Border.Style>
+                          <Style TargetType="Border"
+                                 BasedOn="{StaticResource EndpointBadge}">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                              <DataTrigger Binding="{Binding IsDefault}" Value="True">
+                                <Setter Property="Visibility" Value="Visible" />
+                              </DataTrigger>
+                            </Style.Triggers>
+                          </Style>
+                        </Border.Style>
+                        <TextBlock FontSize="10"
+                                   FontWeight="SemiBold"
+                                   Text="DEFAULT" />
+                      </Border>
+                      <Border Grid.Column="2"
+                              Background="{StaticResource CallsBadgeBrush}">
+                        <Border.Style>
+                          <Style TargetType="Border"
+                                 BasedOn="{StaticResource EndpointBadge}">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                              <DataTrigger Binding="{Binding IsCommunicationsDefault}"
+                                           Value="True">
+                                <Setter Property="Visibility" Value="Visible" />
+                              </DataTrigger>
+                            </Style.Triggers>
+                          </Style>
+                        </Border.Style>
+                        <TextBlock FontSize="10"
+                                   FontWeight="SemiBold"
+                                   Text="CALLS" />
+                      </Border>
+                    </Grid>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
               <WrapPanel Margin="0,8,0,0">
                 <Button Style="{StaticResource CompactButton}"
                         Tag="PlaybackGeneral"
                         Click="SetDefaultAudioEndpoint_Click"
-                        Content="Set default"
+                        Content="Default"
                         ToolTip="Use the selected playback device for normal Windows audio" />
                 <Button Style="{StaticResource CompactButton}"
                         Tag="PlaybackCommunications"
                         Click="SetDefaultAudioEndpoint_Click"
-                        Content="Set calls"
-                        ToolTip="Use the selected playback device for communications" />
+                        Content="Calls"
+                        ToolTip="Set the selected device as Windows' calls default; apps can override it" />
               </WrapPanel>
             </StackPanel>
             <StackPanel Grid.Column="2">
               <TextBlock Margin="0,0,0,6"
                          FontWeight="SemiBold"
-                         Text="Microphones" />
+                         Text="Input" />
               <ListBox x:Name="RecordingEndpointsList"
                        MinHeight="72"
                        MaxHeight="190"
-                       DisplayMemberPath="DisplayLabel" />
+                       ItemTemplate="{Binding ElementName=PlaybackEndpointsList, Path=ItemTemplate}" />
               <WrapPanel Margin="0,8,0,0">
                 <Button Style="{StaticResource CompactButton}"
                         Tag="RecordingGeneral"
                         Click="SetDefaultAudioEndpoint_Click"
-                        Content="Set default"
+                        Content="Default"
                         ToolTip="Use the selected microphone for normal recording" />
                 <Button Style="{StaticResource CompactButton}"
                         Tag="RecordingCommunications"
                         Click="SetDefaultAudioEndpoint_Click"
-                        Content="Set calls"
-                        ToolTip="Use the selected microphone for communications" />
+                        Content="Calls"
+                        ToolTip="Set the selected microphone as Windows' calls default; apps can override it" />
               </WrapPanel>
             </StackPanel>
           </Grid>
 
-          <TextBlock Margin="0,8,0,0"
-                     Foreground="{StaticResource SecondaryTextBrush}"
-                     Text="Select a device, then choose whether it is the normal default or the calls device." />
-
-          <TextBlock Margin="0,14,0,6"
+          <TextBlock Margin="0,12,0,6"
                      FontWeight="SemiBold"
-                     Text="Active application sessions" />
+                     Text="Applications" />
           <ListView x:Name="AudioSessionsList" MinHeight="80" MaxHeight="180">
             <ListView.View>
               <GridView>
@@ -214,12 +250,10 @@
               <ColumnDefinition Width="*" />
               <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <StackPanel>
-              <TextBlock FontSize="18" FontWeight="SemiBold" Text="Devices" />
-              <TextBlock Margin="0,6,0,0"
-                         Foreground="{StaticResource SecondaryTextBrush}"
-                         Text="Bluetooth and USB-wired devices currently present" />
-            </StackPanel>
+            <TextBlock FontSize="18"
+                       FontWeight="SemiBold"
+                       VerticalAlignment="Center"
+                       Text="Devices" />
             <Button x:Name="RefreshDevicesButton"
                     Grid.Column="1"
                     MinWidth="88"
@@ -230,12 +264,12 @@
           </Grid>
 
           <TextBlock x:Name="DeviceStatusText"
-                     Margin="0,12,0,0"
+                     Margin="0,8,0,0"
                      Foreground="{StaticResource SecondaryTextBrush}"
-                     Text="Connected devices load automatically." />
+                     Text="Loading..." />
 
           <ListView x:Name="ConnectedDevicesList"
-                    Margin="0,14,0,0"
+                    Margin="0,10,0,0"
                     MinHeight="80"
                     MaxHeight="200">
             <ListView.View>
@@ -268,11 +302,6 @@
           </WrapPanel>
         </StackPanel>
       </Border>
-
-      <TextBlock Grid.Row="4"
-                 Margin="2,6,0,0"
-                 Foreground="{StaticResource SecondaryTextBrush}"
-                 Text="Display, audio, and connected-device controls are active." />
     </Grid>
   </ScrollViewer>
 </Window>

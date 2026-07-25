@@ -441,3 +441,43 @@ Outputs:
 
 These are attended checks because they require physical device changes and
 open external Settings pages. The automated suite only reads live device state.
+
+## 2026-07-25 - compact UI and active audio roles
+
+### Implemented
+
+- Added a green **DEFAULT** badge to the current console/multimedia endpoint
+  and a blue **CALLS** badge to the current communications endpoint. One output
+  or input can display both roles.
+- Kept endpoint rows focused on the Windows friendly name; role descriptions
+  are also available to screen readers and as hover tooltips.
+- Renamed the endpoint actions to the shorter **Default** and **Calls** labels.
+  The Calls tooltip states that applications can override the Windows role.
+- Removed repeated header, display, audio, device, instruction, and footer
+  sentences.
+- Shortened the live audio/device summaries while retaining counts, time, and
+  actionable error messages.
+- Renamed Playback, Microphones, and Active application sessions to the shorter
+  Output, Input, and Applications headings.
+
+### Verification
+
+- Format verification: passed with no changes required.
+- Release build: passed with 0 warnings and 0 errors.
+- Isolated checks: 35 passed, 0 failed.
+- Read-only live checks: 39 passed, 0 failed.
+- Live topology: extend, 3 active displays, 3 available displays.
+- Live audio: 7 output endpoints, 3 input endpoints, 1 active application.
+- Live normalized device inventory: 13 Bluetooth, 8 wired.
+- Audio, device, or display mutations invoked by automated verification: 0.
+- Actual WPF Release window visually verified with DEFAULT/CALLS badges, all
+  primary sections visible, and only the long device table scrolling.
+- Updated self-contained Portable executable startup and normal shutdown:
+  passed.
+
+Published variants:
+
+| Variant | Bytes | SHA-256 |
+| --- | ---: | --- |
+| Lite | 277,195 | `0EDDA47F343133252B2882DECD47C3E0A7C02D600B78BB3A5CB59114A3F1DB2D` |
+| Portable | 64,843,029 | `76886E1E9B614F815A707B4F69C16AC05A433BDA8ADA1ED9D4519A44A5CCB6F6` |

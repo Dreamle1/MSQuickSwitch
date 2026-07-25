@@ -31,6 +31,7 @@ internal static class Program
             ("Inactive available display enables multi-display choices", AvailableInactiveDisplayEnablesChoices),
             ("No active display produces an unreliable snapshot", NoActiveDisplayIsUnreliable),
             ("Audio endpoint labels use the friendly name", AudioEndpointLabelsUseFriendlyName),
+            ("Audio endpoint roles have clear active descriptions", AudioEndpointRolesAreClear),
             ("Audio session volume is formatted and clamped", AudioSessionVolumeIsFormatted),
             ("Audio refresh notifications are debounced", AudioRefreshNotificationsAreDebounced),
             ("Disposed audio debounce cancels pending work", DisposedAudioDebounceCancelsWork),
@@ -189,6 +190,26 @@ internal static class Program
         Equal("43%", normal.VolumeLabel);
         Equal("100%", high.VolumeLabel);
         Equal("Yes", high.MuteLabel);
+        return Task.CompletedTask;
+    }
+
+    private static Task AudioEndpointRolesAreClear()
+    {
+        AudioEndpointInfo available = new(
+            "1",
+            "Speakers",
+            AudioEndpointKind.Playback,
+            false,
+            false,
+            false);
+        AudioEndpointInfo normal = available with { IsConsoleDefault = true };
+        AudioEndpointInfo calls = available with { IsCommunicationsDefault = true };
+        AudioEndpointInfo both = normal with { IsCommunicationsDefault = true };
+
+        Equal("Available audio device", available.ActiveRoleDescription);
+        Equal("Default audio device", normal.ActiveRoleDescription);
+        Equal("Calls device", calls.ActiveRoleDescription);
+        Equal("Default audio and calls device", both.ActiveRoleDescription);
         return Task.CompletedTask;
     }
 

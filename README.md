@@ -122,7 +122,8 @@ tests/
 Display switching, topology detection, and capability state are implemented.
 Attended display-switch tests remain before M1 is signed off. Audio inventory
 loads automatically, follows Windows notifications, and supports
-per-application volume/mute plus separate normal and calls defaults. M4 adds a
+per-application volume/mute plus separate normal and calls defaults. Compact
+badges show which output and input currently hold each Windows role. M4 adds a
 present-device inventory for Bluetooth and USB-wired hardware, collapses common
 Windows profile/interface duplicates, refreshes on device-change messages, and
 links to Windows Settings for pairing or removal. M5 polish and release work is

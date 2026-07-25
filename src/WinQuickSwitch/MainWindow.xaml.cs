@@ -392,10 +392,10 @@ public partial class MainWindow : Window
             SelectAudioEndpoint(RecordingEndpointsList, inventory.RecordingEndpoints);
 
             AudioStatusText.Text =
-                $"{inventory.PlaybackEndpoints.Count} playback · " +
-                $"{inventory.RecordingEndpoints.Count} recording · " +
-                $"{inventory.Sessions.Count} active sessions · " +
-                $"updated {inventory.CapturedAt.ToLocalTime():t}" +
+                $"{inventory.PlaybackEndpoints.Count} out · " +
+                $"{inventory.RecordingEndpoints.Count} in · " +
+                $"{inventory.Sessions.Count} apps · " +
+                $"{inventory.CapturedAt.ToLocalTime():t}" +
                 _audioWatcherStatusSuffix;
         }
         catch (OperationCanceledException) when (_lifetimeCancellation.IsCancellationRequested)
@@ -462,7 +462,7 @@ public partial class MainWindow : Window
             DeviceStatusText.Text =
                 $"{bluetoothCount} Bluetooth · " +
                 $"{wiredCount} wired · " +
-                $"updated {inventory.CapturedAt.ToLocalTime():t}";
+                $"{inventory.CapturedAt.ToLocalTime():t}";
         }
         catch (OperationCanceledException) when (_lifetimeCancellation.IsCancellationRequested)
         {

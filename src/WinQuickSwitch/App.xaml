@@ -16,6 +16,8 @@
     <SolidColorBrush x:Key="DisabledTextBrush" Color="#7E8999" />
     <SolidColorBrush x:Key="SelectionBrush" Color="#2D7DCA" />
     <SolidColorBrush x:Key="SelectionTextBrush" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="DefaultBadgeBrush" Color="#285C3D" />
+    <SolidColorBrush x:Key="CallsBadgeBrush" Color="#234E78" />
     <SolidColorBrush x:Key="ScrollTrackBrush" Color="#171B22" />
     <SolidColorBrush x:Key="ScrollThumbBrush" Color="#4B5666" />
 
@@ -79,6 +81,13 @@
       <Setter Property="Padding" Value="10,5" />
       <Setter Property="Margin" Value="0,0,6,0" />
       <Setter Property="HorizontalContentAlignment" Value="Center" />
+    </Style>
+
+    <Style x:Key="EndpointBadge" TargetType="Border">
+      <Setter Property="Margin" Value="5,0,0,0" />
+      <Setter Property="Padding" Value="5,1" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
     <Style x:Key="SliderTrackButton" TargetType="RepeatButton">
