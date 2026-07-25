@@ -2,9 +2,9 @@
 
 ## Product statement
 
-WinQuickSwitch gives a Windows 11 user one compact place to switch display and
-audio configurations and inspect connected devices. It should feel like a
-fast control panel, not another full Settings application.
+WinQuickSwitch gives a Windows 11 user one compact, summonable place to switch
+display and audio configurations and inspect connected devices. It should feel
+like a fast control widget, not another full Settings application.
 
 ## Assumption
 
@@ -21,6 +21,7 @@ desktops are outside the first release.
 4. Make hardware state clear before a user changes it.
 5. Prefer documented Windows APIs and clearly isolate compatibility-sensitive
    code.
+6. Stay effectively idle while hidden and return with one global shortcut.
 
 ## Non-goals for version 1
 
@@ -35,7 +36,7 @@ desktops are outside the first release.
 
 ## Version 1 user experience
 
-The main window has three compact sections:
+The resident widget has three compact panels and shows one at a time:
 
 ### Display
 
@@ -116,8 +117,15 @@ as connected.
 
 ### M5 - polish and release
 
-- Keyboard navigation, screen-reader names, high contrast, and 100-200% DPI.
-- Global hotkey is opt-in and configurable.
+- [x] Add the single-instance resident window lifecycle.
+- [x] Add a fixed `Win + Shift + Q` show/hide shortcut.
+- [x] Open beside the pointer and remain inside the nearest monitor work area.
+- [x] Add direct panel and menu keyboard navigation.
+- [x] Suspend panel refreshes and the Core Audio watcher while hidden.
+- Make the global hotkey configurable, with a conflict-safe disabled option.
+- Add optional start-with-Windows behavior and decide whether a tray icon adds
+  enough value.
+- Complete screen-reader, high-contrast, and 100-200% DPI validation.
 - Cold-start and memory measurements on a release build.
 - MSIX and portable framework-dependent packaging experiments.
 - Signed release artifacts and a documented uninstall path.
@@ -129,8 +137,10 @@ systems.
 
 - Normal startup and all version 1 controls work without elevation.
 - No network request occurs during normal use.
-- Closing the window exits the process unless the user explicitly enables a
-  tray option in a later release.
+- Closing, `Esc`, and click-away hide the resident widget; the visible
+  **Quit** action exits the process.
+- A second launch reveals the existing instance and exits without creating
+  another resident process.
 - The display action never invents a fifth topology or targets an individual
   monitor.
 - The audio list distinguishes playback endpoints, recording endpoints, and
@@ -158,7 +168,8 @@ Test at minimum:
 ## Open product decisions
 
 1. Final product name and icon.
-2. Whether a tray mode or global hotkey belongs in version 1.1.
+2. Whether a tray icon adds enough value beyond the implemented resident
+   hotkey and visible Quit action.
 3. Whether changing all three Windows audio roles together should be the
    default behavior.
 4. Resolved: publish both a small framework-dependent Lite build and a larger

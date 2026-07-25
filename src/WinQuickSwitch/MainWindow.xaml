@@ -2,29 +2,71 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="WinQuickSwitch"
-        Width="660"
-        MinWidth="620"
-        MinHeight="560"
+        Width="500"
+        MinWidth="460"
+        MinHeight="0"
         SizeToContent="Height"
         MaxHeight="{Binding Source={x:Static SystemParameters.WorkArea}, Path=Height}"
         Background="{StaticResource PageBrush}"
         Loaded="MainWindow_Loaded"
-        WindowStartupLocation="CenterScreen">
+        Closing="MainWindow_Closing"
+        Deactivated="MainWindow_Deactivated"
+        PreviewKeyDown="MainWindow_PreviewKeyDown"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        Topmost="True"
+        WindowStartupLocation="Manual">
   <ScrollViewer VerticalScrollBarVisibility="Auto">
     <Grid Margin="16">
       <Grid.RowDefinitions>
         <RowDefinition Height="Auto" />
         <RowDefinition Height="Auto" />
-        <RowDefinition Height="Auto" />
       </Grid.RowDefinitions>
 
-      <Border Grid.Row="0" Style="{StaticResource SectionCard}">
+      <Grid Grid.Row="0">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+        <UniformGrid Grid.Column="0" Columns="3">
+          <ToggleButton x:Name="DisplayPanelTab"
+                        Style="{StaticResource WidgetTabToggle}"
+                        Tag="Display"
+                        IsChecked="True"
+                        Click="PanelTab_Click"
+                        Content="Display"
+                        AutomationProperties.Name="Open display controls" />
+          <ToggleButton x:Name="AudioPanelTab"
+                        Style="{StaticResource WidgetTabToggle}"
+                        Tag="Audio"
+                        Click="PanelTab_Click"
+                        Content="Audio"
+                        AutomationProperties.Name="Open audio controls" />
+          <ToggleButton x:Name="DevicesPanelTab"
+                        Style="{StaticResource WidgetTabToggle}"
+                        Tag="Devices"
+                        Click="PanelTab_Click"
+                        Content="Devices"
+                        AutomationProperties.Name="Open connected devices" />
+        </UniformGrid>
+        <Button Grid.Column="1"
+                Style="{StaticResource CompactButton}"
+                Margin="0,0,0,8"
+                Click="Quit_Click"
+                Content="Quit"
+                ToolTip="Exit WinQuickSwitch completely" />
+      </Grid>
+
+      <Border x:Name="DisplayPanel"
+              Grid.Row="1"
+              Style="{StaticResource SectionCard}">
         <StackPanel>
           <TextBlock FontSize="17" FontWeight="SemiBold" Text="Display" />
 
-          <WrapPanel x:Name="DisplayModeButtons"
-                     Margin="0,12,0,2"
-                     KeyboardNavigation.TabNavigation="Continue">
+          <UniformGrid x:Name="DisplayModeButtons"
+                       Margin="0,12,0,2"
+                       Columns="2"
+                       KeyboardNavigation.TabNavigation="Continue">
             <ToggleButton Style="{StaticResource DisplayModeToggle}"
                           Tag="PcScreenOnly"
                           Click="ApplyDisplayMode_Click"
@@ -51,7 +93,7 @@
                           Content="Second screen only"
                           AutomationProperties.Name="Second screen only display mode"
                           ToolTip="Use the external display only" />
-          </WrapPanel>
+          </UniformGrid>
 
           <TextBlock x:Name="DisplayStatusText"
                      Margin="0,4,0,0"
@@ -60,7 +102,10 @@
         </StackPanel>
       </Border>
 
-      <Border Grid.Row="1" Style="{StaticResource SectionCard}">
+      <Border x:Name="AudioPanel"
+              Grid.Row="1"
+              Style="{StaticResource SectionCard}"
+              Visibility="Collapsed">
         <StackPanel>
           <Grid>
             <Grid.ColumnDefinitions>
@@ -197,18 +242,18 @@
                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
             <ListView.View>
               <GridView>
-                <GridViewColumn Width="150"
+                <GridViewColumn Width="95"
                                 Header="Application"
                                 DisplayMemberBinding="{Binding ApplicationName}" />
-                <GridViewColumn Width="170"
+                <GridViewColumn Width="105"
                                 Header="Output"
                                 DisplayMemberBinding="{Binding EndpointName}" />
-                <GridViewColumn Width="190" Header="Volume">
+                <GridViewColumn Width="155" Header="Volume">
                   <GridViewColumn.CellTemplate>
                     <DataTemplate>
                       <Grid Margin="0,1">
                         <Grid.ColumnDefinitions>
-                          <ColumnDefinition Width="135" />
+                          <ColumnDefinition Width="98" />
                           <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <Slider Grid.Column="0"
@@ -230,7 +275,7 @@
                     </DataTemplate>
                   </GridViewColumn.CellTemplate>
                 </GridViewColumn>
-                <GridViewColumn Width="65" Header="Mute">
+                <GridViewColumn Width="55" Header="Mute">
                   <GridViewColumn.CellTemplate>
                     <DataTemplate>
                       <CheckBox HorizontalAlignment="Center"
@@ -247,7 +292,10 @@
         </StackPanel>
       </Border>
 
-      <Border Grid.Row="2" Style="{StaticResource SectionCard}">
+      <Border x:Name="DevicesPanel"
+              Grid.Row="1"
+              Style="{StaticResource SectionCard}"
+              Visibility="Collapsed">
         <StackPanel>
           <Grid>
             <Grid.ColumnDefinitions>
@@ -279,16 +327,16 @@
                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
             <ListView.View>
               <GridView>
-                <GridViewColumn Width="225"
+                <GridViewColumn Width="165"
                                 Header="Name"
                                 DisplayMemberBinding="{Binding Name}" />
-                <GridViewColumn Width="90"
+                <GridViewColumn Width="75"
                                 Header="Connection"
                                 DisplayMemberBinding="{Binding ConnectionLabel}" />
-                <GridViewColumn Width="105"
+                <GridViewColumn Width="85"
                                 Header="Type"
                                 DisplayMemberBinding="{Binding Category}" />
-                <GridViewColumn Width="95"
+                <GridViewColumn Width="80"
                                 Header="Status"
                                 DisplayMemberBinding="{Binding StatusLabel}" />
               </GridView>

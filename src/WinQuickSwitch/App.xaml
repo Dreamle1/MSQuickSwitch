@@ -1,7 +1,6 @@
 <Application x:Class="WinQuickSwitch.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             StartupUri="MainWindow.xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
   <Application.Resources>
     <SolidColorBrush x:Key="PageBrush" Color="#101318" />
     <SolidColorBrush x:Key="CardBrush" Color="#191D24" />
@@ -140,6 +139,15 @@
           </ControlTemplate>
         </Setter.Value>
       </Setter>
+    </Style>
+
+    <Style x:Key="WidgetTabToggle"
+           TargetType="ToggleButton"
+           BasedOn="{StaticResource DisplayModeToggle}">
+      <Setter Property="MinWidth" Value="78" />
+      <Setter Property="MinHeight" Value="30" />
+      <Setter Property="Margin" Value="0,0,6,8" />
+      <Setter Property="Padding" Value="9,4" />
     </Style>
 
     <Style x:Key="CompactButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">

@@ -5,10 +5,10 @@ audio, microphone, Bluetooth, and wired-device controls without digging through
 Settings.
 
 This repository contains the product plan, technical design, and working
-display, audio, and connected-device slices. Projection controls are wired to
-Windows, active audio endpoints and application sessions stay current through
-Windows audio notifications, and present Bluetooth/USB devices refresh when
-Windows reports a hardware change.
+resident widget. Projection controls are wired to Windows, active audio
+endpoints and application sessions stay current through Windows audio
+notifications, and present Bluetooth/USB devices refresh when Windows reports
+a hardware change.
 
 ## Planned first release
 
@@ -19,8 +19,8 @@ Windows reports a hardware change.
 - View and choose speaker/headphone and microphone endpoints.
 - List connected Bluetooth and locally wired devices, with connection and
   enabled-state information when Windows exposes it.
-- Run as an ordinary user and stay closed when not needed; no background
-  service, account, telemetry, or network access.
+- Run as an ordinary user and remain resident but idle while hidden; no
+  background service, account, telemetry, or network access.
 
 The detailed scope and milestones are in
 [docs/PRODUCT_PLAN.md](docs/PRODUCT_PLAN.md). Technical boundaries and API
@@ -72,6 +72,27 @@ A project-local SDK may also be installed in the ignored `.dotnet` directory.
 The implementation and exact verification history are recorded in
 [docs/IMPLEMENTATION_LOG.md](docs/IMPLEMENTATION_LOG.md).
 
+## Using the resident widget
+
+- Press `Win + Shift + Q` anywhere to show or hide WinQuickSwitch.
+- The widget opens beside the pointer and stays inside that monitor's work
+  area.
+- Select **Display**, **Audio**, or **Devices** to show one compact panel at a
+  time.
+- Press `Ctrl + 1`, `Ctrl + 2`, or `Ctrl + 3` to switch panels.
+- In Display, press `1` through `4` to request the corresponding projection
+  mode.
+- In Audio, press `O`, `I`, or `A` to focus output, input, or application
+  sessions.
+- Press `Esc`, click elsewhere, or close the window to hide it. Select
+  **Quit** to exit the resident process.
+- Starting WinQuickSwitch again reveals the existing instance instead of
+  starting a second resident process.
+
+Only the visible panel refreshes. The Core Audio notification watcher stops
+when Audio is not visible, and hidden device events only mark the inventory for
+refresh the next time Devices opens.
+
 ## Publishing
 
 Two checked-in publish profiles keep release commands short and reproducible.
@@ -84,7 +105,7 @@ Lite build:
 
 Output: `artifacts\win-x64-lite\WinQuickSwitch.exe`
 
-- Approximately 271 KB.
+- Approximately 296 KB for the current resident-widget build.
 - Requires the .NET 10 Desktop Runtime on the destination computer.
 - Recommended when minimum download and app footprint matter most.
 
@@ -96,7 +117,7 @@ Portable build:
 
 Output: `artifacts\win-x64-portable\WinQuickSwitch.exe`
 
-- Approximately 62 MB.
+- Approximately 64.9 MB for the current resident-widget build.
 - Includes .NET and runs without a separately installed runtime.
 - Recommended for direct copying to an unknown Windows computer.
 
@@ -119,18 +140,15 @@ tests/
 
 ## Project status
 
-Display switching, topology detection, and capability state are implemented.
-Attended display-switch tests remain before M1 is signed off. Audio inventory
-loads automatically, follows Windows notifications, and supports
-per-application volume/mute plus separate normal and calls defaults. Compact
-badges show which output and input currently hold each Windows role. M4 adds a
-present-device inventory for Bluetooth and USB-wired hardware, collapses common
-Windows profile/interface duplicates, refreshes on device-change messages, and
-links to Windows Settings for pairing or removal. The compact 660-pixel window
-uses a native dark title bar and keeps long inventories inside their own
-vertical scrollers. The active display mode stays highlighted, redundant
-requests are ignored, and a short post-change settle check follows Windows'
-real topology without idle polling. M5 polish and release work is next.
+Display switching, topology detection, audio controls, and connected-device
+inventory are implemented. The resident slice adds a single-instance
+500-pixel widget with a native dark title bar, three mutually exclusive panels,
+pointer-aware multi-monitor placement, and the `Win + Shift + Q` global
+hotkey. Closing or clicking away hides the widget; **Quit** exits it. Hidden
+panels suspend their refresh work and the audio watcher, so residency does not
+turn into continuous polling. Hotkey configuration, startup registration,
+tray integration, accessibility/DPI validation, and release signing remain M5
+work.
 
 ## License
 

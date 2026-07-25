@@ -467,7 +467,8 @@ open external Settings pages. The automated suite only reads live device state.
 - Isolated checks: 35 passed, 0 failed.
 - Read-only live checks: 39 passed, 0 failed.
 - Live topology: extend, 3 active displays, 3 available displays.
-- Live audio: 7 output endpoints, 3 input endpoints, 1 active application.
+- Live audio: 7 output endpoints, 3 input endpoints, and 0-1 active
+  applications across the verification runs.
 - Live normalized device inventory: 13 Bluetooth, 8 wired.
 - Audio, device, or display mutations invoked by automated verification: 0.
 - Actual WPF Release window visually verified with DEFAULT/CALLS badges, all
@@ -593,3 +594,66 @@ Published compact variants:
 
 Physical blanking during a real topology change cannot be removed by the app;
 it is controlled by Windows, the graphics driver, and monitor link training.
+
+## 2026-07-25 - resident widget foundation
+
+### Implemented
+
+- Replaced the all-sections window with a 500-pixel, content-sized widget that
+  shows Display, Audio, or Devices one panel at a time.
+- Added the fixed `Win + Shift + Q` global show/hide shortcut through
+  `RegisterHotKey` with no-repeat behavior.
+- Added direct keyboard access: `Ctrl + 1/2/3` selects panels, `1` through `4`
+  select display modes, `O/I/A` focuses the audio lists, and `Esc` hides.
+- Added pointer-aware, multi-monitor placement that opens beside the pointer,
+  flips away from right/bottom edges, handles negative monitor coordinates,
+  and clamps inside the current work area.
+- Added a single-instance mutex plus activation event. A second launch reveals
+  the resident instance and exits.
+- Changed the close button and click-away behavior to hide the widget. The
+  visible **Quit** action remains the explicit way to end the process.
+- Added a short foreground-activation grace so startup and second-instance
+  handoff are not immediately hidden by a stale deactivation event.
+- Audio notifications now start only while Audio is visible and stop when the
+  panel is left or the widget hides. Device events received while hidden defer
+  enumeration until Devices is opened.
+- Added unit coverage for normal, edge-flipped, and negative-coordinate widget
+  placement and expanded the live watcher test to cover stop and restart.
+
+### Verification
+
+- Format verification: passed with no changes required.
+- Release build: passed with 0 warnings and 0 errors.
+- Isolated checks: 42 passed, 0 failed.
+- Read-only live checks: 46 passed, 0 failed.
+- Live topology: extend, 3 active displays, 3 available displays.
+- Live audio: 7 output endpoints, 3 input endpoints, 1 active application.
+- Live audio watcher start, stop, restart, and final disposal: passed.
+- Live normalized device inventory: 13 Bluetooth, 8 wired.
+- Resident lifecycle: registered hotkey revealed the hidden widget; toggle
+  handling hid it; a second launch exited and revealed the first process.
+- Visual inspection: 500-pixel Display panel, dark native title bar, compact
+  navigation, current Extend highlight, and no clipping.
+- Lite and Portable widget executables both started and remained resident until
+  the exact test process was stopped.
+- Automated display-changing commands invoked: 0.
+
+Published widget variants:
+
+| Variant | Bytes | SHA-256 |
+| --- | ---: | --- |
+| Lite | 296,139 | `FA4FAD20782B3E55096ADEBD8A79823525566D290002607DCB9F32828864C68A` |
+| Portable | 64,851,065 | `118031F42F8A1E70D3E0C0BCAE7BD1C347B856A81E6D45066F7D577557440DDE` |
+
+Outputs:
+
+- `artifacts/win-x64-lite-widget/WinQuickSwitch.exe`
+- `artifacts/win-x64-portable-widget/WinQuickSwitch.exe`
+
+### Remaining resident work
+
+- Make the global shortcut configurable and disable-able.
+- Add optional start-with-Windows behavior.
+- Decide whether a tray icon adds enough value beyond the hotkey and visible
+  Quit action.
+- Complete high-contrast, screen-reader, and 100-200% DPI validation.

@@ -22,6 +22,7 @@ public sealed class WindowsAudioChangeWatcher : IAudioChangeWatcher
     private Exception? _startupException;
     private IMMDeviceEnumerator? _deviceEnumerator;
     private bool _endpointNotificationsRegistered;
+    private volatile bool _running;
     private volatile bool _disposed;
 
     public WindowsAudioChangeWatcher()
@@ -44,6 +45,11 @@ public sealed class WindowsAudioChangeWatcher : IAudioChangeWatcher
                 return;
             }
 
+            _stopSignal.Reset();
+            _rebuildSignal.Reset();
+            _startedSignal.Reset();
+            _startupException = null;
+            _running = true;
             _watcherThread = new Thread(WatchAudioChanges)
             {
                 IsBackground = true,
@@ -55,21 +61,21 @@ public sealed class WindowsAudioChangeWatcher : IAudioChangeWatcher
 
         if (!_startedSignal.Wait(StartTimeout))
         {
-            Dispose();
+            Stop();
             throw new TimeoutException("Windows audio notifications did not start in time.");
         }
 
         if (_startupException is not null)
         {
             Exception startupException = _startupException;
-            Dispose();
+            Stop();
             throw new InvalidOperationException(
                 "Windows audio notifications could not be started.",
                 startupException);
         }
     }
 
-    public void Dispose()
+    public void Stop()
     {
         Thread? watcherThread;
 
@@ -80,14 +86,57 @@ public sealed class WindowsAudioChangeWatcher : IAudioChangeWatcher
                 return;
             }
 
-            _disposed = true;
+            _running = false;
             watcherThread = _watcherThread;
+        }
+
+        if (watcherThread is null)
+        {
+            return;
         }
 
         _stopSignal.Set();
 
         bool stopped = watcherThread is null ||
             (watcherThread != Thread.CurrentThread && watcherThread.Join(StopTimeout));
+
+        if (!stopped)
+        {
+            throw new TimeoutException(
+                "Windows audio notifications did not stop in time.");
+        }
+
+        lock (_stateGate)
+        {
+            if (ReferenceEquals(_watcherThread, watcherThread))
+            {
+                _watcherThread = null;
+            }
+        }
+    }
+
+    public void Dispose()
+    {
+        bool stopped = true;
+
+        try
+        {
+            Stop();
+        }
+        catch (TimeoutException)
+        {
+            stopped = false;
+        }
+
+        lock (_stateGate)
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            _disposed = true;
+        }
 
         if (stopped)
         {
@@ -347,7 +396,7 @@ public sealed class WindowsAudioChangeWatcher : IAudioChangeWatcher
 
     private void NotifyChanged(bool rebuildSessionSubscriptions)
     {
-        if (_disposed)
+        if (_disposed || !_running)
         {
             return;
         }

@@ -5,7 +5,8 @@
 Use a single-process, Windows-only WPF application targeting .NET 10. WPF keeps
 the binary and dependency model modest, starts quickly, supports accessibility,
 and can call both COM and Win32 APIs directly. The application is
-framework-dependent by default and has no background service.
+framework-dependent by default, remains resident in the signed-in user's
+session, and has no background service.
 
 The project targets the generic `net10.0-windows` TFM. The implemented platform
 features use direct Win32 and COM interop, so compiling against a versioned
@@ -55,15 +56,42 @@ attributes. Supported Windows 11 builds receive the app palette directly. If
 an attribute is unavailable, its HRESULT is intentionally nonfatal and Windows
 retains its own frame fallback.
 
-This preserves native move, resize, maximize, snap, system-menu, and caption
-button behavior without another UI package or custom hit-testing layer.
+This preserves native move, system-menu, and caption-button behavior without
+another UI package or custom hit-testing layer. The widget itself is
+non-resizable and always-on-top while visible.
 
-The default window is 660 pixels wide and sizes vertically to its content,
-capped by the working area. Outer/card spacing is compact, the title bar is the
-only app-name heading, and endpoint/session/device lists own their vertical
-scrolling. Horizontal scrolling is disabled in the compact tables; friendly
-audio names trim visually while the full name remains in the bound model and
-automation text.
+The widget is 500 pixels wide and sizes vertically to the active panel's
+content, capped by the working area. Display, Audio, and Devices are mutually
+exclusive panels under a compact tab strip. Outer/card spacing is compact, the
+title bar is the only app-name heading, and endpoint/session/device lists own
+their vertical scrolling. Horizontal scrolling is disabled in the compact
+tables; friendly audio names trim visually while the full name remains in the
+bound model and automation text.
+
+## Resident widget lifecycle
+
+The first process owns a named per-user mutex and an auto-reset activation
+event. A later launch signals that event and exits; the first process reveals
+its existing window. This keeps all native callbacks and mutable Windows state
+inside one process without an IPC framework.
+
+`RegisterHotKey` owns the fixed `Win + Shift + Q` chord with no-repeat
+semantics. `WM_HOTKEY` toggles the window from the existing WPF message hook.
+Registration conflicts leave the app usable and surface a short status
+message; configurable shortcuts remain follow-up work.
+
+Showing the widget reads the pointer position, selects the nearest monitor,
+and uses that monitor's work area. A pure placement calculator prefers the
+lower-right side of the pointer, flips at the right or bottom edge, and clamps
+the final rectangle. WPF device-independent units are converted to and from
+physical pixels around the Win32 monitor calculation, so negative-coordinate
+and mixed-DPI monitor layouts remain valid.
+
+The close button, `Esc`, and click-away hide the window. A short activation
+grace prevents the launch or second-instance handoff from being immediately
+undone if Windows is still settling foreground focus. **Quit** is the explicit
+process-exit path. There is no tray icon or start-with-Windows registration in
+this slice.
 
 ## Display adapter
 
@@ -179,8 +207,9 @@ provide one uniform battery property across Bluetooth device types.
 
 The WPF window listens for `WM_DEVICECHANGE` on its existing native window
 handle. A 450 ms debounce collapses hardware-event bursts before a background
-SetupAPI refresh. The hook and pending refresh are removed on window close;
-there is no polling thread or resident service.
+SetupAPI refresh while Devices is visible. Hidden changes only mark the
+inventory dirty for the next Devices activation. The hook and pending refresh
+are removed on process exit; there is no polling thread or resident service.
 
 The first release is read-only. Pair, remove, troubleshoot, and driver actions
 open the allowlisted `ms-settings:bluetooth` or
@@ -193,7 +222,9 @@ open the allowlisted `ms-settings:bluetooth` or
   observable state on the dispatcher.
 - Dispose COM references and unregister callbacks deterministically.
 - Debounce bursts of device-change notifications before refreshing.
-- Cancel in-flight refresh work when the window closes.
+- Cancel panel refresh work whenever the widget hides.
+- Start the Core Audio notification thread only while Audio is visible and
+  stop it when Audio is left or the widget hides.
 
 ## Security and privacy
 
@@ -213,9 +244,10 @@ Targets for a release, framework-dependent build:
 - No polling loop while idle; use Windows notifications.
 - UI remains responsive while enumerating devices.
 
-Audio and device inventory load when the main window starts. Their watchers
-exist only for the lifetime of that window and do no work while Windows emits
-no relevant notifications.
+Display topology loads for the initial panel. Audio and device inventory load
+only when their panel is selected. The audio watcher exists only while Audio is
+visible; device notifications received while hidden defer enumeration until
+Devices is selected again.
 
 Measure these targets in M5 rather than treating them as guaranteed by the
 framework choice.
@@ -252,3 +284,4 @@ suites. Mark them as attended hardware tests.
 | Projection changes can make the active display disappear | Use only the four Windows modes and make risky actions explicit |
 | WPF styling can drift from Windows 11 | Keep the UI compact and accessible; avoid recreating the full Settings design |
 | Framework-dependent deployment needs a runtime | Detect the runtime in packaging or provide a larger self-contained artifact |
+| The global hotkey conflicts with another application | Keep the widget usable, show the conflict, and add configurable shortcuts in M5 |

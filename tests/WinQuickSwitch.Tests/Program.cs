@@ -1,6 +1,7 @@
 using WinQuickSwitch.Features.Audio;
 using WinQuickSwitch.Features.Devices;
 using WinQuickSwitch.Features.Display;
+using WinQuickSwitch.Features.Widget;
 using WinQuickSwitch.Platform.Windows;
 using WinQuickSwitch.Platform.Windows.Audio;
 using WinQuickSwitch.Platform.Windows.Devices;
@@ -53,6 +54,9 @@ internal static class Program
             ("Device status labels are human readable", DeviceStatusLabelsAreHumanReadable),
             ("Device Settings shortcuts use exact Windows URIs", DeviceSettingsShortcutsUseExactUris),
             ("Dark title bar uses the application palette", DarkTitleBarUsesAppPalette),
+            ("Widget opens below and right of the pointer", WidgetOpensBelowPointer),
+            ("Widget flips away from monitor edges", WidgetFlipsAtMonitorEdges),
+            ("Widget stays inside negative-coordinate work areas", WidgetStaysInsideWorkArea),
         ];
 
         if (args.Contains("--integration", StringComparer.OrdinalIgnoreCase))
@@ -638,6 +642,45 @@ internal static class Program
         return Task.CompletedTask;
     }
 
+    private static Task WidgetOpensBelowPointer()
+    {
+        ScreenPoint position = WidgetPlacementCalculator.PlaceNearPointer(
+            new ScreenPoint(400, 300),
+            new ScreenRectangle(0, 0, 1920, 1040),
+            widgetWidth: 500,
+            widgetHeight: 500);
+
+        Equal(new ScreenPoint(412, 312), position);
+        return Task.CompletedTask;
+    }
+
+    private static Task WidgetFlipsAtMonitorEdges()
+    {
+        ScreenPoint position = WidgetPlacementCalculator.PlaceNearPointer(
+            new ScreenPoint(1850, 1000),
+            new ScreenRectangle(0, 0, 1920, 1040),
+            widgetWidth: 500,
+            widgetHeight: 500);
+
+        Equal(new ScreenPoint(1338, 488), position);
+        return Task.CompletedTask;
+    }
+
+    private static Task WidgetStaysInsideWorkArea()
+    {
+        ScreenPoint position = WidgetPlacementCalculator.PlaceNearPointer(
+            new ScreenPoint(-1800, 900),
+            new ScreenRectangle(-1920, 0, 0, 1040),
+            widgetWidth: 500,
+            widgetHeight: 500);
+
+        True(position.X >= -1920, "The widget crossed the work area's left edge.");
+        True(position.X + 500 <= 0, "The widget crossed the work area's right edge.");
+        True(position.Y >= 0, "The widget crossed the work area's top edge.");
+        True(position.Y + 500 <= 1040, "The widget crossed the work area's bottom edge.");
+        return Task.CompletedTask;
+    }
+
     private static Task LiveDisplayTopologyCanBeRead()
     {
         DisplayTopologySnapshot snapshot = new WindowsDisplayTopologyService().GetSnapshot();
@@ -672,6 +715,8 @@ internal static class Program
     private static Task LiveAudioWatcherStartsAndStops()
     {
         using WindowsAudioChangeWatcher watcher = new();
+        watcher.Start();
+        watcher.Stop();
         watcher.Start();
         return Task.CompletedTask;
     }
