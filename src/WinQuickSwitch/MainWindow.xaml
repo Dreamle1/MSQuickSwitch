@@ -94,7 +94,7 @@
           <TextBlock x:Name="AudioStatusText"
                      Margin="0,12,0,0"
                      Foreground="{StaticResource SecondaryTextBrush}"
-                     Text="Audio inventory has not been loaded." />
+                     Text="Select Refresh to load audio devices and active sessions." />
 
           <Grid Margin="0,14,0,0">
             <Grid.ColumnDefinitions>

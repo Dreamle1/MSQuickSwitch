@@ -40,7 +40,8 @@ single-file self-contained builds can be offered separately.
 ## Development setup
 
 1. Install the .NET 10 SDK or Visual Studio 2026 with the .NET desktop
-   development workload.
+   development workload. The repository accepts .NET 10 feature bands starting
+   at SDK `10.0.100` and rolls forward within .NET 10.
 2. Confirm the SDK:
 
    ```powershell
@@ -70,6 +71,38 @@ A project-local SDK may also be installed in the ignored `.dotnet` directory.
 The implementation and exact verification history are recorded in
 [docs/IMPLEMENTATION_LOG.md](docs/IMPLEMENTATION_LOG.md).
 
+## Publishing
+
+Two checked-in publish profiles keep release commands short and reproducible.
+
+Lite build:
+
+```powershell
+.\.dotnet\dotnet.exe publish .\src\WinQuickSwitch\WinQuickSwitch.csproj -p:PublishProfile=Lite
+```
+
+Output: `artifacts\win-x64-lite\WinQuickSwitch.exe`
+
+- Approximately 215 KB.
+- Requires the .NET 10 Desktop Runtime on the destination computer.
+- Recommended when minimum download and app footprint matter most.
+
+Portable build:
+
+```powershell
+.\.dotnet\dotnet.exe publish .\src\WinQuickSwitch\WinQuickSwitch.csproj -p:PublishProfile=Portable
+```
+
+Output: `artifacts\win-x64-portable\WinQuickSwitch.exe`
+
+- Approximately 62 MB.
+- Includes .NET and runs without a separately installed runtime.
+- Recommended for direct copying to an unknown Windows computer.
+
+Both variants are Windows x64 single-file executables. Trimming and ReadyToRun
+are intentionally disabled because this WPF/COM application prioritizes
+correctness and compact output over speculative publish optimizations.
+
 ## Repository layout
 
 ```text
@@ -88,7 +121,8 @@ tests/
 Display switching, topology detection, and capability state are implemented.
 Attended display-switch tests remain before M1 is signed off. M2 can enumerate
 playback/recording endpoints, distinguish default roles, and show active
-application sessions; automatic endpoint/session notifications remain next.
+application sessions on demand through **Refresh**; automatic endpoint/session
+notifications remain next.
 
 ## License
 

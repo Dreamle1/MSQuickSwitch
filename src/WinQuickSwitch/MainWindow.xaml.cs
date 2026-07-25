@@ -39,11 +39,8 @@ public partial class MainWindow : Window
         base.OnClosed(e);
     }
 
-    private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
-    {
+    private void MainWindow_Loaded(object sender, RoutedEventArgs e) =>
         RefreshDisplayTopology();
-        await RefreshAudioInventoryAsync();
-    }
 
     private async void ApplyDisplayMode_Click(object sender, RoutedEventArgs e)
     {

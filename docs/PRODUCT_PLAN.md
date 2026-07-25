@@ -161,5 +161,5 @@ Test at minimum:
 2. Whether a tray mode or global hotkey belongs in version 1.1.
 3. Whether changing all three Windows audio roles together should be the
    default behavior.
-4. Whether the portable distribution may require the .NET Desktop Runtime or
-   should bundle it at the cost of a much larger download.
+4. Resolved: publish both a small framework-dependent Lite build and a larger
+   self-contained Portable build.

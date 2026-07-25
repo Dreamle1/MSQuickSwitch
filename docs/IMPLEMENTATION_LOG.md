@@ -134,3 +134,37 @@ new milestone build was written to `artifacts/win-x64-m2` instead.
 - M1 still needs attended switching tests on one- and two-monitor systems.
 - M2 still needs endpoint and session change notifications. Until then, use the
   refresh button after connecting a device or starting/stopping audio.
+
+## 2026-07-24 - optimized .NET 10 deployment
+
+### Implemented
+
+- Changed the app and test targets from the versioned Windows SDK TFM to
+  `net10.0-windows`.
+- Removed the unused runtime dependency on `Microsoft.Windows.SDK.NET.dll`
+  (`24.9 MB`) and `WinRT.Runtime.dll` (`0.5 MB`).
+- Added `global.json` to stay on supported .NET 10 SDK feature bands.
+- Added checked-in `Lite` and `Portable` publish profiles.
+- Stopped enumerating Core Audio during startup. Audio state loads only after
+  the user selects **Refresh**.
+- Kept the app single-process with no service or resident tray process.
+
+### Verification
+
+- Release solution build: passed with 0 warnings and 0 errors.
+- Isolated and live read-only checks: 21 passed, 0 failed.
+- Live topology: extend, 3 active displays, 3 available displays.
+- Live audio: 7 playback endpoints, 3 recording endpoints, 1 active session.
+- Display or audio mutations invoked by verification: 0.
+
+### Published variants
+
+| Variant | Runtime model | Bytes | SHA-256 |
+| --- | --- | ---: | --- |
+| Lite | Framework-dependent | 219,339 | `ECCD301B0757FBE90A3FAD14FBD924C51C50D6FC97E9F8452FF7106BA86C6743` |
+| Portable | Self-contained | 64,819,933 | `4A88B189D64289C15BA2590600F191F020EB910C944E8573B68B09DED8775A76` |
+
+Outputs:
+
+- `artifacts/win-x64-lite/WinQuickSwitch.exe`
+- `artifacts/win-x64-portable/WinQuickSwitch.exe`

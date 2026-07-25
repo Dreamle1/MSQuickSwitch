@@ -7,6 +7,11 @@ the binary and dependency model modest, starts quickly, supports accessibility,
 and can call both COM and Win32 APIs directly. The application is
 framework-dependent by default and has no background service.
 
+The project targets the generic `net10.0-windows` TFM. The implemented platform
+features use direct Win32 and COM interop, so compiling against a versioned
+Windows SDK would copy large WinRT support assemblies that the app does not
+use.
+
 ## Layers
 
 ```text
@@ -139,8 +144,22 @@ Targets for a release, framework-dependent build:
 - No polling loop while idle; use Windows notifications.
 - UI remains responsive while enumerating devices.
 
+Audio enumeration is currently started only when the user selects **Refresh**.
+Future endpoint/session watchers should likewise exist only while the audio
+section is active.
+
 Measure these targets in M5 rather than treating them as guaranteed by the
 framework choice.
+
+## Deployment variants
+
+- **Lite** is a framework-dependent, single-file Windows x64 executable. It
+  relies on the shared .NET 10 Desktop Runtime and minimizes app payload.
+- **Portable** is a compressed, self-contained, single-file Windows x64
+  executable. It trades download size for zero runtime setup.
+- Both profiles disable trimming and ReadyToRun. WPF and the current COM
+  declarations are not being treated as trim-safe, while ReadyToRun generally
+  increases publish size.
 
 ## Test strategy
 
