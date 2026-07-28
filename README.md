@@ -94,14 +94,19 @@ The implementation and exact verification history are recorded in
   the widget or open Display, Audio, or Devices directly.
 - The Options theme toggle changes both the widget and supported Windows title
   bar colors immediately.
+- In Options, enable **Start WinQuickSwitch when I sign in** to register the
+  current executable for your Windows account. Sign-in launches stay hidden
+  and wait for a global shortcut.
 
 Only the visible panel refreshes. The Core Audio notification watcher stops
 when Audio is not visible, and hidden device events only mark the inventory for
 refresh the next time Devices opens.
 
 Shortcuts and theme choice are saved to
-`%LOCALAPPDATA%\WinQuickSwitch\settings.json`. The app uses no registry setting
-and adds no settings dependency.
+`%LOCALAPPDATA%\WinQuickSwitch\settings.json`. The optional sign-in launch uses
+the current user's Windows `Run` registration and does not require
+administrator rights. Disable the checkbox before moving or deleting the
+executable so Windows can remove that registration cleanly.
 
 ## Publishing
 
@@ -158,8 +163,9 @@ position across hide/show. The default `Win + Shift + Q` shortcut and optional
 direct Display/Audio/Devices shortcuts are configurable in Options. Closing or
 clicking away hides the widget; **Quit** exits it. Hidden panels suspend their
 refresh work and the audio watcher, so residency does not turn into continuous
-polling. Startup registration, tray integration, accessibility/DPI validation,
-and release signing remain M5 work.
+polling. Optional per-user sign-in startup is implemented and starts hidden.
+Tray integration, accessibility/DPI validation, and release signing remain M5
+work.
 
 ## License
 

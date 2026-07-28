@@ -712,3 +712,54 @@ Outputs:
 
 - `artifacts/win-x64-lite-options/WinQuickSwitch.exe`
 - `artifacts/win-x64-portable-options/WinQuickSwitch.exe`
+
+## 2026-07-27 - optional start with Windows
+
+### Implemented
+
+- Added **Start WinQuickSwitch when I sign in** to Options.
+- Added isolated per-user startup registration through
+  `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`. The value contains the
+  quoted current executable path plus the allowlisted `--startup` argument and
+  does not require elevation.
+- Startup launches now create the native window handle, register global
+  hotkeys, and remain resident without showing the widget.
+- A normal later launch reveals that hidden resident instance. A delayed
+  Windows startup launch does not reveal an instance that is already running.
+- Kept startup registration separate from JSON preferences so the checkbox
+  reflects Windows' current registration and identifies a stale executable
+  path as disabled.
+- Kept registration errors nonfatal, restored the checkbox to the actual
+  Windows state on failure, and reported the error in Options.
+- Documented enabling, disabling, moving, and deleting the executable.
+
+### Verification
+
+- Format verification: passed with no changes required.
+- Release build: passed with 0 warnings and 0 errors.
+- Isolated checks: 52 passed, 0 failed.
+- Read-only live checks: 56 passed, 0 failed.
+- Live topology: extend, 3 active displays, 3 available displays.
+- Live audio: 7 output endpoints, 3 input endpoints, 1 active application.
+- Live normalized device inventory: 13 Bluetooth, 8 wired.
+- Hidden-start lifecycle: the native widget window existed but was not visible;
+  a normal second launch exited and revealed the original window.
+- Lite and Portable package checks both passed hidden startup and later reveal.
+- Options UI check: the startup checkbox was present, visible, and not clipped.
+- The user's actual startup registration was absent and was not changed during
+  verification. Registry mutations were tested through an isolated fake.
+- Existing user widget processes and previous artifact folders were not
+  stopped or overwritten.
+- Automated display-changing commands invoked: 0.
+
+Published startup-option variants:
+
+| Variant | Bytes | SHA-256 |
+| --- | ---: | --- |
+| Lite | 318,667 | `647071B8A41CFA0C4C0590B28E66B7CEEA34E293C900FACBF2977642600477EC` |
+| Portable | 64,860,289 | `B69E9B8BB4C6B85900DDF2B83A81B56D33977CD5B0C55D1EB3FF81794A62899E` |
+
+Outputs:
+
+- `artifacts/win-x64-lite-startup/WinQuickSwitch.exe`
+- `artifacts/win-x64-portable-startup/WinQuickSwitch.exe`

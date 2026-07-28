@@ -94,8 +94,15 @@ the moving pointer.
 The close button, `Esc`, and click-away hide the window. A short activation
 grace prevents the launch or second-instance handoff from being immediately
 undone if Windows is still settling foreground focus. **Quit** is the explicit
-process-exit path. There is no tray icon or start-with-Windows registration in
-this slice.
+process-exit path. There is no tray icon.
+
+Optional sign-in startup writes one quoted command to
+`HKCU\Software\Microsoft\Windows\CurrentVersion\Run`. The command contains the
+current executable path and the allowlisted `--startup` argument. That argument
+creates the native window handle and registers global hotkeys without showing
+the widget. A normal later launch still reveals the existing resident instance;
+a delayed Windows startup launch does not unexpectedly reveal an instance that
+is already running.
 
 ## Local options
 
@@ -103,8 +110,15 @@ The Options panel captures only modified A-Z, 0-9, and F1-F12 shortcuts. Ctrl,
 Alt, or Win is required; Shift can be added. Duplicate in-app bindings are
 rejected before native registration. Settings use `System.Text.Json` and an
 atomic temporary-file replacement under
-`%LOCALAPPDATA%\WinQuickSwitch\settings.json`; no registry keys or third-party
-configuration package are needed.
+`%LOCALAPPDATA%\WinQuickSwitch\settings.json`; no third-party configuration
+package is needed.
+
+Windows is the source of truth for the separate start-with-Windows option. The
+Options checkbox compares the current executable's exact quoted startup
+command with the per-user `Run` value. Enabling overwrites a stale path;
+disabling removes the value. Registry access failures are nonfatal and are
+reported in the Options panel. Machine-wide startup, a scheduled task, and a
+background service are intentionally avoided.
 
 Dark and light palettes update WPF brushes through dynamic color resources.
 The same palette is sent to the native caption through `DwmSetWindowAttribute`,

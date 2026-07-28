@@ -36,7 +36,7 @@ desktops are outside the first release.
 
 ## Version 1 user experience
 
-The resident widget has three compact panels and shows one at a time:
+The resident widget has four compact panels and shows one at a time:
 
 ### Display
 
@@ -125,8 +125,8 @@ as connected.
 - [x] Make show/hide and direct-panel global shortcuts configurable, with
   conflict-safe disabled options.
 - [x] Add a persisted dark/light theme option, including the native title bar.
-- Add optional start-with-Windows behavior and decide whether a tray icon adds
-  enough value.
+- [x] Add optional per-user start-with-Windows behavior that launches hidden.
+- Decide whether a tray icon adds enough value.
 - Complete screen-reader, high-contrast, and 100-200% DPI validation.
 - Cold-start and memory measurements on a release build.
 - MSIX and portable framework-dependent packaging experiments.

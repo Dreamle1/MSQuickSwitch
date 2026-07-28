@@ -28,6 +28,7 @@ public partial class MainWindow : Window
     private readonly IDeviceInventoryService _deviceInventoryService;
     private readonly IDeviceSettingsService _deviceSettingsService;
     private readonly IWidgetSettingsStore _widgetSettingsStore;
+    private readonly IStartupRegistrationService _startupRegistrationService;
     private readonly WindowsGlobalHotkey _globalHotkey = new();
     private readonly WindowsWidgetPlacementService _placementService = new();
     private readonly DebouncedActionScheduler _audioRefreshScheduler;
@@ -61,7 +62,8 @@ public partial class MainWindow : Window
         new WindowsDefaultAudioEndpointService(),
         new WindowsDeviceInventoryService(),
         new WindowsDeviceSettingsService(),
-        new JsonWidgetSettingsStore())
+        new JsonWidgetSettingsStore(),
+        new WindowsStartupRegistrationService())
     {
     }
 
@@ -74,7 +76,8 @@ public partial class MainWindow : Window
         IDefaultAudioEndpointService defaultAudioEndpointService,
         IDeviceInventoryService deviceInventoryService,
         IDeviceSettingsService deviceSettingsService,
-        IWidgetSettingsStore widgetSettingsStore)
+        IWidgetSettingsStore widgetSettingsStore,
+        IStartupRegistrationService startupRegistrationService)
     {
         _displayModeService = displayModeService;
         _displayTopologyService = displayTopologyService;
@@ -85,6 +88,7 @@ public partial class MainWindow : Window
         _deviceInventoryService = deviceInventoryService;
         _deviceSettingsService = deviceSettingsService;
         _widgetSettingsStore = widgetSettingsStore;
+        _startupRegistrationService = startupRegistrationService;
         _widgetSettings = _widgetSettingsStore.Load();
         WidgetTheme.Apply(_widgetSettings.UseDarkTheme);
         InitializeComponent();
@@ -469,6 +473,8 @@ public partial class MainWindow : Window
             DevicesShortcutBox.Text = FormatShortcut(
                 _widgetSettings.Devices);
             DarkThemeCheckBox.IsChecked = _widgetSettings.UseDarkTheme;
+            StartWithWindowsCheckBox.IsChecked =
+                _startupRegistrationService.IsEnabled;
         }
         finally
         {
@@ -571,6 +577,37 @@ public partial class MainWindow : Window
         };
         WidgetTheme.Apply(useDarkTheme, _windowHandle);
         SaveSettings(useDarkTheme ? "Dark theme enabled." : "Light theme enabled.");
+    }
+
+    private void StartWithWindowsCheckBox_Changed(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (_isApplyingSettingsUi)
+        {
+            return;
+        }
+
+        bool enabled = StartWithWindowsCheckBox.IsChecked == true;
+        StartupRegistrationResult result =
+            _startupRegistrationService.SetEnabled(enabled);
+
+        if (!result.Succeeded)
+        {
+            _isApplyingSettingsUi = true;
+
+            try
+            {
+                StartWithWindowsCheckBox.IsChecked =
+                    _startupRegistrationService.IsEnabled;
+            }
+            finally
+            {
+                _isApplyingSettingsUi = false;
+            }
+        }
+
+        OptionsStatusText.Text = result.Message;
     }
 
     private void ResetShortcuts_Click(object sender, RoutedEventArgs e)

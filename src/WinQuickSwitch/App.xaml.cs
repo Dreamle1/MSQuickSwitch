@@ -1,5 +1,7 @@
 using System.Windows;
+using System.Windows.Interop;
 using System.Windows.Threading;
+using WinQuickSwitch.Platform.Windows;
 
 namespace WinQuickSwitch;
 
@@ -21,6 +23,9 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        bool isStartupLaunch = e.Args.Contains(
+            WindowsStartupRegistrationService.StartupArgument,
+            StringComparer.OrdinalIgnoreCase);
 
         _singleInstanceMutex = new Mutex(
             initiallyOwned: true,
@@ -29,7 +34,11 @@ public partial class App : Application
 
         if (!_ownsMutex)
         {
-            SignalExistingInstance();
+            if (!isStartupLaunch)
+            {
+                SignalExistingInstance();
+            }
+
             Shutdown();
             return;
         }
@@ -40,7 +49,16 @@ public partial class App : Application
             _activationEventName);
         MainWindow window = new();
         MainWindow = window;
-        window.ShowFromExternalRequest();
+
+        if (isStartupLaunch)
+        {
+            new WindowInteropHelper(window).EnsureHandle();
+        }
+        else
+        {
+            window.ShowFromExternalRequest();
+        }
+
         _activationListener = Task.Run(ListenForActivationRequests);
     }
 

@@ -60,6 +60,10 @@ internal static class Program
             ("Widget shortcuts validate and format supported chords", WidgetShortcutsValidateAndFormat),
             ("Widget settings remove duplicate shortcuts", WidgetSettingsRemoveDuplicates),
             ("Widget settings persist without dependencies", WidgetSettingsPersist),
+            ("Startup registration uses a quoted hidden-start command", StartupRegistrationUsesHiddenCommand),
+            ("Startup registration recognizes only the current executable", StartupRegistrationRecognizesCurrentExecutable),
+            ("Startup registration can be removed safely", StartupRegistrationCanBeRemoved),
+            ("Startup registration failures remain nonfatal", StartupRegistrationFailuresRemainNonfatal),
             ("Global hotkeys register and resolve actions", GlobalHotkeysRegisterAndResolve),
             ("Global hotkey conflicts stay isolated", GlobalHotkeyConflictsStayIsolated),
             ("Widget opens below and right of the pointer", WidgetOpensBelowPointer),
@@ -768,6 +772,83 @@ internal static class Program
         return Task.CompletedTask;
     }
 
+    private static Task StartupRegistrationUsesHiddenCommand()
+    {
+        FakeStartupRegistry registry = new();
+        WindowsStartupRegistrationService service = new(
+            registry,
+            () => @"C:\Program Files\WinQuickSwitch\WinQuickSwitch.exe");
+
+        StartupRegistrationResult result = service.SetEnabled(true);
+
+        True(result.Succeeded, result.Message);
+        Equal(
+            "\"C:\\Program Files\\WinQuickSwitch\\WinQuickSwitch.exe\" --startup",
+            registry.Value);
+        True(service.IsEnabled, "The newly written startup command should be active.");
+        return Task.CompletedTask;
+    }
+
+    private static Task StartupRegistrationRecognizesCurrentExecutable()
+    {
+        FakeStartupRegistry registry = new()
+        {
+            Value = "\"C:\\Old\\WinQuickSwitch.exe\" --startup",
+        };
+        WindowsStartupRegistrationService service = new(
+            registry,
+            () => @"C:\New\WinQuickSwitch.exe");
+
+        True(
+            !service.IsEnabled,
+            "A stale registration for a moved executable should not appear enabled.");
+
+        registry.Value = "\"c:\\new\\winquickswitch.exe\" --startup";
+        True(
+            service.IsEnabled,
+            "Windows paths should be matched without case sensitivity.");
+        return Task.CompletedTask;
+    }
+
+    private static Task StartupRegistrationCanBeRemoved()
+    {
+        FakeStartupRegistry registry = new()
+        {
+            Value = "\"C:\\Apps\\WinQuickSwitch.exe\" --startup",
+        };
+        WindowsStartupRegistrationService service = new(
+            registry,
+            () => @"C:\Apps\WinQuickSwitch.exe");
+
+        StartupRegistrationResult result = service.SetEnabled(false);
+
+        True(result.Succeeded, result.Message);
+        Equal<string?>(null, registry.Value);
+        Equal(1, registry.DeleteCount);
+        return Task.CompletedTask;
+    }
+
+    private static Task StartupRegistrationFailuresRemainNonfatal()
+    {
+        FakeStartupRegistry registry = new()
+        {
+            Exception = new IOException("blocked"),
+        };
+        WindowsStartupRegistrationService service = new(
+            registry,
+            () => @"C:\Apps\WinQuickSwitch.exe");
+
+        True(
+            !service.IsEnabled,
+            "An unreadable startup entry should be treated as disabled.");
+
+        StartupRegistrationResult result = service.SetEnabled(true);
+
+        True(!result.Succeeded, "A registry failure should be reported.");
+        Contains("blocked", result.Message);
+        return Task.CompletedTask;
+    }
+
     private static Task GlobalHotkeysRegisterAndResolve()
     {
         FakeGlobalHotkeyNative native = new();
@@ -1255,5 +1336,41 @@ internal static class Program
 
         public void Unregister(IntPtr windowHandle, int id) =>
             Unregistrations.Add((windowHandle, id));
+    }
+
+    private sealed class FakeStartupRegistry : IStartupRegistry
+    {
+        public string? Value { get; set; }
+
+        public Exception? Exception { get; init; }
+
+        public int DeleteCount { get; private set; }
+
+        public string? ReadValue()
+        {
+            ThrowIfConfigured();
+            return Value;
+        }
+
+        public void WriteValue(string command)
+        {
+            ThrowIfConfigured();
+            Value = command;
+        }
+
+        public void DeleteValue()
+        {
+            ThrowIfConfigured();
+            DeleteCount++;
+            Value = null;
+        }
+
+        private void ThrowIfConfigured()
+        {
+            if (Exception is not null)
+            {
+                throw Exception;
+            }
+        }
     }
 }
