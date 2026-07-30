@@ -6,6 +6,14 @@ internal enum WidgetHotkeyAction
     Display,
     Audio,
     Devices,
+    PcScreenOnly,
+    Duplicate,
+    Extend,
+    SecondScreenOnly,
+    FavoriteOutput1,
+    FavoriteOutput2,
+    FavoriteOutput3,
+    FavoriteOutput4,
 }
 
 [Flags]
@@ -89,8 +97,18 @@ internal sealed record WidgetSettings(
     WidgetShortcut? ToggleWidget,
     WidgetShortcut? Display,
     WidgetShortcut? Audio,
-    WidgetShortcut? Devices)
+    WidgetShortcut? Devices,
+    WidgetShortcut? PcScreenOnly = null,
+    WidgetShortcut? Duplicate = null,
+    WidgetShortcut? Extend = null,
+    WidgetShortcut? SecondScreenOnly = null,
+    FavoriteOutputSetting? FavoriteOutput1 = null,
+    FavoriteOutputSetting? FavoriteOutput2 = null,
+    FavoriteOutputSetting? FavoriteOutput3 = null,
+    FavoriteOutputSetting? FavoriteOutput4 = null)
 {
+    public const int MaximumFavoriteOutputs = 4;
+
     public static WidgetSettings Default { get; } = new(
         true,
         new WidgetShortcut(
@@ -107,6 +125,14 @@ internal sealed record WidgetSettings(
             WidgetHotkeyAction.Display => Display,
             WidgetHotkeyAction.Audio => Audio,
             WidgetHotkeyAction.Devices => Devices,
+            WidgetHotkeyAction.PcScreenOnly => PcScreenOnly,
+            WidgetHotkeyAction.Duplicate => Duplicate,
+            WidgetHotkeyAction.Extend => Extend,
+            WidgetHotkeyAction.SecondScreenOnly => SecondScreenOnly,
+            WidgetHotkeyAction.FavoriteOutput1 => FavoriteOutput1?.Shortcut,
+            WidgetHotkeyAction.FavoriteOutput2 => FavoriteOutput2?.Shortcut,
+            WidgetHotkeyAction.FavoriteOutput3 => FavoriteOutput3?.Shortcut,
+            WidgetHotkeyAction.FavoriteOutput4 => FavoriteOutput4?.Shortcut,
             _ => null,
         };
 
@@ -119,6 +145,17 @@ internal sealed record WidgetSettings(
             WidgetHotkeyAction.Display => this with { Display = shortcut },
             WidgetHotkeyAction.Audio => this with { Audio = shortcut },
             WidgetHotkeyAction.Devices => this with { Devices = shortcut },
+            WidgetHotkeyAction.PcScreenOnly => this with { PcScreenOnly = shortcut },
+            WidgetHotkeyAction.Duplicate => this with { Duplicate = shortcut },
+            WidgetHotkeyAction.Extend => this with { Extend = shortcut },
+            WidgetHotkeyAction.SecondScreenOnly => this with
+            {
+                SecondScreenOnly = shortcut,
+            },
+            WidgetHotkeyAction.FavoriteOutput1 => WithFavoriteShortcut(0, shortcut),
+            WidgetHotkeyAction.FavoriteOutput2 => WithFavoriteShortcut(1, shortcut),
+            WidgetHotkeyAction.FavoriteOutput3 => WithFavoriteShortcut(2, shortcut),
+            WidgetHotkeyAction.FavoriteOutput4 => WithFavoriteShortcut(3, shortcut),
             _ => this,
         };
 
@@ -138,7 +175,27 @@ internal sealed record WidgetSettings(
             Display = NormalizeShortcut(Display),
             Audio = NormalizeShortcut(Audio),
             Devices = NormalizeShortcut(Devices),
+            PcScreenOnly = NormalizeShortcut(PcScreenOnly),
+            Duplicate = NormalizeShortcut(Duplicate),
+            Extend = NormalizeShortcut(Extend),
+            SecondScreenOnly = NormalizeShortcut(SecondScreenOnly),
+            FavoriteOutput1 = NormalizeFavorite(FavoriteOutput1),
+            FavoriteOutput2 = NormalizeFavorite(FavoriteOutput2),
+            FavoriteOutput3 = NormalizeFavorite(FavoriteOutput3),
+            FavoriteOutput4 = NormalizeFavorite(FavoriteOutput4),
         };
+
+        HashSet<string> endpointIds = new(StringComparer.Ordinal);
+
+        for (int slot = 0; slot < MaximumFavoriteOutputs; slot++)
+        {
+            FavoriteOutputSetting? favorite = normalized.GetFavorite(slot);
+
+            if (favorite is not null && !endpointIds.Add(favorite.EndpointId))
+            {
+                normalized = normalized.WithFavorite(slot, null);
+            }
+        }
 
         HashSet<WidgetShortcut> used = [];
 
@@ -155,9 +212,140 @@ internal sealed record WidgetSettings(
         return normalized;
     }
 
+    public FavoriteOutputSetting? GetFavorite(int slot) =>
+        slot switch
+        {
+            0 => FavoriteOutput1,
+            1 => FavoriteOutput2,
+            2 => FavoriteOutput3,
+            3 => FavoriteOutput4,
+            _ => null,
+        };
+
+    public WidgetSettings WithFavorite(
+        int slot,
+        FavoriteOutputSetting? favorite) =>
+        slot switch
+        {
+            0 => this with { FavoriteOutput1 = favorite },
+            1 => this with { FavoriteOutput2 = favorite },
+            2 => this with { FavoriteOutput3 = favorite },
+            3 => this with { FavoriteOutput4 = favorite },
+            _ => this,
+        };
+
+    public int FindFavoriteSlot(string endpointId)
+    {
+        for (int slot = 0; slot < MaximumFavoriteOutputs; slot++)
+        {
+            if (string.Equals(
+                GetFavorite(slot)?.EndpointId,
+                endpointId,
+                StringComparison.Ordinal))
+            {
+                return slot;
+            }
+        }
+
+        return -1;
+    }
+
+    public int FindOpenFavoriteSlot()
+    {
+        for (int slot = 0; slot < MaximumFavoriteOutputs; slot++)
+        {
+            if (GetFavorite(slot) is null)
+            {
+                return slot;
+            }
+        }
+
+        return -1;
+    }
+
+    public WidgetSettings ResetShortcuts()
+    {
+        WidgetSettings reset = this with
+        {
+            ToggleWidget = Default.ToggleWidget,
+            Display = null,
+            Audio = null,
+            Devices = null,
+            PcScreenOnly = null,
+            Duplicate = null,
+            Extend = null,
+            SecondScreenOnly = null,
+        };
+
+        for (int slot = 0; slot < MaximumFavoriteOutputs; slot++)
+        {
+            if (reset.GetFavorite(slot) is FavoriteOutputSetting favorite)
+            {
+                reset = reset.WithFavorite(
+                    slot,
+                    favorite with { Shortcut = null });
+            }
+        }
+
+        return reset;
+    }
+
+    public static WidgetHotkeyAction GetFavoriteAction(int slot) =>
+        slot switch
+        {
+            0 => WidgetHotkeyAction.FavoriteOutput1,
+            1 => WidgetHotkeyAction.FavoriteOutput2,
+            2 => WidgetHotkeyAction.FavoriteOutput3,
+            3 => WidgetHotkeyAction.FavoriteOutput4,
+            _ => throw new ArgumentOutOfRangeException(nameof(slot)),
+        };
+
+    public static bool TryGetFavoriteSlot(
+        WidgetHotkeyAction action,
+        out int slot)
+    {
+        slot = action switch
+        {
+            WidgetHotkeyAction.FavoriteOutput1 => 0,
+            WidgetHotkeyAction.FavoriteOutput2 => 1,
+            WidgetHotkeyAction.FavoriteOutput3 => 2,
+            WidgetHotkeyAction.FavoriteOutput4 => 3,
+            _ => -1,
+        };
+
+        return slot >= 0;
+    }
+
+    private WidgetSettings WithFavoriteShortcut(
+        int slot,
+        WidgetShortcut? shortcut)
+    {
+        FavoriteOutputSetting? favorite = GetFavorite(slot);
+
+        return favorite is null
+            ? this
+            : WithFavorite(slot, favorite with { Shortcut = shortcut });
+    }
+
     private static WidgetShortcut? NormalizeShortcut(WidgetShortcut? shortcut) =>
         shortcut is { IsValid: true } ? shortcut : null;
+
+    private static FavoriteOutputSetting? NormalizeFavorite(
+        FavoriteOutputSetting? favorite) =>
+        favorite is not null &&
+        !string.IsNullOrWhiteSpace(favorite.EndpointId) &&
+        !string.IsNullOrWhiteSpace(favorite.Name)
+            ? favorite with
+            {
+                Shortcut = NormalizeShortcut(favorite.Shortcut),
+            }
+            : null;
 }
+
+internal sealed record FavoriteOutputSetting(
+    string EndpointId,
+    string Name,
+    WidgetShortcut? Shortcut);
 
 internal interface IWidgetSettingsStore
 {

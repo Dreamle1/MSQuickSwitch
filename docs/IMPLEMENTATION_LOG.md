@@ -763,3 +763,66 @@ Outputs:
 
 - `artifacts/win-x64-lite-startup/WinQuickSwitch.exe`
 - `artifacts/win-x64-portable-startup/WinQuickSwitch.exe`
+
+## 2026-07-29 - favorite outputs and direct display hotkeys
+
+### Implemented
+
+- Added four optional favorite playback-output slots. Audio's compact
+  **Favorite** action adds the selected output or removes it when selected
+  again.
+- Persisted each favorite by its Core Audio endpoint ID, last friendly name,
+  and optional shortcut. Invalid and duplicate endpoint entries normalize away,
+  and existing settings files migrate with all new fields empty.
+- Added a collapsed **Favorite output shortcuts** section to Options. Each
+  saved output receives its own editable global shortcut.
+- Added a collapsed **Display mode shortcuts** section for PC screen only,
+  Duplicate, Extend, and second screen only.
+- Kept Duplicate and Extend shortcuts unobtrusive while hidden. PC-screen-only
+  and second-screen-only reveal Display and retain the existing confirmation
+  because they can turn off the current screen.
+- Routed favorite shortcuts through the existing general-default Core Audio
+  adapter. A failed selection reveals Audio with the error; a successful
+  selection stays hidden.
+- Expanded duplicate-chord detection and conflict-isolated native registration
+  across all panel, display-mode, and favorite-output actions.
+- Changed panel tabs to respond to the native accessibility toggle action as
+  well as pointer input.
+- Added deterministic size-change clamping. A panel keeps its current position
+  when it fits and moves only by the overflow amount when taller content would
+  cross a monitor work-area edge.
+
+### Verification
+
+- Format verification: passed with no changes required.
+- Release build: passed with 0 warnings and 0 errors.
+- Isolated checks: 57 passed, 0 failed.
+- Read-only live checks: 61 passed, 0 failed.
+- Live topology: extend, 3 active displays, 3 available displays.
+- Live audio: 7 output endpoints, 3 input endpoints, 1 active application.
+- Live normalized device inventory: 13 Bluetooth, 8 wired.
+- Settings checks covered old-file migration, favorite persistence, duplicate
+  endpoint cleanup, shortcut reset with favorites retained, display/favorite
+  action mapping, and conflict-isolated global registration.
+- Accessibility-driven UI checks confirmed all four display shortcut fields,
+  favorite-output guidance, and Audio's Favorite control and summary were
+  visible without clipping.
+- The UI check found and verified the fix for taller panels crossing a monitor
+  edge; a pure placement test confirms in-bounds positions do not move.
+- Lite and Portable package checks both passed hidden startup and later reveal.
+- Existing settings, default audio endpoints, display topology, running user
+  widget processes, and previous artifact folders were not changed.
+- Automated display-changing commands invoked: 0.
+- Automated audio-endpoint changes invoked: 0.
+
+Published favorite-hotkey variants:
+
+| Variant | Bytes | SHA-256 |
+| --- | ---: | --- |
+| Lite | 335,051 | `A9137CCCE7A249574126650A6C164E34BA6B4F03D3B90B2D5FBBA4AFA7AA0F8F` |
+| Portable | 64,865,717 | `C9AAD8B7EF334EBB64E7FD38415514C59CEC9D8ECC53B764765EA682FE397EE4` |
+
+Outputs:
+
+- `artifacts/win-x64-lite-favorites/WinQuickSwitch.exe`
+- `artifacts/win-x64-portable-favorites/WinQuickSwitch.exe`

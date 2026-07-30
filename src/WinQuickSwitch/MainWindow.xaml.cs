@@ -50,6 +50,7 @@ public partial class MainWindow : Window
     private bool _deviceInventoryDirty = true;
     private bool _hasPositionedWidget;
     private bool _isApplyingSettingsUi;
+    private bool _isApplyingPanelSelection;
     private DateTime _autoHideAllowedAfterUtc;
     private const int WmDeviceChange = 0x0219;
 
@@ -141,6 +142,18 @@ public partial class MainWindow : Window
         UpdateOptionsControls();
     }
 
+    private void MainWindow_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (!IsVisible || !_hasPositionedWidget || _isExiting)
+        {
+            return;
+        }
+
+        Dispatcher.BeginInvoke(
+            KeepWidgetInsideWorkArea,
+            DispatcherPriority.Loaded);
+    }
+
     private void AudioChangeWatcher_Changed(object? sender, EventArgs e)
     {
         if (IsVisible && _activePanel == WidgetPanel.Audio)
@@ -189,21 +202,40 @@ public partial class MainWindow : Window
         return IntPtr.Zero;
     }
 
-    private void HandleGlobalHotkey(WidgetHotkeyAction action)
+    private async void HandleGlobalHotkey(WidgetHotkeyAction action)
     {
         switch (action)
         {
             case WidgetHotkeyAction.ToggleWidget:
-                ToggleWidget();
+                if (IsVisible)
+                {
+                    HideWidget();
+                }
+                else
+                {
+                    await ShowWidgetAsync();
+                }
+
                 break;
             case WidgetHotkeyAction.Display:
-                ShowWidget(WidgetPanel.Display);
+                await ShowWidgetAsync(WidgetPanel.Display);
                 break;
             case WidgetHotkeyAction.Audio:
-                ShowWidget(WidgetPanel.Audio);
+                await ShowWidgetAsync(WidgetPanel.Audio);
                 break;
             case WidgetHotkeyAction.Devices:
-                ShowWidget(WidgetPanel.Devices);
+                await ShowWidgetAsync(WidgetPanel.Devices);
+                break;
+            default:
+                if (TryGetDisplayMode(action, out DisplayMode displayMode))
+                {
+                    await ApplyDisplayModeFromHotkeyAsync(displayMode);
+                }
+                else if (WidgetSettings.TryGetFavoriteSlot(action, out int slot))
+                {
+                    await ApplyFavoriteOutputFromHotkeyAsync(slot);
+                }
+
                 break;
         }
     }
@@ -216,22 +248,10 @@ public partial class MainWindow : Window
             return;
         }
 
-        ShowWidget();
+        _ = ShowWidgetAsync();
     }
 
-    private void ToggleWidget()
-    {
-        if (IsVisible)
-        {
-            HideWidget();
-        }
-        else
-        {
-            ShowWidget();
-        }
-    }
-
-    private async void ShowWidget(WidgetPanel? requestedPanel = null)
+    private async Task ShowWidgetAsync(WidgetPanel? requestedPanel = null)
     {
         if (_isExiting)
         {
@@ -265,13 +285,89 @@ public partial class MainWindow : Window
         Hide();
     }
 
-    private async void PanelTab_Click(object sender, RoutedEventArgs e)
+    private async Task ApplyDisplayModeFromHotkeyAsync(DisplayMode mode)
     {
-        if (sender is ToggleButton { Tag: string panelName } &&
-            Enum.TryParse(panelName, out WidgetPanel panel))
+        if (RequiresConfirmation(mode) && !IsVisible)
         {
-            await ActivatePanelAsync(panel);
+            await ShowWidgetAsync(WidgetPanel.Display);
         }
+
+        await ApplyDisplayModeAsync(mode);
+    }
+
+    private async Task ApplyFavoriteOutputFromHotkeyAsync(int slot)
+    {
+        FavoriteOutputSetting? favorite = _widgetSettings.GetFavorite(slot);
+
+        if (favorite is null)
+        {
+            return;
+        }
+
+        AudioControlResult result;
+
+        try
+        {
+            result = await _defaultAudioEndpointService.SetDefaultAsync(
+                favorite.EndpointId,
+                favorite.Name,
+                AudioDefaultRoleSelection.General,
+                _lifetimeCancellation.Token);
+        }
+        catch (OperationCanceledException) when (
+            _lifetimeCancellation.IsCancellationRequested)
+        {
+            return;
+        }
+
+        if (!result.Succeeded)
+        {
+            await ShowWidgetAsync(WidgetPanel.Audio);
+        }
+
+        AudioStatusText.Text = result.Message;
+
+        if (IsVisible && _activePanel == WidgetPanel.Audio)
+        {
+            _audioRefreshScheduler.Schedule();
+        }
+    }
+
+    private static bool TryGetDisplayMode(
+        WidgetHotkeyAction action,
+        out DisplayMode mode)
+    {
+        mode = action switch
+        {
+            WidgetHotkeyAction.PcScreenOnly => DisplayMode.PcScreenOnly,
+            WidgetHotkeyAction.Duplicate => DisplayMode.Duplicate,
+            WidgetHotkeyAction.Extend => DisplayMode.Extend,
+            WidgetHotkeyAction.SecondScreenOnly => DisplayMode.SecondScreenOnly,
+            _ => default,
+        };
+
+        return action is
+            WidgetHotkeyAction.PcScreenOnly or
+            WidgetHotkeyAction.Duplicate or
+            WidgetHotkeyAction.Extend or
+            WidgetHotkeyAction.SecondScreenOnly;
+    }
+
+    private async void PanelTab_Checked(object sender, RoutedEventArgs e)
+    {
+        if (!IsInitialized ||
+            _isApplyingPanelSelection ||
+            sender is not ToggleButton
+            {
+                IsChecked: true,
+                Tag: string panelName,
+            } ||
+            !Enum.TryParse(panelName, out WidgetPanel panel))
+        {
+            return;
+        }
+
+        await ActivatePanelAsync(panel);
     }
 
     private async Task ActivatePanelAsync(WidgetPanel panel)
@@ -286,10 +382,19 @@ public partial class MainWindow : Window
         OptionsPanel.Visibility =
             panel == WidgetPanel.Options ? Visibility.Visible : Visibility.Collapsed;
 
-        DisplayPanelTab.IsChecked = panel == WidgetPanel.Display;
-        AudioPanelTab.IsChecked = panel == WidgetPanel.Audio;
-        DevicesPanelTab.IsChecked = panel == WidgetPanel.Devices;
-        OptionsPanelTab.IsChecked = panel == WidgetPanel.Options;
+        _isApplyingPanelSelection = true;
+
+        try
+        {
+            DisplayPanelTab.IsChecked = panel == WidgetPanel.Display;
+            AudioPanelTab.IsChecked = panel == WidgetPanel.Audio;
+            DevicesPanelTab.IsChecked = panel == WidgetPanel.Devices;
+            OptionsPanelTab.IsChecked = panel == WidgetPanel.Options;
+        }
+        finally
+        {
+            _isApplyingPanelSelection = false;
+        }
 
         if (panel != WidgetPanel.Audio)
         {
@@ -405,6 +510,42 @@ public partial class MainWindow : Window
         }
     }
 
+    private void KeepWidgetInsideWorkArea()
+    {
+        try
+        {
+            UpdateLayout();
+            PresentationSource? source = PresentationSource.FromVisual(this);
+            Matrix toDevice =
+                source?.CompositionTarget?.TransformToDevice ?? Matrix.Identity;
+            Matrix fromDevice =
+                source?.CompositionTarget?.TransformFromDevice ?? Matrix.Identity;
+            Point pixelOrigin = toDevice.Transform(new Point(Left, Top));
+            Vector pixelSize = toDevice.Transform(
+                new Vector(
+                    ActualWidth > 0 ? ActualWidth : Width,
+                    ActualHeight > 0 ? ActualHeight : 500));
+            ScreenRectangle workArea =
+                _placementService.GetWindowWorkArea(_windowHandle);
+            ScreenPoint clamped = WidgetPlacementCalculator.ClampToWorkArea(
+                new ScreenPoint(
+                    (int)Math.Round(pixelOrigin.X),
+                    (int)Math.Round(pixelOrigin.Y)),
+                workArea,
+                Math.Max(1, (int)Math.Ceiling(pixelSize.X)),
+                Math.Max(1, (int)Math.Ceiling(pixelSize.Y)));
+            Point dipPosition = fromDevice.Transform(
+                new Point(clamped.X, clamped.Y));
+
+            Left = dipPosition.X;
+            Top = dipPosition.Y;
+        }
+        catch (Win32Exception)
+        {
+            // Retain the existing position if Windows cannot read the monitor.
+        }
+    }
+
     private void MainWindow_Closing(object? sender, CancelEventArgs e)
     {
         if (_isExiting)
@@ -472,9 +613,44 @@ public partial class MainWindow : Window
                 _widgetSettings.Audio);
             DevicesShortcutBox.Text = FormatShortcut(
                 _widgetSettings.Devices);
+            PcScreenOnlyShortcutBox.Text = FormatShortcut(
+                _widgetSettings.PcScreenOnly);
+            DuplicateShortcutBox.Text = FormatShortcut(
+                _widgetSettings.Duplicate);
+            ExtendShortcutBox.Text = FormatShortcut(
+                _widgetSettings.Extend);
+            SecondScreenOnlyShortcutBox.Text = FormatShortcut(
+                _widgetSettings.SecondScreenOnly);
+
+            List<FavoriteOutputShortcutOption> favoriteOptions = [];
+
+            for (int slot = 0;
+                 slot < WidgetSettings.MaximumFavoriteOutputs;
+                 slot++)
+            {
+                FavoriteOutputSetting? favorite =
+                    _widgetSettings.GetFavorite(slot);
+
+                if (favorite is null)
+                {
+                    continue;
+                }
+
+                favoriteOptions.Add(new(
+                    WidgetSettings.GetFavoriteAction(slot),
+                    favorite.Name,
+                    FormatShortcut(favorite.Shortcut),
+                    $"{favorite.Name} shortcut"));
+            }
+
+            FavoriteOutputShortcutItems.ItemsSource = favoriteOptions;
+            FavoriteOutputsEmptyText.Visibility = favoriteOptions.Count == 0
+                ? Visibility.Visible
+                : Visibility.Collapsed;
             DarkThemeCheckBox.IsChecked = _widgetSettings.UseDarkTheme;
             StartWithWindowsCheckBox.IsChecked =
                 _startupRegistrationService.IsEnabled;
+            UpdateFavoriteOutputsSummary();
         }
         finally
         {
@@ -612,10 +788,7 @@ public partial class MainWindow : Window
 
     private void ResetShortcuts_Click(object sender, RoutedEventArgs e)
     {
-        _widgetSettings = WidgetSettings.Default with
-        {
-            UseDarkTheme = _widgetSettings.UseDarkTheme,
-        };
+        _widgetSettings = _widgetSettings.ResetShortcuts();
         HotkeyRegistrationResult result = ApplyHotkeyBindings(_widgetSettings);
         UpdateOptionsControls();
         SaveSettings(
@@ -624,22 +797,39 @@ public partial class MainWindow : Window
                 : result.FirstFailure ?? "A default shortcut is unavailable.");
     }
 
-    private void SaveSettings(string successMessage)
+    private void SaveSettings(
+        string successMessage,
+        TextBlock? statusText = null)
     {
+        TextBlock target = statusText ?? OptionsStatusText;
+
         if (_widgetSettingsStore.TrySave(
             _widgetSettings,
             out string? errorMessage))
         {
-            OptionsStatusText.Text = successMessage;
+            target.Text = successMessage;
         }
         else
         {
-            OptionsStatusText.Text = errorMessage;
+            target.Text = errorMessage;
         }
     }
 
     private static string FormatShortcut(WidgetShortcut? shortcut) =>
         shortcut?.DisplayText ?? "Not set";
+
+    private static bool TryGetHotkeyAction(
+        object? tag,
+        out WidgetHotkeyAction action)
+    {
+        if (tag is WidgetHotkeyAction typedAction)
+        {
+            action = typedAction;
+            return true;
+        }
+
+        return Enum.TryParse(tag as string, out action);
+    }
 
     private static WidgetHotkeyModifiers ConvertModifiers(
         ModifierKeys modifiers)
@@ -681,9 +871,8 @@ public partial class MainWindow : Window
         if (_activePanel == WidgetPanel.Options &&
             e.OriginalSource is TextBox
             {
-                Tag: string actionName,
             } shortcutBox &&
-            Enum.TryParse(actionName, out WidgetHotkeyAction action))
+            TryGetHotkeyAction(shortcutBox.Tag, out WidgetHotkeyAction action))
         {
             CaptureShortcut(shortcutBox, action, e);
             return;
@@ -771,6 +960,11 @@ public partial class MainWindow : Window
             return;
         }
 
+        await ApplyDisplayModeAsync(mode);
+    }
+
+    private async Task ApplyDisplayModeAsync(DisplayMode mode)
+    {
         if (_currentDisplayMode == mode)
         {
             SetDisplayModeSelection(mode);
@@ -971,6 +1165,69 @@ public partial class MainWindow : Window
                 checkBox.IsEnabled = true;
             }
         }
+    }
+
+    private void AddFavoriteOutput_Click(object sender, RoutedEventArgs e)
+    {
+        if (PlaybackEndpointsList.SelectedItem is not AudioEndpointInfo endpoint)
+        {
+            AudioStatusText.Text = "Select an output device first.";
+            return;
+        }
+
+        int existingSlot = _widgetSettings.FindFavoriteSlot(endpoint.Id);
+
+        if (existingSlot >= 0)
+        {
+            WidgetSettings candidate =
+                _widgetSettings.WithFavorite(existingSlot, null);
+            HotkeyRegistrationResult result = ApplyHotkeyBindings(candidate);
+            _widgetSettings = candidate;
+            UpdateOptionsControls();
+            SaveSettings(
+                result.Succeeded
+                    ? $"{endpoint.Name} removed from favorites."
+                    : result.FirstFailure ??
+                        "Favorite removed; a shortcut is unavailable.",
+                AudioStatusText);
+            return;
+        }
+
+        int openSlot = _widgetSettings.FindOpenFavoriteSlot();
+
+        if (openSlot < 0)
+        {
+            AudioStatusText.Text =
+                $"You can save up to {WidgetSettings.MaximumFavoriteOutputs} favorites.";
+            return;
+        }
+
+        _widgetSettings = _widgetSettings.WithFavorite(
+            openSlot,
+            new FavoriteOutputSetting(endpoint.Id, endpoint.Name, null));
+        UpdateOptionsControls();
+        SaveSettings(
+            $"{endpoint.Name} added to favorites.",
+            AudioStatusText);
+    }
+
+    private void UpdateFavoriteOutputsSummary()
+    {
+        List<string> names = [];
+
+        for (int slot = 0;
+             slot < WidgetSettings.MaximumFavoriteOutputs;
+             slot++)
+        {
+            if (_widgetSettings.GetFavorite(slot) is FavoriteOutputSetting favorite)
+            {
+                names.Add(favorite.Name);
+            }
+        }
+
+        FavoriteOutputsSummaryText.Text = names.Count == 0
+            ? "Favorites: none"
+            : $"Favorites: {string.Join(", ", names)}";
     }
 
     private async void SetDefaultAudioEndpoint_Click(object sender, RoutedEventArgs e)
@@ -1187,3 +1444,9 @@ public partial class MainWindow : Window
         }
     }
 }
+
+internal sealed record FavoriteOutputShortcutOption(
+    WidgetHotkeyAction Action,
+    string Name,
+    string ShortcutText,
+    string EditorName);

@@ -59,7 +59,11 @@ internal static class Program
             ("Light title bar uses the application palette", LightTitleBarUsesAppPalette),
             ("Widget shortcuts validate and format supported chords", WidgetShortcutsValidateAndFormat),
             ("Widget settings remove duplicate shortcuts", WidgetSettingsRemoveDuplicates),
+            ("Display and favorite shortcuts map to distinct actions", DisplayAndFavoriteShortcutsMapToActions),
+            ("Favorite outputs normalize invalid and duplicate devices", FavoriteOutputsNormalizeDevices),
+            ("Reset shortcuts preserves favorite output devices", ResetShortcutsPreservesFavorites),
             ("Widget settings persist without dependencies", WidgetSettingsPersist),
+            ("Older widget settings migrate with new shortcuts empty", OlderWidgetSettingsMigrate),
             ("Startup registration uses a quoted hidden-start command", StartupRegistrationUsesHiddenCommand),
             ("Startup registration recognizes only the current executable", StartupRegistrationRecognizesCurrentExecutable),
             ("Startup registration can be removed safely", StartupRegistrationCanBeRemoved),
@@ -69,6 +73,7 @@ internal static class Program
             ("Widget opens below and right of the pointer", WidgetOpensBelowPointer),
             ("Widget flips away from monitor edges", WidgetFlipsAtMonitorEdges),
             ("Widget stays inside negative-coordinate work areas", WidgetStaysInsideWorkArea),
+            ("Growing widget clamps only when it crosses a work-area edge", GrowingWidgetClampsAtEdges),
         ];
 
         if (args.Contains("--integration", StringComparer.OrdinalIgnoreCase))
@@ -741,6 +746,79 @@ internal static class Program
         return Task.CompletedTask;
     }
 
+    private static Task DisplayAndFavoriteShortcutsMapToActions()
+    {
+        WidgetShortcut displayShortcut = new(
+            WidgetHotkeyModifiers.Control | WidgetHotkeyModifiers.Alt,
+            0x31);
+        WidgetShortcut favoriteShortcut = new(
+            WidgetHotkeyModifiers.Control | WidgetHotkeyModifiers.Alt,
+            0x32);
+        WidgetSettings settings = WidgetSettings.Default with
+        {
+            Extend = displayShortcut,
+            FavoriteOutput2 = new(
+                "endpoint-2",
+                "Desk speakers",
+                favoriteShortcut),
+        };
+
+        Equal(
+            displayShortcut,
+            settings.GetShortcut(WidgetHotkeyAction.Extend));
+        Equal(
+            favoriteShortcut,
+            settings.GetShortcut(WidgetHotkeyAction.FavoriteOutput2));
+        Equal(1, settings.FindFavoriteSlot("endpoint-2"));
+        True(
+            WidgetSettings.TryGetFavoriteSlot(
+                WidgetHotkeyAction.FavoriteOutput2,
+                out int slot),
+            "The favorite action should resolve to a slot.");
+        Equal(1, slot);
+        return Task.CompletedTask;
+    }
+
+    private static Task FavoriteOutputsNormalizeDevices()
+    {
+        WidgetSettings settings = WidgetSettings.Default with
+        {
+            FavoriteOutput1 = new("endpoint-1", "Speakers", null),
+            FavoriteOutput2 = new("endpoint-1", "Duplicate speakers", null),
+            FavoriteOutput3 = new("", "Missing identifier", null),
+            FavoriteOutput4 = new("endpoint-4", "", null),
+        };
+
+        WidgetSettings normalized = settings.Normalize();
+
+        Equal("Speakers", normalized.FavoriteOutput1?.Name);
+        Equal<FavoriteOutputSetting?>(null, normalized.FavoriteOutput2);
+        Equal<FavoriteOutputSetting?>(null, normalized.FavoriteOutput3);
+        Equal<FavoriteOutputSetting?>(null, normalized.FavoriteOutput4);
+        Equal(1, normalized.FindOpenFavoriteSlot());
+        return Task.CompletedTask;
+    }
+
+    private static Task ResetShortcutsPreservesFavorites()
+    {
+        WidgetShortcut shortcut = new(
+            WidgetHotkeyModifiers.Control | WidgetHotkeyModifiers.Alt,
+            0x33);
+        WidgetSettings settings = WidgetSettings.Default with
+        {
+            Duplicate = shortcut,
+            FavoriteOutput1 = new("endpoint-1", "Headphones", shortcut),
+        };
+
+        WidgetSettings reset = settings.ResetShortcuts();
+
+        Equal(WidgetSettings.Default.ToggleWidget, reset.ToggleWidget);
+        Equal<WidgetShortcut?>(null, reset.Duplicate);
+        Equal("endpoint-1", reset.FavoriteOutput1?.EndpointId);
+        Equal<WidgetShortcut?>(null, reset.FavoriteOutput1?.Shortcut);
+        return Task.CompletedTask;
+    }
+
     private static Task WidgetSettingsPersist()
     {
         string settingsPath = Path.Combine(
@@ -756,12 +834,62 @@ internal static class Program
                 Audio = new WidgetShortcut(
                     WidgetHotkeyModifiers.Control | WidgetHotkeyModifiers.Alt,
                     0x41),
+                Extend = new WidgetShortcut(
+                    WidgetHotkeyModifiers.Control | WidgetHotkeyModifiers.Alt,
+                    0x45),
+                FavoriteOutput1 = new FavoriteOutputSetting(
+                    "endpoint-1",
+                    "Desk speakers",
+                    new WidgetShortcut(
+                        WidgetHotkeyModifiers.Control |
+                        WidgetHotkeyModifiers.Alt,
+                        0x31)),
             };
 
             True(
                 store.TrySave(expected, out string? saveError),
                 saveError ?? "Settings save failed.");
             Equal(expected, store.Load());
+        }
+        finally
+        {
+            File.Delete(settingsPath);
+            File.Delete(settingsPath + ".tmp");
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private static Task OlderWidgetSettingsMigrate()
+    {
+        string settingsPath = Path.Combine(
+            Path.GetTempPath(),
+            $"WinQuickSwitch.Tests.{Guid.NewGuid():N}.json");
+
+        try
+        {
+            File.WriteAllText(
+                settingsPath,
+                """
+                {
+                  "UseDarkTheme": false,
+                  "ToggleWidget": {
+                    "Modifiers": 12,
+                    "VirtualKey": 81
+                  },
+                  "Display": null,
+                  "Audio": null,
+                  "Devices": null
+                }
+                """);
+
+            WidgetSettings loaded =
+                new JsonWidgetSettingsStore(settingsPath).Load();
+
+            True(!loaded.UseDarkTheme, "The existing theme should be retained.");
+            Equal("Win + Shift + Q", loaded.ToggleWidget?.DisplayText);
+            Equal<WidgetShortcut?>(null, loaded.Extend);
+            Equal<FavoriteOutputSetting?>(null, loaded.FavoriteOutput1);
         }
         finally
         {
@@ -858,13 +986,23 @@ internal static class Program
             Audio = new WidgetShortcut(
                 WidgetHotkeyModifiers.Control | WidgetHotkeyModifiers.Alt,
                 0x41),
+            Extend = new WidgetShortcut(
+                WidgetHotkeyModifiers.Control | WidgetHotkeyModifiers.Alt,
+                0x45),
+            FavoriteOutput1 = new FavoriteOutputSetting(
+                "endpoint-1",
+                "Desk speakers",
+                new WidgetShortcut(
+                    WidgetHotkeyModifiers.Control |
+                    WidgetHotkeyModifiers.Alt,
+                    0x31)),
         };
 
         HotkeyRegistrationResult result =
             hotkeys.ApplyBindings(new IntPtr(44), settings);
 
         True(result.Succeeded, result.FirstFailure ?? "Registration failed.");
-        Equal(2, native.Registrations.Count);
+        Equal(4, native.Registrations.Count);
         True(
             hotkeys.TryResolveAction(
                 WindowsGlobalHotkey.GetId(WidgetHotkeyAction.ToggleWidget),
@@ -877,6 +1015,18 @@ internal static class Program
                 out WidgetHotkeyAction audioAction),
             "The Audio shortcut was not registered.");
         Equal(WidgetHotkeyAction.Audio, audioAction);
+        True(
+            hotkeys.TryResolveAction(
+                WindowsGlobalHotkey.GetId(WidgetHotkeyAction.Extend),
+                out WidgetHotkeyAction extendAction),
+            "The Extend shortcut was not registered.");
+        Equal(WidgetHotkeyAction.Extend, extendAction);
+        True(
+            hotkeys.TryResolveAction(
+                WindowsGlobalHotkey.GetId(WidgetHotkeyAction.FavoriteOutput1),
+                out WidgetHotkeyAction favoriteAction),
+            "The favorite-output shortcut was not registered.");
+        Equal(WidgetHotkeyAction.FavoriteOutput1, favoriteAction);
         True(
             (native.Registrations[0].Modifiers & 0x4000) != 0,
             "MOD_NOREPEAT was not applied.");
@@ -949,6 +1099,26 @@ internal static class Program
         True(position.X + 500 <= 0, "The widget crossed the work area's right edge.");
         True(position.Y >= 0, "The widget crossed the work area's top edge.");
         True(position.Y + 500 <= 1040, "The widget crossed the work area's bottom edge.");
+        return Task.CompletedTask;
+    }
+
+    private static Task GrowingWidgetClampsAtEdges()
+    {
+        ScreenRectangle workArea = new(0, 0, 1920, 1040);
+
+        ScreenPoint unchanged = WidgetPlacementCalculator.ClampToWorkArea(
+            new ScreenPoint(700, 200),
+            workArea,
+            widgetWidth: 500,
+            widgetHeight: 700);
+        ScreenPoint clamped = WidgetPlacementCalculator.ClampToWorkArea(
+            new ScreenPoint(1500, 700),
+            workArea,
+            widgetWidth: 500,
+            widgetHeight: 700);
+
+        Equal(new ScreenPoint(700, 200), unchanged);
+        Equal(new ScreenPoint(1420, 340), clamped);
         return Task.CompletedTask;
     }
 

@@ -77,7 +77,8 @@ The implementation and exact verification history are recorded in
 - Press `Win + Shift + Q` anywhere to show or hide WinQuickSwitch.
 - The first reveal opens beside the pointer and stays inside that monitor's
   work area. Later hide/show cycles keep the same position, including a
-  position you dragged the widget to.
+  position you dragged the widget to. If a taller panel would cross a monitor
+  edge, the widget moves only enough to keep every control visible.
 - Select **Display**, **Audio**, **Devices**, or **Options** to show one compact
   panel at a time.
 - Press `Ctrl + 1`, `Ctrl + 2`, `Ctrl + 3`, or `Ctrl + 4` to switch panels.
@@ -85,6 +86,8 @@ The implementation and exact verification history are recorded in
   mode.
 - In Audio, press `O`, `I`, or `A` to focus output, input, or application
   sessions.
+- In Audio, select an output and choose **Favorite**. Up to four outputs can be
+  saved; choose **Favorite** again to remove a saved output.
 - Press `Esc`, click elsewhere, or close the window to hide it. Select
   **Quit** to exit the resident process.
 - Starting WinQuickSwitch again reveals the existing instance instead of
@@ -92,6 +95,12 @@ The implementation and exact verification history are recorded in
 - In Options, select a shortcut field and press a modified letter, number, or
   function key. Delete clears the field. Separate global shortcuts can toggle
   the widget or open Display, Audio, or Devices directly.
+- Expand **Display mode shortcuts** to assign a global shortcut to PC screen
+  only, Duplicate, Extend, or second screen only. The two modes that can turn
+  off the current display still ask for confirmation.
+- Expand **Favorite output shortcuts** to assign a global shortcut to each
+  saved output. Using one changes the normal Windows output without opening
+  the widget; a failure opens Audio with an explanation.
 - The Options theme toggle changes both the widget and supported Windows title
   bar colors immediately.
 - In Options, enable **Start WinQuickSwitch when I sign in** to register the
@@ -120,7 +129,7 @@ Lite build:
 
 Output: `artifacts\win-x64-lite\WinQuickSwitch.exe`
 
-- Approximately 314 KB for the current resident-widget build.
+- Approximately 335 KB for the current resident-widget build.
 - Requires the .NET 10 Desktop Runtime on the destination computer.
 - Recommended when minimum download and app footprint matter most.
 
@@ -160,7 +169,8 @@ inventory are implemented. The resident slice adds a single-instance
 500-pixel widget with a theme-matched native title bar and four mutually
 exclusive panels. It places itself beside the pointer once, then keeps a stable
 position across hide/show. The default `Win + Shift + Q` shortcut and optional
-direct Display/Audio/Devices shortcuts are configurable in Options. Closing or
+direct panel, projection-mode, and favorite-output shortcuts are configurable
+in Options. Up to four playback outputs can be saved as favorites. Closing or
 clicking away hides the widget; **Quit** exits it. Hidden panels suspend their
 refresh work and the audio watcher, so residency does not turn into continuous
 polling. Optional per-user sign-in startup is implemented and starts hidden.

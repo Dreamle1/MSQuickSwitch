@@ -18,6 +18,22 @@ internal sealed class WindowsWidgetPlacementService
         }
 
         IntPtr monitor = MonitorFromPoint(pointer, MonitorDefaultToNearest);
+        return (
+            new ScreenPoint(pointer.X, pointer.Y),
+            GetMonitorWorkArea(monitor));
+    }
+
+    public ScreenRectangle GetWindowWorkArea(IntPtr windowHandle)
+    {
+        IntPtr monitor = MonitorFromWindow(
+            windowHandle,
+            MonitorDefaultToNearest);
+
+        return GetMonitorWorkArea(monitor);
+    }
+
+    private static ScreenRectangle GetMonitorWorkArea(IntPtr monitor)
+    {
         MonitorInfo monitorInfo = new()
         {
             Size = (uint)Marshal.SizeOf<MonitorInfo>(),
@@ -30,13 +46,11 @@ internal sealed class WindowsWidgetPlacementService
                 "Windows could not read the current monitor work area.");
         }
 
-        return (
-            new ScreenPoint(pointer.X, pointer.Y),
-            new ScreenRectangle(
-                monitorInfo.WorkArea.Left,
-                monitorInfo.WorkArea.Top,
-                monitorInfo.WorkArea.Right,
-                monitorInfo.WorkArea.Bottom));
+        return new ScreenRectangle(
+            monitorInfo.WorkArea.Left,
+            monitorInfo.WorkArea.Top,
+            monitorInfo.WorkArea.Right,
+            monitorInfo.WorkArea.Bottom);
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -71,6 +85,11 @@ internal sealed class WindowsWidgetPlacementService
     [DllImport("user32.dll")]
     private static extern IntPtr MonitorFromPoint(
         NativePoint point,
+        uint flags);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr MonitorFromWindow(
+        IntPtr windowHandle,
         uint flags);
 
     [DllImport("user32.dll", EntryPoint = "GetMonitorInfoW",

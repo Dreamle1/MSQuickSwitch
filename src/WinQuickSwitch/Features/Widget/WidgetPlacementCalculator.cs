@@ -45,4 +45,21 @@ internal static class WidgetPlacementCalculator
             Math.Clamp(left, workArea.Left, maximumLeft),
             Math.Clamp(top, workArea.Top, maximumTop));
     }
+
+    public static ScreenPoint ClampToWorkArea(
+        ScreenPoint position,
+        ScreenRectangle workArea,
+        int widgetWidth,
+        int widgetHeight)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(widgetWidth);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(widgetHeight);
+
+        int maximumLeft = Math.Max(workArea.Left, workArea.Right - widgetWidth);
+        int maximumTop = Math.Max(workArea.Top, workArea.Bottom - widgetHeight);
+
+        return new ScreenPoint(
+            Math.Clamp(position.X, workArea.Left, maximumLeft),
+            Math.Clamp(position.Y, workArea.Top, maximumTop));
+    }
 }

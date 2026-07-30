@@ -76,11 +76,19 @@ its existing window. This keeps all native callbacks and mutable Windows state
 inside one process without an IPC framework.
 
 `RegisterHotKey` owns the default `Win + Shift + Q` chord with no-repeat
-semantics. Optional bindings can toggle the window or reveal it directly on
-Display, Audio, or Devices. `WM_HOTKEY` resolves the native identifier back to
-one of those allowlisted actions. Each binding registers independently, so one
-conflict does not disable the others; the Options panel reports the conflict
-and does not save a newly rejected binding.
+semantics. Optional bindings can toggle the window, reveal Display/Audio/
+Devices, request one of the four allowlisted projection modes, or select one
+of four favorite playback outputs. `WM_HOTKEY` resolves the native identifier
+back to one of those fixed actions. Each binding registers independently, so
+one conflict does not disable the others; the Options panel reports the
+conflict and does not save a newly rejected binding.
+
+Duplicate and Extend shortcuts can run while the widget remains hidden.
+PC-screen-only and second-screen-only retain the normal confirmation and reveal
+Display before asking, because either choice can turn off the screen currently
+showing the widget. Favorite-output shortcuts call the same general-default
+audio adapter as the visible **Default** button. A failed favorite selection
+reveals Audio with the error; success remains unobtrusive.
 
 The first reveal reads the pointer position, selects the nearest monitor, and
 uses that monitor's work area. A pure placement calculator prefers the
@@ -89,7 +97,9 @@ the final rectangle. WPF device-independent units are converted to and from
 physical pixels around the Win32 monitor calculation, so negative-coordinate
 and mixed-DPI monitor layouts remain valid. The resulting position is retained
 for later hide/show cycles and panel changes instead of repeatedly anchoring to
-the moving pointer.
+the moving pointer. A size-change clamp preserves that top-left position when
+the new panel fits and moves it only by the overflow amount when a taller panel
+or expanded shortcut section would cross the current monitor's work area.
 
 The close button, `Esc`, and click-away hide the window. A short activation
 grace prevents the launch or second-instance handoff from being immediately
@@ -112,6 +122,13 @@ rejected before native registration. Settings use `System.Text.Json` and an
 atomic temporary-file replacement under
 `%LOCALAPPDATA%\WinQuickSwitch\settings.json`; no third-party configuration
 package is needed.
+
+Favorite playback outputs are fixed to four optional slots to keep persistence,
+hotkey IDs, and the Options UI bounded. Each slot stores the Core Audio
+endpoint ID, its last friendly name, and an optional shortcut. Endpoint IDs,
+not list positions or names, drive selection after restart. Invalid and
+duplicate entries are removed during settings normalization, and older
+settings files load with all new shortcuts empty.
 
 Windows is the source of truth for the separate start-with-Windows option. The
 Options checkbox compares the current executable's exact quoted startup

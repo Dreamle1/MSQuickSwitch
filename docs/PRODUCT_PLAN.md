@@ -52,6 +52,7 @@ The resident widget has four compact panels and shows one at a time:
 - List active playback sessions by application.
 - Change per-application volume and mute state.
 - Choose a playback or recording endpoint.
+- Save up to four favorite playback outputs and assign direct global shortcuts.
 - Refresh automatically when sessions or endpoints appear or disappear.
 
 ### Devices
@@ -101,6 +102,7 @@ Exit: the UI stays accurate while applications and headsets come and go.
 - [x] Treat a communications-default change separately from the general default.
 - [x] Provide a safe fallback that opens the relevant Settings page if endpoint
   selection is unsupported on a Windows build.
+- [x] Add persisted favorite playback outputs with direct global shortcuts.
 
 Exit: session controls work for ordinary desktop apps and endpoint switching
 either succeeds or degrades clearly.
@@ -126,6 +128,7 @@ as connected.
   conflict-safe disabled options.
 - [x] Add a persisted dark/light theme option, including the native title bar.
 - [x] Add optional per-user start-with-Windows behavior that launches hidden.
+- [x] Add configurable global shortcuts for all four projection modes.
 - Decide whether a tray icon adds enough value.
 - Complete screen-reader, high-contrast, and 100-200% DPI validation.
 - Cold-start and memory measurements on a release build.

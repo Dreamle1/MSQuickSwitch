@@ -9,6 +9,7 @@
         MaxHeight="{Binding Source={x:Static SystemParameters.WorkArea}, Path=Height}"
         Background="{DynamicResource PageBrush}"
         Loaded="MainWindow_Loaded"
+        SizeChanged="MainWindow_SizeChanged"
         Closing="MainWindow_Closing"
         Deactivated="MainWindow_Deactivated"
         PreviewKeyDown="MainWindow_PreviewKeyDown"
@@ -33,25 +34,25 @@
                         Style="{StaticResource WidgetTabToggle}"
                         Tag="Display"
                         IsChecked="True"
-                        Click="PanelTab_Click"
+                        Checked="PanelTab_Checked"
                         Content="Display"
                         AutomationProperties.Name="Open display controls" />
           <ToggleButton x:Name="AudioPanelTab"
                         Style="{StaticResource WidgetTabToggle}"
                         Tag="Audio"
-                        Click="PanelTab_Click"
+                        Checked="PanelTab_Checked"
                         Content="Audio"
                         AutomationProperties.Name="Open audio controls" />
           <ToggleButton x:Name="DevicesPanelTab"
                         Style="{StaticResource WidgetTabToggle}"
                         Tag="Devices"
-                        Click="PanelTab_Click"
+                        Checked="PanelTab_Checked"
                         Content="Devices"
                         AutomationProperties.Name="Open connected devices" />
           <ToggleButton x:Name="OptionsPanelTab"
                         Style="{StaticResource WidgetTabToggle}"
                         Tag="Options"
-                        Click="PanelTab_Click"
+                        Checked="PanelTab_Checked"
                         Content="Options"
                         AutomationProperties.Name="Open widget options" />
         </UniformGrid>
@@ -213,7 +214,17 @@
                         Click="SetDefaultAudioEndpoint_Click"
                         Content="Calls"
                         ToolTip="Set the selected device as Windows' calls default; apps can override it" />
+                <Button Style="{StaticResource CompactButton}"
+                        Click="AddFavoriteOutput_Click"
+                        Content="Favorite"
+                        ToolTip="Add the selected output to favorites, or remove it if already saved" />
               </WrapPanel>
+              <TextBlock x:Name="FavoriteOutputsSummaryText"
+                         Margin="0,6,0,0"
+                         Foreground="{DynamicResource SecondaryTextBrush}"
+                         Text="Favorites: none"
+                         TextTrimming="CharacterEllipsis"
+                         ToolTip="{Binding RelativeSource={RelativeSource Self}, Path=Text}" />
             </StackPanel>
             <StackPanel Grid.Column="2">
               <TextBlock Margin="0,0,0,6"
@@ -434,6 +445,103 @@
                      Tag="Devices"
                      AutomationProperties.Name="Open Devices shortcut" />
           </Grid>
+
+          <Expander x:Name="DisplayModeShortcutsExpander"
+                    Margin="0,12,0,0"
+                    Header="Display mode shortcuts">
+            <Grid Margin="0,8,0,0">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="135" />
+                <ColumnDefinition Width="*" />
+              </Grid.ColumnDefinitions>
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+              </Grid.RowDefinitions>
+
+              <TextBlock Grid.Row="0"
+                         Margin="0,0,8,8"
+                         VerticalAlignment="Center"
+                         Text="PC screen only" />
+              <TextBox x:Name="PcScreenOnlyShortcutBox"
+                       Grid.Row="0"
+                       Grid.Column="1"
+                       Margin="0,0,0,8"
+                       IsReadOnly="True"
+                       Tag="PcScreenOnly"
+                       AutomationProperties.Name="PC screen only shortcut" />
+
+              <TextBlock Grid.Row="1"
+                         Margin="0,0,8,8"
+                         VerticalAlignment="Center"
+                         Text="Duplicate" />
+              <TextBox x:Name="DuplicateShortcutBox"
+                       Grid.Row="1"
+                       Grid.Column="1"
+                       Margin="0,0,0,8"
+                       IsReadOnly="True"
+                       Tag="Duplicate"
+                       AutomationProperties.Name="Duplicate shortcut" />
+
+              <TextBlock Grid.Row="2"
+                         Margin="0,0,8,8"
+                         VerticalAlignment="Center"
+                         Text="Extend" />
+              <TextBox x:Name="ExtendShortcutBox"
+                       Grid.Row="2"
+                       Grid.Column="1"
+                       Margin="0,0,0,8"
+                       IsReadOnly="True"
+                       Tag="Extend"
+                       AutomationProperties.Name="Extend shortcut" />
+
+              <TextBlock Grid.Row="3"
+                         Margin="0,0,8,0"
+                         VerticalAlignment="Center"
+                         Text="Second screen only" />
+              <TextBox x:Name="SecondScreenOnlyShortcutBox"
+                       Grid.Row="3"
+                       Grid.Column="1"
+                       IsReadOnly="True"
+                       Tag="SecondScreenOnly"
+                       AutomationProperties.Name="Second screen only shortcut" />
+            </Grid>
+          </Expander>
+
+          <Expander x:Name="FavoriteOutputShortcutsExpander"
+                    Margin="0,8,0,0"
+                    Header="Favorite output shortcuts">
+            <StackPanel Margin="0,8,0,0">
+              <TextBlock x:Name="FavoriteOutputsEmptyText"
+                         Foreground="{DynamicResource SecondaryTextBrush}"
+                         Text="In Audio, select an output and choose Favorite."
+                         TextWrapping="Wrap" />
+              <ItemsControl x:Name="FavoriteOutputShortcutItems">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Grid Margin="0,0,0,8">
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="145" />
+                      </Grid.ColumnDefinitions>
+                      <TextBlock Margin="0,0,8,0"
+                                 VerticalAlignment="Center"
+                                 Text="{Binding Name}"
+                                 TextTrimming="CharacterEllipsis"
+                                 ToolTip="{Binding Name}" />
+                      <TextBox Grid.Column="1"
+                               IsReadOnly="True"
+                               Tag="{Binding Action}"
+                               Text="{Binding ShortcutText, Mode=OneWay}"
+                               AutomationProperties.Name="{Binding EditorName}" />
+                    </Grid>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </Expander>
 
           <CheckBox x:Name="DarkThemeCheckBox"
                     Margin="0,14,0,0"
