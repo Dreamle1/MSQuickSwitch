@@ -389,13 +389,14 @@
                      Text="Options" />
           <TextBlock Margin="0,5,0,0"
                      Foreground="{DynamicResource SecondaryTextBrush}"
-                     Text="Select a field, then press a shortcut. Delete clears it."
+                     Text="Select a field, then press a shortcut, or choose Unset."
                      TextWrapping="Wrap" />
 
           <Grid Margin="0,12,0,0">
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="115" />
               <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="68" />
             </Grid.ColumnDefinitions>
             <Grid.RowDefinitions>
               <RowDefinition Height="Auto" />
@@ -411,10 +412,17 @@
             <TextBox x:Name="ToggleShortcutBox"
                      Grid.Row="0"
                      Grid.Column="1"
-                     Margin="0,0,0,8"
+                     Margin="0,0,6,8"
                      IsReadOnly="True"
                      Tag="ToggleWidget"
                      AutomationProperties.Name="Show or hide shortcut" />
+            <Button Grid.Row="0"
+                    Grid.Column="2"
+                    Style="{StaticResource CompactButton}"
+                    Tag="ToggleWidget"
+                    Click="UnsetShortcut_Click"
+                    Content="Unset"
+                    AutomationProperties.Name="Unset show or hide shortcut" />
 
             <TextBlock Grid.Row="1"
                        Margin="0,0,8,8"
@@ -423,10 +431,17 @@
             <TextBox x:Name="DisplayShortcutBox"
                      Grid.Row="1"
                      Grid.Column="1"
-                     Margin="0,0,0,8"
+                     Margin="0,0,6,8"
                      IsReadOnly="True"
                      Tag="Display"
                      AutomationProperties.Name="Open Display shortcut" />
+            <Button Grid.Row="1"
+                    Grid.Column="2"
+                    Style="{StaticResource CompactButton}"
+                    Tag="Display"
+                    Click="UnsetShortcut_Click"
+                    Content="Unset"
+                    AutomationProperties.Name="Unset Open Display shortcut" />
 
             <TextBlock Grid.Row="2"
                        Margin="0,0,8,8"
@@ -435,10 +450,17 @@
             <TextBox x:Name="AudioShortcutBox"
                      Grid.Row="2"
                      Grid.Column="1"
-                     Margin="0,0,0,8"
+                     Margin="0,0,6,8"
                      IsReadOnly="True"
                      Tag="Audio"
                      AutomationProperties.Name="Open Audio shortcut" />
+            <Button Grid.Row="2"
+                    Grid.Column="2"
+                    Style="{StaticResource CompactButton}"
+                    Tag="Audio"
+                    Click="UnsetShortcut_Click"
+                    Content="Unset"
+                    AutomationProperties.Name="Unset Open Audio shortcut" />
 
             <TextBlock Grid.Row="3"
                        Margin="0,0,8,0"
@@ -447,9 +469,17 @@
             <TextBox x:Name="DevicesShortcutBox"
                      Grid.Row="3"
                      Grid.Column="1"
+                     Margin="0,0,6,0"
                      IsReadOnly="True"
                      Tag="Devices"
                      AutomationProperties.Name="Open Devices shortcut" />
+            <Button Grid.Row="3"
+                    Grid.Column="2"
+                    Style="{StaticResource CompactButton}"
+                    Tag="Devices"
+                    Click="UnsetShortcut_Click"
+                    Content="Unset"
+                    AutomationProperties.Name="Unset Open Devices shortcut" />
           </Grid>
 
           <Expander x:Name="DisplayModeShortcutsExpander"
@@ -459,6 +489,7 @@
               <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="135" />
                 <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="68" />
               </Grid.ColumnDefinitions>
               <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
@@ -474,10 +505,17 @@
               <TextBox x:Name="PcScreenOnlyShortcutBox"
                        Grid.Row="0"
                        Grid.Column="1"
-                       Margin="0,0,0,8"
+                       Margin="0,0,6,8"
                        IsReadOnly="True"
                        Tag="PcScreenOnly"
                        AutomationProperties.Name="PC screen only shortcut" />
+              <Button Grid.Row="0"
+                      Grid.Column="2"
+                      Style="{StaticResource CompactButton}"
+                      Tag="PcScreenOnly"
+                      Click="UnsetShortcut_Click"
+                      Content="Unset"
+                      AutomationProperties.Name="Unset PC screen only shortcut" />
 
               <TextBlock Grid.Row="1"
                          Margin="0,0,8,8"
@@ -486,10 +524,17 @@
               <TextBox x:Name="DuplicateShortcutBox"
                        Grid.Row="1"
                        Grid.Column="1"
-                       Margin="0,0,0,8"
+                       Margin="0,0,6,8"
                        IsReadOnly="True"
                        Tag="Duplicate"
                        AutomationProperties.Name="Duplicate shortcut" />
+              <Button Grid.Row="1"
+                      Grid.Column="2"
+                      Style="{StaticResource CompactButton}"
+                      Tag="Duplicate"
+                      Click="UnsetShortcut_Click"
+                      Content="Unset"
+                      AutomationProperties.Name="Unset Duplicate shortcut" />
 
               <TextBlock Grid.Row="2"
                          Margin="0,0,8,8"
@@ -498,10 +543,17 @@
               <TextBox x:Name="ExtendShortcutBox"
                        Grid.Row="2"
                        Grid.Column="1"
-                       Margin="0,0,0,8"
+                       Margin="0,0,6,8"
                        IsReadOnly="True"
                        Tag="Extend"
                        AutomationProperties.Name="Extend shortcut" />
+              <Button Grid.Row="2"
+                      Grid.Column="2"
+                      Style="{StaticResource CompactButton}"
+                      Tag="Extend"
+                      Click="UnsetShortcut_Click"
+                      Content="Unset"
+                      AutomationProperties.Name="Unset Extend shortcut" />
 
               <TextBlock Grid.Row="3"
                          Margin="0,0,8,0"
@@ -510,9 +562,17 @@
               <TextBox x:Name="SecondScreenOnlyShortcutBox"
                        Grid.Row="3"
                        Grid.Column="1"
+                       Margin="0,0,6,0"
                        IsReadOnly="True"
                        Tag="SecondScreenOnly"
                        AutomationProperties.Name="Second screen only shortcut" />
+              <Button Grid.Row="3"
+                      Grid.Column="2"
+                      Style="{StaticResource CompactButton}"
+                      Tag="SecondScreenOnly"
+                      Click="UnsetShortcut_Click"
+                      Content="Unset"
+                      AutomationProperties.Name="Unset Second screen only shortcut" />
             </Grid>
           </Expander>
 
@@ -531,6 +591,7 @@
                       <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="145" />
+                        <ColumnDefinition Width="68" />
                       </Grid.ColumnDefinitions>
                       <TextBlock Margin="0,0,8,0"
                                  VerticalAlignment="Center"
@@ -538,10 +599,17 @@
                                  TextTrimming="CharacterEllipsis"
                                  ToolTip="{Binding Name}" />
                       <TextBox Grid.Column="1"
+                               Margin="0,0,6,0"
                                IsReadOnly="True"
                                Tag="{Binding Action}"
                                Text="{Binding ShortcutText, Mode=OneWay}"
                                AutomationProperties.Name="{Binding EditorName}" />
+                      <Button Grid.Column="2"
+                              Style="{StaticResource CompactButton}"
+                              Tag="{Binding Action}"
+                              Click="UnsetShortcut_Click"
+                              Content="Unset"
+                              AutomationProperties.Name="{Binding EditorName, StringFormat=Unset {0}}" />
                     </Grid>
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>

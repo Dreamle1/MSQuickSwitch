@@ -117,7 +117,9 @@ is already running.
 
 The Options panel captures only modified A-Z, 0-9, and F1-F12 shortcuts. Ctrl,
 Alt, or Win is required; Shift can be added. Duplicate in-app bindings are
-rejected before native registration. Settings use `System.Text.Json` and an
+rejected before native registration. Each shortcut row has an explicit Unset
+action; Delete remains a keyboard shortcut for the same operation. Settings use
+`System.Text.Json` and an
 atomic temporary-file replacement under
 `%LOCALAPPDATA%\WinQuickSwitch\settings.json`; no third-party configuration
 package is needed.

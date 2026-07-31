@@ -94,8 +94,8 @@ The implementation and exact verification history are recorded in
 - Starting WinQuickSwitch again reveals the existing instance instead of
   starting a second resident process.
 - In Options, select a shortcut field and press a modified letter, number, or
-  function key. Delete clears the field. Separate global shortcuts can toggle
-  the widget or open Display, Audio, or Devices directly.
+  function key. Choose **Unset** (or press Delete) to clear it. Separate global
+  shortcuts can toggle the widget or open Display, Audio, or Devices directly.
 - Expand **Display mode shortcuts** to assign a global shortcut to PC screen
   only, Duplicate, Extend, or second screen only. Display mode actions apply
   immediately without a confirmation prompt.

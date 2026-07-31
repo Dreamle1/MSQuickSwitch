@@ -790,6 +790,18 @@ public partial class MainWindow : Window
                 : result.FirstFailure ?? "A default shortcut is unavailable.");
     }
 
+    private void UnsetShortcut_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button ||
+            !TryGetHotkeyAction(button.Tag, out WidgetHotkeyAction action))
+        {
+            OptionsStatusText.Text = "That shortcut could not be cleared.";
+            return;
+        }
+
+        ApplyShortcutChange(action, null);
+    }
+
     private void SaveSettings(
         string successMessage,
         TextBlock? statusText = null)

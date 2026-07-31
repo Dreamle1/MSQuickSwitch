@@ -131,6 +131,7 @@ as connected.
 - [x] Add a persisted dark/light theme option, including the native title bar.
 - [x] Add optional per-user start-with-Windows behavior that launches hidden.
 - [x] Add configurable global shortcuts for all four projection modes.
+- [x] Add an explicit Unset action for clearing any configured shortcut.
 - Decide whether a tray icon adds enough value.
 - Complete screen-reader, high-contrast, and 100-200% DPI validation.
 - Cold-start and memory measurements on a release build.

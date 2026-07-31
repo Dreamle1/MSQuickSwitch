@@ -913,3 +913,22 @@ Published immediate-action variants:
 | --- | --- |
 | Lite | `FFEE84E8E87BF1C5FA79F82590118561333A211A9617D3A6B72880EAC4D7257F` |
 | Portable | `9CDE5E7D2A8F2EBDFCD1DF198A6A6EE89D883EFB6579F4ADA58076B88A3FC49D` |
+
+## 2026-07-30 - explicit shortcut Unset controls
+
+### Implemented
+
+- Added an **Unset** button beside every built-in display, panel, and
+  show/hide shortcut.
+- Added the same button to each saved favorite-output shortcut.
+- Reused the existing conflict-safe shortcut registration and persistence path,
+  so unsetting immediately unregisters the global hotkey and saves the empty
+  value. Delete/backspace in a focused shortcut field still works.
+- Updated the Options guidance and architecture/product documentation.
+
+### Verification
+
+- Format verification: passed with no changes required.
+- Release build: passed with 0 warnings and 0 errors.
+- Regression suite: 57/57 tests passed.
+- No display or audio changes were invoked by automated verification.
