@@ -1061,6 +1061,13 @@ public partial class MainWindow : Window
     private async void RefreshAudio_Click(object sender, RoutedEventArgs e) =>
         await RefreshAudioInventoryAsync();
 
+    private void OpenSoundSettings_Click(object sender, RoutedEventArgs e)
+    {
+        AudioControlResult result =
+            _defaultAudioEndpointService.OpenSoundSettings();
+        AudioStatusText.Text = result.Message;
+    }
+
     private async void RefreshDevices_Click(object sender, RoutedEventArgs e) =>
         await RefreshDeviceInventoryAsync();
 

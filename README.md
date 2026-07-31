@@ -86,6 +86,7 @@ The implementation and exact verification history are recorded in
   mode.
 - In Audio, press `O`, `I`, or `A` to focus output, input, or application
   sessions.
+- Choose **Sound settings** for the general Windows **System > Sound** page.
 - In Audio, select an output and choose **Favorite**. Up to four outputs can be
   saved; choose **Favorite** again to remove a saved output.
 - Press `Esc`, click elsewhere, or close the window to hide it. Select

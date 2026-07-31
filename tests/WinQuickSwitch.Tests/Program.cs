@@ -17,16 +17,16 @@ internal static class Program
     {
         List<(string Name, Func<Task> Run)> tests =
         [
-            ("PC screen only uses /internal", () => MapsMode(DisplayMode.PcScreenOnly, "/internal")),
-            ("Duplicate uses /clone", () => MapsMode(DisplayMode.Duplicate, "/clone")),
-            ("Extend uses /extend", () => MapsMode(DisplayMode.Extend, "/extend")),
-            ("Second screen only uses /external", () => MapsMode(DisplayMode.SecondScreenOnly, "/external")),
-            ("Zero exit code succeeds", ZeroExitCodeSucceeds),
-            ("Non-zero exit code fails", NonZeroExitCodeFails),
-            ("Process startup failure becomes a result", ProcessFailureBecomesResult),
+            ("PC screen only uses the internal topology flag", () => MapsMode(DisplayMode.PcScreenOnly, WindowsDisplayModeService.SdcTopologyInternal)),
+            ("Duplicate uses the clone topology flag", () => MapsMode(DisplayMode.Duplicate, WindowsDisplayModeService.SdcTopologyClone)),
+            ("Extend uses the extend topology flag", () => MapsMode(DisplayMode.Extend, WindowsDisplayModeService.SdcTopologyExtend)),
+            ("Second screen only uses the external topology flag", () => MapsMode(DisplayMode.SecondScreenOnly, WindowsDisplayModeService.SdcTopologyExternal)),
+            ("Zero SetDisplayConfig result succeeds", ZeroDisplayConfigResultSucceeds),
+            ("Non-zero SetDisplayConfig result fails", NonZeroDisplayConfigResultFails),
+            ("Native display failure becomes a result", NativeDisplayFailureBecomesResult),
             ("Cancellation is preserved", CancellationIsPreserved),
-            ("Unknown modes are rejected before process execution", UnknownModeIsRejected),
-            ("Hidden process runner returns the process exit code", HiddenProcessRunnerReturnsExitCode),
+            ("Unknown modes are rejected before the native call", UnknownModeIsRejected),
+            ("Direct display call runs away from the UI thread", DisplayCallRunsOffCallingThread),
             ("Single internal display is classified as PC screen only", SingleInternalDisplayIsClassified),
             ("Single external display is classified as second screen only", SingleExternalDisplayIsClassified),
             ("Shared display source is classified as duplicate", SharedSourceIsClassifiedAsDuplicate),
@@ -1217,50 +1217,53 @@ internal static class Program
             IsReliable: true,
             Status: mode?.GetDisplayName() ?? "Updating");
 
-    private static async Task MapsMode(DisplayMode mode, string expectedArgument)
+    private static async Task MapsMode(DisplayMode mode, uint topologyFlag)
     {
-        FakeDisplaySwitchProcess process = new();
-        WindowsDisplayModeService service = CreateService(process);
+        FakeDisplayConfigNative native = new();
+        WindowsDisplayModeService service = new(native);
 
         await service.ApplyAsync(mode);
 
-        Equal(expectedArgument, process.LastArguments);
-        True(process.CallCount == 1, "The process should run exactly once.");
-        True(
-            process.LastExecutablePath.EndsWith("DisplaySwitch.exe", StringComparison.OrdinalIgnoreCase),
-            "The service should invoke DisplaySwitch.exe.");
+        Equal(WindowsDisplayModeService.SdcApply | topologyFlag, native.LastFlags);
+        Equal(1, native.CallCount);
     }
 
-    private static async Task ZeroExitCodeSucceeds()
+    private static async Task ZeroDisplayConfigResultSucceeds()
     {
-        FakeDisplaySwitchProcess process = new() { ExitCode = 0 };
-        DisplayModeResult result = await CreateService(process).ApplyAsync(DisplayMode.Extend);
+        FakeDisplayConfigNative native = new() { ResultCode = 0 };
+        DisplayModeResult result =
+            await new WindowsDisplayModeService(native).ApplyAsync(
+                DisplayMode.Extend);
 
-        True(result.Succeeded, "Exit code zero should be successful.");
-        Equal(0, result.ExitCode);
+        True(result.Succeeded, "Result code zero should be successful.");
+        Equal(0, result.ErrorCode);
         Contains("Extend", result.Message);
     }
 
-    private static async Task NonZeroExitCodeFails()
+    private static async Task NonZeroDisplayConfigResultFails()
     {
-        FakeDisplaySwitchProcess process = new() { ExitCode = 5 };
-        DisplayModeResult result = await CreateService(process).ApplyAsync(DisplayMode.Duplicate);
+        FakeDisplayConfigNative native = new() { ResultCode = 5 };
+        DisplayModeResult result =
+            await new WindowsDisplayModeService(native).ApplyAsync(
+                DisplayMode.Duplicate);
 
-        True(!result.Succeeded, "A non-zero exit code should fail.");
-        Equal(5, result.ExitCode);
-        Contains("exit code 5", result.Message);
+        True(!result.Succeeded, "A non-zero result code should fail.");
+        Equal(5, result.ErrorCode);
+        Contains("error code 5", result.Message);
     }
 
-    private static async Task ProcessFailureBecomesResult()
+    private static async Task NativeDisplayFailureBecomesResult()
     {
-        FakeDisplaySwitchProcess process = new()
+        FakeDisplayConfigNative native = new()
         {
             Exception = new InvalidOperationException("test failure"),
         };
 
-        DisplayModeResult result = await CreateService(process).ApplyAsync(DisplayMode.Extend);
+        DisplayModeResult result =
+            await new WindowsDisplayModeService(native).ApplyAsync(
+                DisplayMode.Extend);
 
-        True(!result.Succeeded, "A process exception should return a failure result.");
+        True(!result.Succeeded, "A native exception should return a failure result.");
         Contains("test failure", result.Message);
     }
 
@@ -1269,43 +1272,38 @@ internal static class Program
         using CancellationTokenSource cancellation = new();
         await cancellation.CancelAsync();
 
-        FakeDisplaySwitchProcess process = new()
-        {
-            Exception = new OperationCanceledException(cancellation.Token),
-        };
+        FakeDisplayConfigNative native = new();
 
         await ThrowsAsync<OperationCanceledException>(
-            () => CreateService(process).ApplyAsync(DisplayMode.Extend, cancellation.Token));
+            () => new WindowsDisplayModeService(native).ApplyAsync(
+                DisplayMode.Extend,
+                cancellation.Token));
+        Equal(0, native.CallCount);
     }
 
     private static async Task UnknownModeIsRejected()
     {
-        FakeDisplaySwitchProcess process = new();
+        FakeDisplayConfigNative native = new();
 
         await ThrowsAsync<ArgumentOutOfRangeException>(
-            () => CreateService(process).ApplyAsync((DisplayMode)999));
+            () => new WindowsDisplayModeService(native).ApplyAsync(
+                (DisplayMode)999));
 
-        Equal(0, process.CallCount);
+        Equal(0, native.CallCount);
     }
 
-    private static async Task HiddenProcessRunnerReturnsExitCode()
+    private static async Task DisplayCallRunsOffCallingThread()
     {
-        string commandProcessor = Environment.GetEnvironmentVariable("ComSpec")
-            ?? Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.System),
-                "cmd.exe");
+        int callingThreadId = Environment.CurrentManagedThreadId;
+        FakeDisplayConfigNative native = new();
 
-        HiddenProcessRunner process = new();
-        int exitCode = await process.RunAsync(
-            commandProcessor,
-            "/d /c exit 7",
-            CancellationToken.None);
+        await new WindowsDisplayModeService(native).ApplyAsync(
+            DisplayMode.Extend);
 
-        Equal(7, exitCode);
+        True(
+            native.ApplyThreadId != callingThreadId,
+            "SetDisplayConfig should not block the calling UI thread.");
     }
-
-    private static WindowsDisplayModeService CreateService(FakeDisplaySwitchProcess process) =>
-        new(process, @"C:\Windows\System32\DisplaySwitch.exe");
 
     private static void True(bool condition, string message)
     {
@@ -1349,30 +1347,30 @@ internal static class Program
 
     private sealed class TestFailureException(string message) : Exception(message);
 
-    private sealed class FakeDisplaySwitchProcess : IDisplaySwitchProcess
+    private sealed class FakeDisplayConfigNative : IDisplayConfigNative
     {
-        public int ExitCode { get; init; }
+        public int ResultCode { get; init; }
 
         public Exception? Exception { get; init; }
 
         public int CallCount { get; private set; }
 
-        public string LastExecutablePath { get; private set; } = string.Empty;
+        public uint LastFlags { get; private set; }
 
-        public string LastArguments { get; private set; } = string.Empty;
+        public int ApplyThreadId { get; private set; }
 
-        public Task<int> RunAsync(
-            string executablePath,
-            string arguments,
-            CancellationToken cancellationToken)
+        public int Apply(uint flags)
         {
             CallCount++;
-            LastExecutablePath = executablePath;
-            LastArguments = arguments;
+            LastFlags = flags;
+            ApplyThreadId = Environment.CurrentManagedThreadId;
 
-            return Exception is null
-                ? Task.FromResult(ExitCode)
-                : Task.FromException<int>(Exception);
+            if (Exception is not null)
+            {
+                throw Exception;
+            }
+
+            return ResultCode;
         }
     }
 

@@ -77,7 +77,8 @@ without needing an oral handoff.
 ### M1 - projection modes
 
 - [x] Add an `IDisplayModeService`.
-- [x] Invoke the built-in Windows display switch operation without a shell window.
+- [x] Apply allowlisted projection topologies directly through
+  `SetDisplayConfig` without a helper process or shell window.
 - [x] Detect active/available paths and the current global topology.
 - [x] Disable duplicate/extend choices that Windows reports as unavailable.
 - [x] Add focused automated tests around command selection and result handling.
@@ -103,6 +104,7 @@ Exit: the UI stays accurate while applications and headsets come and go.
 - [x] Provide a safe fallback that opens the relevant Settings page if endpoint
   selection is unsupported on a Windows build.
 - [x] Add persisted favorite playback outputs with direct global shortcuts.
+- [x] Link to the general Windows **System > Sound** page.
 
 Exit: session controls work for ordinary desktop apps and endpoint switching
 either succeeds or degrades clearly.

@@ -145,9 +145,10 @@ DWM attributes remain nonfatal and use the Windows fallback.
 ## Display adapter
 
 Version 1 supports the four global projection topologies exposed by `Win + P`:
-internal, clone, extend, and external. Start by calling the Windows
-`DisplaySwitch.exe` operation with an argument allowlist. Do not accept raw
-command text from the UI.
+internal, clone, extend, and external. Apply them directly through
+`SetDisplayConfig` with `SDC_APPLY` plus exactly one allowlisted
+`SDC_TOPOLOGY_*` flag. The native call runs away from the WPF dispatcher, so no
+helper process or shell window is created and the widget remains responsive.
 
 If reliable current-topology detection is needed, query the active display
 configuration through `QueryDisplayConfig`; keep that native mapping separate
@@ -161,11 +162,11 @@ the four modes.
 
 The display choices are persistent toggle controls rather than stateless
 buttons. The current topology is highlighted at startup; selecting that same
-mode again restores the checked state without launching `DisplaySwitch.exe`.
+mode again restores the checked state without calling `SetDisplayConfig`.
 For a real change, the requested mode highlights immediately and the group
 accepts no second request until the first completes.
 
-After `DisplaySwitch.exe` exits successfully, a transient topology monitor
+After `SetDisplayConfig` returns successfully, a transient topology monitor
 checks `QueryDisplayConfig` every 150 ms for at most 18 attempts (2.55 seconds).
 It stops as soon as Windows reports the requested mode. This prevents a stale
 immediate topology read from snapping the selection back during monitor
@@ -216,6 +217,11 @@ communications role. The policy interface is not a documented Windows API, so
 any activation, cast, or call failure returns a normal result and opens the
 documented `ms-settings:sound` page through a separate launcher. No other
 feature code references the policy COM declaration.
+
+The visible **Sound settings** action uses only `ms-settings:sound`, which is
+the general Windows **System > Sound** page. It intentionally does not open the
+Volume mixer, Sound devices, default-endpoint properties, or a device-specific
+page.
 
 The current read-only implementation enumerates active render/capture
 endpoints, separately tracks console, multimedia, and communications defaults,

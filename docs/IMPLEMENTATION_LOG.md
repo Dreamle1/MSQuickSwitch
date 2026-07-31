@@ -826,3 +826,54 @@ Outputs:
 
 - `artifacts/win-x64-lite-favorites/WinQuickSwitch.exe`
 - `artifacts/win-x64-portable-favorites/WinQuickSwitch.exe`
+
+## 2026-07-30 - direct display switching and general Sound settings
+
+### Implemented
+
+- Replaced the `DisplaySwitch.exe` helper-process launch with a direct
+  `SetDisplayConfig` call for PC screen only, Duplicate, Extend, and second
+  screen only.
+- Kept display changes off the WPF UI thread, preserving the immediate selected
+  state and the short topology-settle monitor so the widget remains responsive.
+- Removed the obsolete hidden-process display adapter.
+- Added a compact **Sound settings** action to Audio. It opens the general
+  Windows **System > Sound** page through `ms-settings:sound`; it does not jump
+  directly to Volume mixer or a specific endpoint page.
+- Found that the running resident and the Windows startup entry still pointed
+  to the older `win-x64-lite-startup` artifact. Published the new fast builds,
+  stopped only that verified old resident process, started the new Lite build
+  hidden, and moved the startup entry to the same executable.
+
+### Verification
+
+- Format verification: passed with no changes required.
+- Release build: passed with 0 warnings and 0 errors.
+- Isolated checks: 57 passed, 0 failed.
+- Read-only live checks: 61 passed, 0 failed.
+- Live topology: extend, 3 active displays, 3 available displays.
+- Live audio: 6 output endpoints, 3 input endpoints, 1 active application.
+- Live normalized device inventory: 13 Bluetooth, 8 wired.
+- Tests cover all four `SetDisplayConfig` topology mappings, native errors,
+  cancellation, unknown modes, and execution away from the calling thread.
+- The existing Sound-settings test verifies the exact `ms-settings:sound` URI.
+- UI automation confirmed the new Sound-settings action is visible and not
+  clipped.
+- Lite and Portable package checks both passed hidden startup and later reveal.
+- Final live-state verification found exactly one resident process running from
+  `artifacts/win-x64-lite-fast`, with the Windows startup entry pointing to
+  that same executable with `--startup`.
+- Automated display-changing commands invoked: 0.
+- Automated audio-endpoint changes invoked: 0.
+
+Published fast-display variants:
+
+| Variant | Bytes | SHA-256 |
+| --- | ---: | --- |
+| Lite | 334,539 | `76DC17ADA60EBEB2A2633EB3BA08C7B7D14CE15CEEDEA5CF65FD28CDCE1F142B` |
+| Portable | 64,865,537 | `B7DC60F40B6F030DBE15F2AA2A65098BCC3361E36041E9F2D5E6313C78733CED` |
+
+Outputs:
+
+- `artifacts/win-x64-lite-fast/WinQuickSwitch.exe`
+- `artifacts/win-x64-portable-fast/WinQuickSwitch.exe`

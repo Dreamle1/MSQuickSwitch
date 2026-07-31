@@ -123,13 +123,19 @@
                        FontWeight="SemiBold"
                        VerticalAlignment="Center"
                        Text="Audio" />
-            <Button x:Name="RefreshAudioButton"
-                    Grid.Column="1"
-                    MinWidth="78"
-                    MinHeight="32"
-                    Padding="10,4"
-                    Click="RefreshAudio_Click"
-                    Content="Refresh" />
+            <WrapPanel Grid.Column="1">
+              <Button x:Name="OpenSoundSettingsButton"
+                      Style="{StaticResource CompactButton}"
+                      Click="OpenSoundSettings_Click"
+                      Content="Sound settings"
+                      ToolTip="Open the general Windows System > Sound page" />
+              <Button x:Name="RefreshAudioButton"
+                      MinWidth="78"
+                      MinHeight="32"
+                      Padding="10,4"
+                      Click="RefreshAudio_Click"
+                      Content="Refresh" />
+            </WrapPanel>
           </Grid>
 
           <TextBlock x:Name="AudioStatusText"
