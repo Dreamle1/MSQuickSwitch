@@ -97,8 +97,8 @@ The implementation and exact verification history are recorded in
   function key. Delete clears the field. Separate global shortcuts can toggle
   the widget or open Display, Audio, or Devices directly.
 - Expand **Display mode shortcuts** to assign a global shortcut to PC screen
-  only, Duplicate, Extend, or second screen only. The two modes that can turn
-  off the current display still ask for confirmation.
+  only, Duplicate, Extend, or second screen only. Display mode actions apply
+  immediately without a confirmation prompt.
 - Expand **Favorite output shortcuts** to assign a global shortcut to each
   saved output. Using one changes the normal Windows output without opening
   the widget; a failure opens Audio with an explanation.

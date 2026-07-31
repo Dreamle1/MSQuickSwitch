@@ -83,10 +83,9 @@ back to one of those fixed actions. Each binding registers independently, so
 one conflict does not disable the others; the Options panel reports the
 conflict and does not save a newly rejected binding.
 
-Duplicate and Extend shortcuts can run while the widget remains hidden.
-PC-screen-only and second-screen-only retain the normal confirmation and reveal
-Display before asking, because either choice can turn off the screen currently
-showing the widget. Favorite-output shortcuts call the same general-default
+All four display-mode shortcuts can run while the widget remains hidden and
+apply immediately without a confirmation prompt. Favorite-output shortcuts
+call the same general-default
 audio adapter as the visible **Default** button. A failed favorite selection
 reveals Audio with the error; success remains unobtrusive.
 

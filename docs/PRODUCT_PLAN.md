@@ -42,8 +42,8 @@ The resident widget has four compact panels and shows one at a time:
 
 - Show the current topology when it can be determined reliably.
 - Offer PC screen only, duplicate, extend, and second screen only.
-- Ask for confirmation only for actions likely to make the active display
-  disappear.
+- Apply display-mode actions immediately from the widget or their global
+  shortcuts, without an extra confirmation prompt.
 - Show success or a useful error after Windows completes the request.
 
 ### Audio

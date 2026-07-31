@@ -877,3 +877,39 @@ Outputs:
 
 - `artifacts/win-x64-lite-fast/WinQuickSwitch.exe`
 - `artifacts/win-x64-portable-fast/WinQuickSwitch.exe`
+
+## 2026-07-30 - immediate display-mode actions
+
+### Implemented
+
+- Removed the confirmation dialog from all four display-mode actions.
+- Display buttons and their global shortcuts now call the display service
+  immediately; shortcuts can remain hidden instead of revealing the widget for
+  a prompt.
+- Simplified deactivation handling now that display confirmation no longer
+  temporarily suppresses widget auto-hide.
+- Updated the README, architecture notes, and product plan to describe the
+  immediate behavior.
+
+### Verification
+
+- Format verification: passed with no changes required.
+- Release build: passed with 0 warnings and 0 errors.
+- Regression suite: 57/57 tests passed.
+- Removed all display-confirmation code paths and prompt strings from the
+  application.
+- The existing display-service and topology-transition tests remain unchanged;
+  they continue to cover the native call, failure handling, cancellation, and
+  settle monitoring.
+- Republished and restarted the hidden Lite resident. Final live-state
+  verification found exactly one process running from
+  `artifacts/win-x64-lite-fast`, with the Windows startup entry pointing to
+  that same executable with `--startup`.
+- Automated display-changing commands invoked: 0.
+
+Published immediate-action variants:
+
+| Variant | SHA-256 |
+| --- | --- |
+| Lite | `FFEE84E8E87BF1C5FA79F82590118561333A211A9617D3A6B72880EAC4D7257F` |
+| Portable | `9CDE5E7D2A8F2EBDFCD1DF198A6A6EE89D883EFB6579F4ADA58076B88A3FC49D` |

@@ -46,7 +46,6 @@ public partial class MainWindow : Window
     private string? _hotkeyStatusSuffix;
     private bool _isAudioWatcherRunning;
     private bool _isExiting;
-    private bool _suppressAutoHide;
     private bool _deviceInventoryDirty = true;
     private bool _hasPositionedWidget;
     private bool _isApplyingSettingsUi;
@@ -287,11 +286,6 @@ public partial class MainWindow : Window
 
     private async Task ApplyDisplayModeFromHotkeyAsync(DisplayMode mode)
     {
-        if (RequiresConfirmation(mode) && !IsVisible)
-        {
-            await ShowWidgetAsync(WidgetPanel.Display);
-        }
-
         await ApplyDisplayModeAsync(mode);
     }
 
@@ -559,15 +553,14 @@ public partial class MainWindow : Window
 
     private void MainWindow_Deactivated(object? sender, EventArgs e)
     {
-        if (!_suppressAutoHide &&
-            IsVisible &&
+        if (IsVisible &&
             !_isExiting &&
             DateTime.UtcNow >= _autoHideAllowedAfterUtc)
         {
             Dispatcher.BeginInvoke(
                 () =>
                 {
-                    if (!_suppressAutoHide && IsVisible && !IsActive && !_isExiting)
+                    if (IsVisible && !IsActive && !_isExiting)
                     {
                         HideWidget();
                     }
@@ -968,13 +961,6 @@ public partial class MainWindow : Window
         if (_currentDisplayMode == mode)
         {
             SetDisplayModeSelection(mode);
-            return;
-        }
-
-        if (RequiresConfirmation(mode) && !ConfirmDisplayChange(mode))
-        {
-            DisplayStatusText.Text = "Display change cancelled.";
-            SetDisplayModeSelection(_currentDisplayMode);
             return;
         }
 
@@ -1426,30 +1412,6 @@ public partial class MainWindow : Window
         }
     }
 
-    private static bool RequiresConfirmation(DisplayMode mode) =>
-        mode is DisplayMode.PcScreenOnly or DisplayMode.SecondScreenOnly;
-
-    private bool ConfirmDisplayChange(DisplayMode mode)
-    {
-        _suppressAutoHide = true;
-
-        try
-        {
-            MessageBoxResult answer = MessageBox.Show(
-                this,
-                $"{mode.GetDisplayName()} can turn off the display you are currently using. Continue?",
-                "Confirm display change",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Warning,
-                MessageBoxResult.No);
-
-            return answer == MessageBoxResult.Yes;
-        }
-        finally
-        {
-            _suppressAutoHide = false;
-        }
-    }
 }
 
 internal sealed record FavoriteOutputShortcutOption(
