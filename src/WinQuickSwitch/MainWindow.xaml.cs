@@ -9,6 +9,7 @@ using System.Windows.Threading;
 using WinQuickSwitch.Features.Audio;
 using WinQuickSwitch.Features.Devices;
 using WinQuickSwitch.Features.Display;
+using WinQuickSwitch.Features.Taskbar;
 using WinQuickSwitch.Features.Widget;
 using WinQuickSwitch.Platform.Windows;
 using WinQuickSwitch.Platform.Windows.Audio;
@@ -28,6 +29,7 @@ public partial class MainWindow : Window
     private readonly IDeviceInventoryService _deviceInventoryService;
     private readonly IDeviceSettingsService _deviceSettingsService;
     private readonly IWirelessRadioService _wirelessRadioService;
+    private readonly ITaskbarService _taskbarService;
     private readonly IWidgetSettingsStore _widgetSettingsStore;
     private readonly IStartupRegistrationService _startupRegistrationService;
     private readonly WindowsGlobalHotkey _globalHotkey = new();
@@ -66,6 +68,7 @@ public partial class MainWindow : Window
         new WindowsDeviceInventoryService(),
         new WindowsDeviceSettingsService(),
         new WindowsWirelessRadioService(),
+        new WindowsTaskbarService(),
         new JsonWidgetSettingsStore(),
         new WindowsStartupRegistrationService())
     {
@@ -81,6 +84,7 @@ public partial class MainWindow : Window
         IDeviceInventoryService deviceInventoryService,
         IDeviceSettingsService deviceSettingsService,
         IWirelessRadioService wirelessRadioService,
+        ITaskbarService taskbarService,
         IWidgetSettingsStore widgetSettingsStore,
         IStartupRegistrationService startupRegistrationService)
     {
@@ -93,6 +97,7 @@ public partial class MainWindow : Window
         _deviceInventoryService = deviceInventoryService;
         _deviceSettingsService = deviceSettingsService;
         _wirelessRadioService = wirelessRadioService;
+        _taskbarService = taskbarService;
         _widgetSettingsStore = widgetSettingsStore;
         _startupRegistrationService = startupRegistrationService;
         _widgetSettings = _widgetSettingsStore.Load();
@@ -445,6 +450,7 @@ public partial class MainWindow : Window
                 break;
             case WidgetPanel.Options:
                 UpdateOptionsControls();
+                RefreshTaskbarState();
                 ToggleShortcutBox.Focus();
                 break;
         }
@@ -827,6 +833,52 @@ public partial class MainWindow : Window
         }
 
         OptionsStatusText.Text = result.Message;
+    }
+
+    private void ShowTaskbar_Click(object sender, RoutedEventArgs e) =>
+        SetTaskbarAutoHide(enabled: false);
+
+    private void HideTaskbar_Click(object sender, RoutedEventArgs e) =>
+        SetTaskbarAutoHide(enabled: true);
+
+    private void OpenTaskbarSettings_Click(object sender, RoutedEventArgs e) =>
+        ShowTaskbarActionResult(_taskbarService.OpenTaskbarSettings());
+
+    private void OpenTaskbarDisplaySettings_Click(
+        object sender,
+        RoutedEventArgs e) =>
+        ShowTaskbarActionResult(_taskbarService.OpenDisplaySettings());
+
+    private void OpenTaskbarNotificationSettings_Click(
+        object sender,
+        RoutedEventArgs e) =>
+        ShowTaskbarActionResult(_taskbarService.OpenNotificationSettings());
+
+    private void SetTaskbarAutoHide(bool enabled)
+    {
+        TaskbarActionResult result = _taskbarService.SetAutoHide(enabled);
+        ShowTaskbarActionResult(result);
+
+        if (result.Succeeded)
+        {
+            RefreshTaskbarState();
+        }
+    }
+
+    private void RefreshTaskbarState()
+    {
+        TaskbarSnapshot snapshot = _taskbarService.GetSnapshot();
+        TaskbarStatusText.Text = snapshot.State switch
+        {
+            TaskbarState.Visible => "Taskbar is visible.",
+            TaskbarState.AutoHidden => "Taskbar is set to auto-hide.",
+            _ => "Taskbar state is unavailable.",
+        };
+    }
+
+    private void ShowTaskbarActionResult(TaskbarActionResult result)
+    {
+        TaskbarStatusText.Text = result.Message;
     }
 
     private void ResetShortcuts_Click(object sender, RoutedEventArgs e)

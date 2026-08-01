@@ -3,6 +3,7 @@ using System.Windows.Media;
 using WinQuickSwitch.Features.Audio;
 using WinQuickSwitch.Features.Devices;
 using WinQuickSwitch.Features.Display;
+using WinQuickSwitch.Features.Taskbar;
 using WinQuickSwitch.Features.Widget;
 using WinQuickSwitch.Platform.Windows;
 using WinQuickSwitch.Platform.Windows.Audio;
@@ -56,6 +57,10 @@ internal static class Program
             ("Unrelated USB devices remain separate", UnrelatedUsbDevicesRemainSeparate),
             ("Device status labels are human readable", DeviceStatusLabelsAreHumanReadable),
             ("Device Settings shortcuts use exact Windows URIs", DeviceSettingsShortcutsUseExactUris),
+            ("Taskbar state maps the Windows auto-hide flag", TaskbarStateMapsAutoHideFlag),
+            ("Taskbar controls delegate the requested state", TaskbarControlsDelegateState),
+            ("Taskbar Settings shortcuts use exact Windows URIs", TaskbarSettingsShortcutsUseExactUris),
+            ("Taskbar API failures remain nonfatal", TaskbarApiFailuresRemainNonfatal),
             ("Wireless radio states remain independent", WirelessRadioStatesRemainIndependent),
             ("Wireless radio control delegates the desired state", WirelessRadioControlDelegatesState),
             ("Denied wireless radio control fails clearly", DeniedWirelessRadioControlFailsClearly),
@@ -88,6 +93,7 @@ internal static class Program
             tests.Add(("Live audio notification watcher starts and stops", LiveAudioWatcherStartsAndStops));
             tests.Add(("Live connected-device inventory can be read", LiveDeviceInventoryCanBeRead));
             tests.Add(("Live wireless radio states can be read", LiveWirelessRadioStatesCanBeRead));
+            tests.Add(("Live taskbar state can be read", LiveTaskbarStateCanBeRead));
         }
 
         int failed = 0;
@@ -650,6 +656,83 @@ internal static class Program
         Equal("ms-settings:network-wifi", launcher.Uris[2]);
         Equal("ms-settings:network-status", launcher.Uris[3]);
         Equal("ms-settings:network-airplanemode", launcher.Uris[4]);
+        return Task.CompletedTask;
+    }
+
+    private static Task TaskbarStateMapsAutoHideFlag()
+    {
+        FakeTaskbarBackend backend = new()
+        {
+            State = WindowsTaskbarService.AutoHideState,
+        };
+        WindowsTaskbarService service = new(
+            backend,
+            new FakeTaskbarSettingsLauncher());
+
+        Equal(TaskbarState.AutoHidden, service.GetSnapshot().State);
+
+        backend.State = 0;
+        Equal(TaskbarState.Visible, service.GetSnapshot().State);
+        return Task.CompletedTask;
+    }
+
+    private static Task TaskbarControlsDelegateState()
+    {
+        FakeTaskbarBackend backend = new();
+        WindowsTaskbarService service = new(
+            backend,
+            new FakeTaskbarSettingsLauncher());
+
+        TaskbarActionResult hide = service.SetAutoHide(true);
+        TaskbarActionResult show = service.SetAutoHide(false);
+
+        True(hide.Succeeded, hide.Message);
+        True(show.Succeeded, show.Message);
+        Equal(2, backend.SetCalls.Count);
+        Equal(WindowsTaskbarService.AutoHideState, backend.SetCalls[0]);
+        Equal(0u, backend.SetCalls[1]);
+        return Task.CompletedTask;
+    }
+
+    private static Task TaskbarSettingsShortcutsUseExactUris()
+    {
+        FakeTaskbarSettingsLauncher launcher = new();
+        WindowsTaskbarService service = new(
+            new FakeTaskbarBackend(),
+            launcher);
+
+        TaskbarActionResult taskbar = service.OpenTaskbarSettings();
+        TaskbarActionResult display = service.OpenDisplaySettings();
+        TaskbarActionResult notifications = service.OpenNotificationSettings();
+
+        True(taskbar.Succeeded, taskbar.Message);
+        True(display.Succeeded, display.Message);
+        True(notifications.Succeeded, notifications.Message);
+        Equal(3, launcher.Uris.Count);
+        Equal("ms-settings:taskbar", launcher.Uris[0]);
+        Equal("ms-settings:display", launcher.Uris[1]);
+        Equal("ms-settings:notifications", launcher.Uris[2]);
+        return Task.CompletedTask;
+    }
+
+    private static Task TaskbarApiFailuresRemainNonfatal()
+    {
+        FakeTaskbarBackend backend = new()
+        {
+            Exception = new InvalidOperationException("shell unavailable"),
+        };
+        WindowsTaskbarService service = new(
+            backend,
+            new FakeTaskbarSettingsLauncher());
+
+        TaskbarSnapshot snapshot = service.GetSnapshot();
+        TaskbarActionResult result = service.SetAutoHide(true);
+
+        Equal(TaskbarState.Unavailable, snapshot.State);
+        True(!result.Succeeded, "Taskbar API failure should become a result.");
+        True(
+            result.Message.Contains("shell unavailable", StringComparison.Ordinal),
+            result.Message);
         return Task.CompletedTask;
     }
 
@@ -1293,6 +1376,19 @@ internal static class Program
             $"     wifi={snapshot.WiFi}, bluetooth={snapshot.Bluetooth}");
     }
 
+    private static Task LiveTaskbarStateCanBeRead()
+    {
+        TaskbarSnapshot snapshot = new WindowsTaskbarService().GetSnapshot();
+
+        True(
+            snapshot.State is TaskbarState.Visible or
+                TaskbarState.AutoHidden or
+                TaskbarState.Unavailable,
+            "Windows returned an unknown taskbar state.");
+        Console.WriteLine($"     taskbar={snapshot.State}");
+        return Task.CompletedTask;
+    }
+
     private static PnpDeviceDescriptor PnpDevice(
         string instanceId,
         Guid? containerId,
@@ -1570,6 +1666,46 @@ internal static class Program
         public List<string> Uris { get; } = [];
 
         public void Open(string settingsUri) => Uris.Add(settingsUri);
+    }
+
+    private sealed class FakeTaskbarBackend : ITaskbarBackend
+    {
+        public uint State { get; set; }
+
+        public Exception? Exception { get; init; }
+
+        public bool SetResult { get; init; } = true;
+
+        public List<uint> SetCalls { get; } = [];
+
+        public uint GetState()
+        {
+            if (Exception is not null)
+            {
+                throw Exception;
+            }
+
+            return State;
+        }
+
+        public bool SetState(uint state)
+        {
+            if (Exception is not null)
+            {
+                throw Exception;
+            }
+
+            SetCalls.Add(state);
+            State = state;
+            return SetResult;
+        }
+    }
+
+    private sealed class FakeTaskbarSettingsLauncher : ITaskbarSettingsLauncher
+    {
+        public List<string> Uris { get; } = [];
+
+        public void Open(string uri) => Uris.Add(uri);
     }
 
     private sealed class FakeWirelessRadioBackend : IWirelessRadioBackend

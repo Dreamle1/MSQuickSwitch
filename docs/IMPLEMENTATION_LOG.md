@@ -1046,3 +1046,37 @@ Published tray-enabled variants:
 | --- | --- |
 | Lite | `A89967D7EB93B89CBAEC979FCE7EED338FA984299DCD6E0C63D89AF4FC8DD11E` |
 | Portable | `EA7E735451ABF98603C5CA0FCD1287F2B2369879BBBAB0565A57FB70F71D63B5` |
+
+## 2026-08-01 - taskbar visibility and settings shortcuts
+
+### Implemented
+
+- Added a compact Taskbar section to Options with explicit **Show taskbar** and
+  **Hide taskbar** actions. Hide means Windows auto-hide: the taskbar remains
+  available when the pointer reaches its screen edge.
+- Reads the current taskbar state with `SHAppBarMessage(ABM_GETSTATE)` and
+  applies changes with `ABM_SETSTATE`; shell/API failures remain nonfatal and
+  are shown in the status line.
+- Added Settings shortcuts for Taskbar, Display, and Notifications using the
+  documented `ms-settings:` URIs. Broader taskbar behavior remains owned by
+  Windows Settings.
+
+### Verification
+
+- Format verification: passed with no changes required.
+- Release build: passed with 0 warnings and 0 errors.
+- Isolated checks: 66 passed, 0 failed.
+- Read-only live checks: 68 passed, 0 failed.
+- Live taskbar state: visible.
+- Taskbar state-changing calls were exercised only against a fake backend;
+  no real taskbar visibility was changed by automated verification.
+- No display, audio, radio, or device state changes were invoked.
+- Published both fast variants and restarted the hidden Lite resident. Final
+  verification found one responsive process at the expected Lite path.
+
+Published taskbar-control variants:
+
+| Variant | SHA-256 |
+| --- | --- |
+| Lite | `8E1E4580986A400D02766EA12EE81441FB4D99A0A68724467F4A01584D222623` |
+| Portable | `31717007932B61B9FFFAC952C3C8E913A498BBF2A195C9DC32B5B630CEF1EDFE` |

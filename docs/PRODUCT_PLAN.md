@@ -66,6 +66,13 @@ The resident widget has four compact panels and shows one at a time:
 - Link to the appropriate Windows Settings page for pairing or advanced device
   management.
 
+### Taskbar
+
+- Show the current taskbar visibility mode.
+- Turn taskbar auto-hide on or off with explicit Show and Hide actions.
+- Link to Windows taskbar, display, and notification settings for the broader
+  behavior controls that Windows owns.
+
 ## Milestones
 
 ### M0 - planning and shell
@@ -139,6 +146,7 @@ as connected.
 - [x] Add configurable global shortcuts for all four projection modes.
 - [x] Add an explicit Unset action for clearing any configured shortcut.
 - [x] Add a native notification-area icon with Open and Exit actions.
+- [x] Add taskbar Show/Hide controls and related Windows Settings links.
 - Complete screen-reader, high-contrast, and 100-200% DPI validation.
 - Cold-start and memory measurements on a release build.
 - MSIX and portable framework-dependent packaging experiments.
@@ -161,6 +169,8 @@ systems.
   application sessions.
 - Per-application volume updates do not change the master device volume.
 - The device page distinguishes present devices from previously paired devices.
+- The Options panel can read taskbar visibility, toggle auto-hide explicitly,
+  and open the related Windows Settings pages.
 - Unsupported operations remain disabled or open Windows Settings with a clear
   explanation.
 - Failures are visible to the user and logged locally without device serial
@@ -184,5 +194,5 @@ Test at minimum:
 1. Final product name and icon.
 2. Whether changing all three Windows audio roles together should be the
    default behavior.
-4. Resolved: publish both a small framework-dependent Lite build and a larger
+3. Resolved: publish both a small framework-dependent Lite build and a larger
    self-contained Portable build.

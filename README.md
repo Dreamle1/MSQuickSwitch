@@ -115,6 +115,10 @@ The implementation and exact verification history are recorded in
   the widget; a failure opens Audio with an explanation.
 - The Options theme toggle changes both the widget and supported Windows title
   bar colors immediately.
+- In Options, **Show taskbar** turns off Windows auto-hide and **Hide taskbar**
+  enables it. The status line reports the current state. **Taskbar settings**,
+  **Display settings**, and **Notifications** open the related Windows pages
+  for taskbar behavior, multiple displays, and notification-area controls.
 - In Options, enable **Start WinQuickSwitch when I sign in** to register the
   current executable for your Windows account. Sign-in launches stay hidden
   and wait for a global shortcut.

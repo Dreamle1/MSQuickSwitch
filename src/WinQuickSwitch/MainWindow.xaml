@@ -657,6 +657,44 @@
             </StackPanel>
           </Expander>
 
+          <StackPanel Margin="0,14,0,0">
+            <TextBlock FontSize="14"
+                       FontWeight="SemiBold"
+                       Text="Taskbar" />
+            <TextBlock Margin="0,4,0,0"
+                       Foreground="{DynamicResource SecondaryTextBrush}"
+                       Text="Show it, or enable Windows auto-hide."
+                       TextWrapping="Wrap" />
+            <UniformGrid Margin="0,8,0,0" Columns="2">
+              <Button Style="{StaticResource CompactButton}"
+                      Click="ShowTaskbar_Click"
+                      Content="Show taskbar"
+                      ToolTip="Turn off taskbar auto-hide" />
+              <Button Style="{StaticResource CompactButton}"
+                      Click="HideTaskbar_Click"
+                      Content="Hide taskbar"
+                      ToolTip="Enable Windows taskbar auto-hide" />
+            </UniformGrid>
+            <WrapPanel Margin="0,2,0,0">
+              <Button Style="{StaticResource CompactButton}"
+                      Click="OpenTaskbarSettings_Click"
+                      Content="Taskbar settings" />
+              <Button Style="{StaticResource CompactButton}"
+                      Click="OpenTaskbarDisplaySettings_Click"
+                      Content="Display settings"
+                      ToolTip="Configure taskbar behavior across displays" />
+              <Button Style="{StaticResource CompactButton}"
+                      Click="OpenTaskbarNotificationSettings_Click"
+                      Content="Notifications"
+                      ToolTip="Configure notification-area behavior" />
+            </WrapPanel>
+            <TextBlock x:Name="TaskbarStatusText"
+                       Margin="0,6,0,0"
+                       Foreground="{DynamicResource SecondaryTextBrush}"
+                       Text="Taskbar state is loading..."
+                       TextWrapping="Wrap" />
+          </StackPanel>
+
           <CheckBox x:Name="DarkThemeCheckBox"
                     Margin="0,14,0,0"
                     Checked="DarkThemeCheckBox_Changed"

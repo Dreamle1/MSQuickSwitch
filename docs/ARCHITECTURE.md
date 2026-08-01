@@ -8,10 +8,10 @@ and can call both COM and Win32 APIs directly. The application is
 framework-dependent by default, remains resident in the signed-in user's
 session, and has no background service.
 
-The project targets the generic `net10.0-windows` TFM. The implemented platform
-features use direct Win32 and COM interop, so compiling against a versioned
-Windows SDK would copy large WinRT support assemblies that the app does not
-use.
+The project targets `net10.0-windows10.0.22621.0` so the Wi-Fi and Bluetooth
+radio adapter can consume the supported Windows Runtime projection directly.
+Other platform features use direct Win32 and COM interop; no UI framework,
+tray, or settings package is added.
 
 ## Layers
 
@@ -37,6 +37,7 @@ src/WinQuickSwitch/
     Display/
     Audio/
     Devices/
+    Taskbar/
   Platform/Windows/
     Display/
     Audio/
@@ -116,6 +117,17 @@ creates the native window handle and registers global hotkeys without showing
 the widget. A normal later launch still reveals the existing resident instance;
 a delayed Windows startup launch does not unexpectedly reveal an instance that
 is already running.
+
+### Taskbar
+
+`WindowsTaskbarService` reads and changes the Windows taskbar's auto-hide state
+through `SHAppBarMessage(ABM_GETSTATE/ABM_SETSTATE)`. **Show taskbar** sends a
+zero state; **Hide taskbar** sends `ABS_AUTOHIDE`, which means Windows reveals
+the taskbar when the pointer reaches its edge rather than destroying the shell
+window. The adapter catches shell failures and leaves the widget usable. The
+Options links use the documented `ms-settings:taskbar`, `ms-settings:display`,
+and `ms-settings:notifications` URIs for settings that should remain owned by
+Windows.
 
 ## Local options
 
