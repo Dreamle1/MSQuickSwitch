@@ -9,4 +9,6 @@ public interface IDefaultAudioEndpointService
         CancellationToken cancellationToken = default);
 
     AudioControlResult OpenSoundSettings();
+
+    AudioControlResult OpenVolumeMixerSettings();
 }

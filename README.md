@@ -86,6 +86,9 @@ The implementation and exact verification history are recorded in
   mode.
 - In Audio, press `O`, `I`, or `A` to focus output, input, or application
   sessions.
+- Choose **Volume mixer** to open the full Windows per-app mixer. The **App
+  volumes** section remains available for quick volume and mute changes without
+  leaving WinQuickSwitch.
 - Choose **Sound settings** for the general Windows **System > Sound** page.
 - In Audio, select an output and choose **Favorite**. Up to four outputs can be
   saved; choose **Favorite** again to remove a saved output.

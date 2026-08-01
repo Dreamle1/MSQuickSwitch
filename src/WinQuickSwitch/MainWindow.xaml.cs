@@ -1066,6 +1066,13 @@ public partial class MainWindow : Window
         AudioStatusText.Text = result.Message;
     }
 
+    private void OpenVolumeMixer_Click(object sender, RoutedEventArgs e)
+    {
+        AudioControlResult result =
+            _defaultAudioEndpointService.OpenVolumeMixerSettings();
+        AudioStatusText.Text = result.Message;
+    }
+
     private async void RefreshDevices_Click(object sender, RoutedEventArgs e) =>
         await RefreshDeviceInventoryAsync();
 

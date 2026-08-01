@@ -219,10 +219,11 @@ any activation, cast, or call failure returns a normal result and opens the
 documented `ms-settings:sound` page through a separate launcher. No other
 feature code references the policy COM declaration.
 
-The visible **Sound settings** action uses only `ms-settings:sound`, which is
-the general Windows **System > Sound** page. It intentionally does not open the
-Volume mixer, Sound devices, default-endpoint properties, or a device-specific
-page.
+The Audio header exposes two allowlisted Settings actions. **Sound settings**
+uses `ms-settings:sound` for the general Windows **System > Sound** page, while
+**Volume mixer** uses `ms-settings:apps-volume` for Windows' full per-app mixer.
+Sound devices, default-endpoint properties, and device-specific pages remain
+outside this milestone.
 
 The current read-only implementation enumerates active render/capture
 endpoints, separately tracks console, multimedia, and communications defaults,

@@ -48,6 +48,7 @@ internal static class Program
             ("General endpoint selection updates both default roles", GeneralEndpointSelectionUpdatesBothRoles),
             ("Communications endpoint selection updates only calls", CommunicationsEndpointSelectionUpdatesCalls),
             ("Unsupported endpoint selection preserves Settings fallback", UnsupportedEndpointSelectionPreservesFallback),
+            ("Volume mixer uses the exact Windows Settings URI", VolumeMixerUsesExactSettingsUri),
             ("Physical device interfaces are grouped by container", PhysicalDeviceInterfacesAreGrouped),
             ("Bluetooth takes precedence for mixed-interface devices", BluetoothTakesPrecedence),
             ("Bluetooth profile names collapse into one device", BluetoothProfilesCollapse),
@@ -448,6 +449,21 @@ internal static class Program
         True(fallback.Succeeded, fallback.Message);
         Equal(1, settings.Uris.Count);
         Equal("ms-settings:sound", settings.Uris[0]);
+    }
+
+    private static Task VolumeMixerUsesExactSettingsUri()
+    {
+        FakeWindowsSettingsLauncher settings = new();
+        WindowsDefaultAudioEndpointService service = new(
+            new FakeDefaultAudioEndpointSetter(),
+            settings);
+
+        AudioControlResult result = service.OpenVolumeMixerSettings();
+
+        True(result.Succeeded, result.Message);
+        Equal(1, settings.Uris.Count);
+        Equal("ms-settings:apps-volume", settings.Uris[0]);
+        return Task.CompletedTask;
     }
 
     private static Task PhysicalDeviceInterfacesAreGrouped()

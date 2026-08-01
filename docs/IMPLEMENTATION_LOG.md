@@ -932,3 +932,39 @@ Published immediate-action variants:
 - Release build: passed with 0 warnings and 0 errors.
 - Regression suite: 57/57 tests passed.
 - No display or audio changes were invoked by automated verification.
+
+## 2026-07-31 - Windows Volume mixer entry point
+
+### Implemented
+
+- Added a compact **Volume mixer** action to the Audio header using the
+  allowlisted `ms-settings:apps-volume` URI.
+- Kept the general **Sound settings** action separate at `ms-settings:sound`.
+- Renamed the in-widget Applications heading to **App volumes**, clarifying
+  that its existing live Core Audio sliders and mute controls are the quick
+  mixer while Windows Settings provides the full fallback.
+- Routed the new Settings action through `IDefaultAudioEndpointService` and the
+  existing Windows launcher boundary; no new resident watcher or dependency was
+  added.
+
+### Verification
+
+- Format verification: passed with no changes required.
+- Release build: passed with 0 warnings and 0 errors.
+- Isolated checks: 58 passed, 0 failed.
+- Read-only live checks: 62 passed, 0 failed.
+- Live topology: extend, 3 active displays, 3 available displays.
+- Live audio: 4 playback endpoints, 3 recording endpoints, 0 active sessions.
+- Live normalized device inventory: 13 Bluetooth, 8 wired.
+- Added an isolated test for the exact Windows Volume mixer URI.
+- No audio state is changed when the Settings action is used.
+- Published both fast variants and restarted the hidden Lite resident. Final
+  verification found exactly one resident process, and the Windows startup
+  entry points to that same Lite executable with `--startup`.
+
+Published Volume mixer variants:
+
+| Variant | SHA-256 |
+| --- | --- |
+| Lite | `5B1EA6CFCE9411DA652DF5B2D727FE1356BADF315B0FE2A1E15D439DB4F2809C` |
+| Portable | `6BDDE199D9B90EB7B6ACCB8517E0A02FAFB18074BEF4E383856235B067D609D6` |

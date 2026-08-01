@@ -105,6 +105,8 @@ Exit: the UI stays accurate while applications and headsets come and go.
   selection is unsupported on a Windows build.
 - [x] Add persisted favorite playback outputs with direct global shortcuts.
 - [x] Link to the general Windows **System > Sound** page.
+- [x] Link to the Windows per-application Volume mixer while retaining the
+  lightweight in-widget app volume and mute controls.
 
 Exit: session controls work for ordinary desktop apps and endpoint switching
 either succeeds or degrades clearly.

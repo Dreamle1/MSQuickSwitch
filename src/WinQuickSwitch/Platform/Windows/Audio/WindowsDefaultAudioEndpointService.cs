@@ -40,19 +40,32 @@ public sealed class WindowsDefaultAudioEndpointService : IDefaultAudioEndpointSe
             cancellationToken);
     }
 
-    public AudioControlResult OpenSoundSettings()
+    public AudioControlResult OpenSoundSettings() => OpenSettings(
+        "ms-settings:sound",
+        "Opened Windows sound settings.",
+        "Windows sound settings");
+
+    public AudioControlResult OpenVolumeMixerSettings() => OpenSettings(
+        "ms-settings:apps-volume",
+        "Opened Windows volume mixer.",
+        "Windows volume mixer");
+
+    private AudioControlResult OpenSettings(
+        string settingsUri,
+        string successMessage,
+        string settingsName)
     {
         try
         {
-            _settingsLauncher.Open("ms-settings:sound");
-            return AudioControlResult.Success("Opened Windows sound settings.");
+            _settingsLauncher.Open(settingsUri);
+            return AudioControlResult.Success(successMessage);
         }
         catch (Exception exception) when (
             exception is InvalidOperationException or
             System.ComponentModel.Win32Exception)
         {
             return AudioControlResult.Failure(
-                $"Windows sound settings could not be opened: {exception.Message}");
+                $"{settingsName} could not be opened: {exception.Message}");
         }
     }
 
