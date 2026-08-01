@@ -27,6 +27,7 @@ public partial class MainWindow : Window
     private readonly IDefaultAudioEndpointService _defaultAudioEndpointService;
     private readonly IDeviceInventoryService _deviceInventoryService;
     private readonly IDeviceSettingsService _deviceSettingsService;
+    private readonly IWirelessRadioService _wirelessRadioService;
     private readonly IWidgetSettingsStore _widgetSettingsStore;
     private readonly IStartupRegistrationService _startupRegistrationService;
     private readonly WindowsGlobalHotkey _globalHotkey = new();
@@ -35,6 +36,7 @@ public partial class MainWindow : Window
     private readonly DebouncedActionScheduler _deviceRefreshScheduler;
     private readonly SemaphoreSlim _audioRefreshGate = new(1, 1);
     private readonly SemaphoreSlim _deviceRefreshGate = new(1, 1);
+    private readonly SemaphoreSlim _wirelessRadioGate = new(1, 1);
     private readonly CancellationTokenSource _lifetimeCancellation = new();
     private CancellationTokenSource _visibleCancellation = new();
     private HwndSource? _windowSource;
@@ -62,6 +64,7 @@ public partial class MainWindow : Window
         new WindowsDefaultAudioEndpointService(),
         new WindowsDeviceInventoryService(),
         new WindowsDeviceSettingsService(),
+        new WindowsWirelessRadioService(),
         new JsonWidgetSettingsStore(),
         new WindowsStartupRegistrationService())
     {
@@ -76,6 +79,7 @@ public partial class MainWindow : Window
         IDefaultAudioEndpointService defaultAudioEndpointService,
         IDeviceInventoryService deviceInventoryService,
         IDeviceSettingsService deviceSettingsService,
+        IWirelessRadioService wirelessRadioService,
         IWidgetSettingsStore widgetSettingsStore,
         IStartupRegistrationService startupRegistrationService)
     {
@@ -87,6 +91,7 @@ public partial class MainWindow : Window
         _defaultAudioEndpointService = defaultAudioEndpointService;
         _deviceInventoryService = deviceInventoryService;
         _deviceSettingsService = deviceSettingsService;
+        _wirelessRadioService = wirelessRadioService;
         _widgetSettingsStore = widgetSettingsStore;
         _startupRegistrationService = startupRegistrationService;
         _widgetSettings = _widgetSettingsStore.Load();
@@ -406,10 +411,12 @@ public partial class MainWindow : Window
                 PlaybackEndpointsList.Focus();
                 break;
             case WidgetPanel.Devices:
-                if (_deviceInventoryDirty)
-                {
-                    await RefreshDeviceInventoryAsync();
-                }
+                Task inventoryRefresh = _deviceInventoryDirty
+                    ? RefreshDeviceInventoryAsync()
+                    : Task.CompletedTask;
+                await Task.WhenAll(
+                    RefreshWirelessRadioStateAsync(),
+                    inventoryRefresh);
 
                 ConnectedDevicesList.Focus();
                 break;
@@ -1074,7 +1081,9 @@ public partial class MainWindow : Window
     }
 
     private async void RefreshDevices_Click(object sender, RoutedEventArgs e) =>
-        await RefreshDeviceInventoryAsync();
+        await Task.WhenAll(
+            RefreshWirelessRadioStateAsync(),
+            RefreshDeviceInventoryAsync());
 
     private void OpenBluetoothSettings_Click(object sender, RoutedEventArgs e)
     {
@@ -1082,10 +1091,85 @@ public partial class MainWindow : Window
         DeviceStatusText.Text = result.Message;
     }
 
+    private void OpenWiFiSettings_Click(object sender, RoutedEventArgs e)
+    {
+        DeviceActionResult result = _deviceSettingsService.OpenWiFiSettings();
+        DeviceStatusText.Text = result.Message;
+    }
+
+    private void OpenNetworkSettings_Click(object sender, RoutedEventArgs e)
+    {
+        DeviceActionResult result = _deviceSettingsService.OpenNetworkSettings();
+        DeviceStatusText.Text = result.Message;
+    }
+
+    private void OpenAirplaneModeSettings_Click(object sender, RoutedEventArgs e)
+    {
+        DeviceActionResult result =
+            _deviceSettingsService.OpenAirplaneModeSettings();
+        DeviceStatusText.Text = result.Message;
+    }
+
     private void OpenConnectedDevicesSettings_Click(object sender, RoutedEventArgs e)
     {
         DeviceActionResult result = _deviceSettingsService.OpenConnectedDevicesSettings();
         DeviceStatusText.Text = result.Message;
+    }
+
+    private async void WirelessRadioToggle_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (sender is not ToggleButton { Tag: string kindName } button ||
+            !Enum.TryParse(kindName, out WirelessRadioKind kind))
+        {
+            WirelessStatusText.Text = "That wireless control is unavailable.";
+            WirelessStatusText.Visibility = Visibility.Visible;
+            return;
+        }
+
+        bool enabled = button.IsChecked == true;
+        button.IsEnabled = false;
+
+        try
+        {
+            WirelessRadioResult result = await _wirelessRadioService.SetStateAsync(
+                kind,
+                enabled,
+                _lifetimeCancellation.Token);
+
+            await Task.Delay(
+                TimeSpan.FromMilliseconds(250),
+                _lifetimeCancellation.Token);
+            await RefreshWirelessRadioStateAsync();
+
+            WirelessStatusText.Text = result.Message;
+            WirelessStatusText.Visibility = result.Succeeded
+                ? Visibility.Collapsed
+                : Visibility.Visible;
+
+            if (!result.Succeeded)
+            {
+                OpenRadioSettings(kind);
+            }
+        }
+        catch (OperationCanceledException) when (
+            _lifetimeCancellation.IsCancellationRequested)
+        {
+            // The application is closing.
+        }
+    }
+
+    private void OpenRadioSettings(WirelessRadioKind kind)
+    {
+        DeviceActionResult settingsResult = kind == WirelessRadioKind.WiFi
+            ? _deviceSettingsService.OpenWiFiSettings()
+            : _deviceSettingsService.OpenBluetoothSettings();
+
+        if (!settingsResult.Succeeded)
+        {
+            WirelessStatusText.Text += $" {settingsResult.Message}";
+        }
     }
 
     private async void SessionVolumeSlider_Commit(
@@ -1370,6 +1454,78 @@ public partial class MainWindow : Window
                 string.Equals(endpoint.Id, selectedId, StringComparison.Ordinal))
             ?? endpoints.FirstOrDefault(endpoint => endpoint.IsDefault)
             ?? endpoints.FirstOrDefault();
+    }
+
+    private async Task RefreshWirelessRadioStateAsync()
+    {
+        bool entered = false;
+        CancellationToken cancellationToken = _lifetimeCancellation.Token;
+
+        try
+        {
+            entered = await _wirelessRadioGate.WaitAsync(
+                TimeSpan.Zero,
+                cancellationToken);
+
+            if (!entered)
+            {
+                return;
+            }
+
+            WiFiRadioToggle.IsEnabled = false;
+            BluetoothRadioToggle.IsEnabled = false;
+
+            WirelessRadioSnapshot snapshot =
+                await _wirelessRadioService.GetSnapshotAsync(cancellationToken);
+
+            ApplyWirelessRadioState(
+                WiFiRadioToggle,
+                "Wi-Fi",
+                snapshot.WiFi);
+            ApplyWirelessRadioState(
+                BluetoothRadioToggle,
+                "Bluetooth",
+                snapshot.Bluetooth);
+            WirelessStatusText.Visibility = Visibility.Collapsed;
+        }
+        catch (OperationCanceledException) when (
+            cancellationToken.IsCancellationRequested)
+        {
+            // The application is closing.
+        }
+        catch (Exception exception)
+        {
+            WiFiRadioToggle.IsChecked = false;
+            BluetoothRadioToggle.IsChecked = false;
+            WiFiRadioToggle.Content = "Wi-Fi unavailable";
+            BluetoothRadioToggle.Content = "Bluetooth unavailable";
+            WirelessStatusText.Text =
+                $"Wireless state is unavailable: {exception.Message}";
+            WirelessStatusText.Visibility = Visibility.Visible;
+        }
+        finally
+        {
+            if (entered)
+            {
+                _wirelessRadioGate.Release();
+            }
+        }
+    }
+
+    private static void ApplyWirelessRadioState(
+        ToggleButton button,
+        string name,
+        WirelessRadioState state)
+    {
+        button.IsChecked = state == WirelessRadioState.On;
+        button.IsEnabled = state is WirelessRadioState.On or WirelessRadioState.Off;
+        button.Content = state switch
+        {
+            WirelessRadioState.On => $"{name} on",
+            WirelessRadioState.Off => $"{name} off",
+            WirelessRadioState.Disabled => $"{name} locked",
+            _ => $"{name} unavailable",
+        };
     }
 
     private async Task RefreshDeviceInventoryAsync()

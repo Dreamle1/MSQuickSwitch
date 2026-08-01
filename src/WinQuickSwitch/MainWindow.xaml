@@ -348,6 +348,29 @@
                      Foreground="{DynamicResource SecondaryTextBrush}"
                      Text="Loading..." />
 
+          <UniformGrid Margin="0,10,0,0" Columns="2">
+            <ToggleButton x:Name="WiFiRadioToggle"
+                          Style="{StaticResource DisplayModeToggle}"
+                          Margin="0,0,6,0"
+                          Tag="WiFi"
+                          Click="WirelessRadioToggle_Click"
+                          Content="Wi-Fi unavailable"
+                          AutomationProperties.Name="Toggle Wi-Fi" />
+            <ToggleButton x:Name="BluetoothRadioToggle"
+                          Style="{StaticResource DisplayModeToggle}"
+                          Margin="6,0,0,0"
+                          Tag="Bluetooth"
+                          Click="WirelessRadioToggle_Click"
+                          Content="Bluetooth unavailable"
+                          AutomationProperties.Name="Toggle Bluetooth" />
+          </UniformGrid>
+
+          <TextBlock x:Name="WirelessStatusText"
+                     Margin="0,7,0,0"
+                     Foreground="{DynamicResource SecondaryTextBrush}"
+                     TextWrapping="Wrap"
+                     Visibility="Collapsed" />
+
           <ListView x:Name="ConnectedDevicesList"
                     Margin="0,10,0,0"
                     MinHeight="80"
@@ -373,9 +396,21 @@
 
           <WrapPanel Margin="0,10,0,0">
             <Button Style="{StaticResource CompactButton}"
+                    Click="OpenWiFiSettings_Click"
+                    Content="Wi-Fi settings"
+                    ToolTip="Manage Wi-Fi networks in Windows Settings" />
+            <Button Style="{StaticResource CompactButton}"
                     Click="OpenBluetoothSettings_Click"
                     Content="Bluetooth settings"
                     ToolTip="Pair, disconnect, or remove a Bluetooth device in Windows Settings" />
+            <Button Style="{StaticResource CompactButton}"
+                    Click="OpenAirplaneModeSettings_Click"
+                    Content="Airplane mode"
+                    ToolTip="Open Windows airplane mode settings" />
+            <Button Style="{StaticResource CompactButton}"
+                    Click="OpenNetworkSettings_Click"
+                    Content="Network"
+                    ToolTip="Open Windows network status settings" />
             <Button Style="{StaticResource CompactButton}"
                     Click="OpenConnectedDevicesSettings_Click"
                     Content="Devices settings"

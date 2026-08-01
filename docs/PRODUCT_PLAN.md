@@ -61,6 +61,8 @@ The resident widget has four compact panels and shows one at a time:
 - Show friendly name, class, connection/presence state, and battery percentage
   when Windows supplies it.
 - Update the list when a device connects or disconnects.
+- Show current Wi-Fi and Bluetooth radio state and allow a permission-gated
+  user-initiated on/off request.
 - Link to the appropriate Windows Settings page for pairing or advanced device
   management.
 
@@ -117,6 +119,8 @@ either succeeds or degrades clearly.
 - [x] Normalize duplicate physical devices that expose several interfaces.
 - [x] Watch for add, remove, and update events.
 - [x] Add Settings deep links; keep pairing and device removal outside the app.
+- [x] Add permission-gated Wi-Fi and Bluetooth radio toggles with Settings
+  fallback, without elevation or a resident polling service.
 
 Exit: the list updates live and does not label historical/non-present devices
 as connected.

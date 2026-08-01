@@ -56,6 +56,10 @@ internal static class Program
             ("Unrelated USB devices remain separate", UnrelatedUsbDevicesRemainSeparate),
             ("Device status labels are human readable", DeviceStatusLabelsAreHumanReadable),
             ("Device Settings shortcuts use exact Windows URIs", DeviceSettingsShortcutsUseExactUris),
+            ("Wireless radio states remain independent", WirelessRadioStatesRemainIndependent),
+            ("Wireless radio control delegates the desired state", WirelessRadioControlDelegatesState),
+            ("Denied wireless radio control fails clearly", DeniedWirelessRadioControlFailsClearly),
+            ("Wireless radio API failures remain nonfatal", WirelessRadioApiFailuresRemainNonfatal),
             ("Dark title bar uses the application palette", DarkTitleBarUsesAppPalette),
             ("Light title bar uses the application palette", LightTitleBarUsesAppPalette),
             ("Widget shortcuts validate and format supported chords", WidgetShortcutsValidateAndFormat),
@@ -83,6 +87,7 @@ internal static class Program
             tests.Add(("Live Core Audio inventory can be read", LiveAudioInventoryCanBeRead));
             tests.Add(("Live audio notification watcher starts and stops", LiveAudioWatcherStartsAndStops));
             tests.Add(("Live connected-device inventory can be read", LiveDeviceInventoryCanBeRead));
+            tests.Add(("Live wireless radio states can be read", LiveWirelessRadioStatesCanBeRead));
         }
 
         int failed = 0;
@@ -630,13 +635,94 @@ internal static class Program
 
         DeviceActionResult bluetooth = service.OpenBluetoothSettings();
         DeviceActionResult devices = service.OpenConnectedDevicesSettings();
+        DeviceActionResult wifi = service.OpenWiFiSettings();
+        DeviceActionResult network = service.OpenNetworkSettings();
+        DeviceActionResult airplane = service.OpenAirplaneModeSettings();
 
         True(bluetooth.Succeeded, bluetooth.Message);
         True(devices.Succeeded, devices.Message);
-        Equal(2, launcher.Uris.Count);
+        True(wifi.Succeeded, wifi.Message);
+        True(network.Succeeded, network.Message);
+        True(airplane.Succeeded, airplane.Message);
+        Equal(5, launcher.Uris.Count);
         Equal("ms-settings:bluetooth", launcher.Uris[0]);
         Equal("ms-settings:connecteddevices", launcher.Uris[1]);
+        Equal("ms-settings:network-wifi", launcher.Uris[2]);
+        Equal("ms-settings:network-status", launcher.Uris[3]);
+        Equal("ms-settings:network-airplanemode", launcher.Uris[4]);
         return Task.CompletedTask;
+    }
+
+    private static async Task WirelessRadioStatesRemainIndependent()
+    {
+        FakeWirelessRadioBackend backend = new()
+        {
+            Radios =
+            [
+                new WirelessRadioDevice(
+                    WirelessRadioKind.WiFi,
+                    WirelessRadioState.On),
+                new WirelessRadioDevice(
+                    WirelessRadioKind.Bluetooth,
+                    WirelessRadioState.Off),
+            ],
+        };
+        WindowsWirelessRadioService service = new(backend);
+
+        WirelessRadioSnapshot snapshot = await service.GetSnapshotAsync();
+
+        Equal(WirelessRadioState.On, snapshot.WiFi);
+        Equal(WirelessRadioState.Off, snapshot.Bluetooth);
+    }
+
+    private static async Task WirelessRadioControlDelegatesState()
+    {
+        FakeWirelessRadioBackend backend = new();
+        WindowsWirelessRadioService service = new(backend);
+
+        WirelessRadioResult result = await service.SetStateAsync(
+            WirelessRadioKind.Bluetooth,
+            true);
+
+        True(result.Succeeded, result.Message);
+        Equal(1, backend.SetCalls.Count);
+        Equal((WirelessRadioKind.Bluetooth, true), backend.SetCalls[0]);
+    }
+
+    private static async Task DeniedWirelessRadioControlFailsClearly()
+    {
+        FakeWirelessRadioBackend backend = new()
+        {
+            ControlStatus = WirelessRadioControlStatus.DeniedBySystem,
+        };
+        WindowsWirelessRadioService service = new(backend);
+
+        WirelessRadioResult result = await service.SetStateAsync(
+            WirelessRadioKind.WiFi,
+            false);
+
+        True(!result.Succeeded, "Denied radio control should fail.");
+        True(
+            result.Message.Contains("policy", StringComparison.OrdinalIgnoreCase),
+            result.Message);
+    }
+
+    private static async Task WirelessRadioApiFailuresRemainNonfatal()
+    {
+        FakeWirelessRadioBackend backend = new()
+        {
+            Exception = new UnauthorizedAccessException("radio access"),
+        };
+        WindowsWirelessRadioService service = new(backend);
+
+        WirelessRadioResult result = await service.SetStateAsync(
+            WirelessRadioKind.Bluetooth,
+            false);
+
+        True(!result.Succeeded, "A radio API exception should become a failure result.");
+        True(
+            result.Message.Contains("radio access", StringComparison.Ordinal),
+            result.Message);
     }
 
     private static Task DarkTitleBarUsesAppPalette()
@@ -1198,6 +1284,15 @@ internal static class Program
             $"wired={inventory.Devices.Count(device => device.Transport == DeviceTransport.Wired)}");
     }
 
+    private static async Task LiveWirelessRadioStatesCanBeRead()
+    {
+        WirelessRadioSnapshot snapshot =
+            await new WindowsWirelessRadioService().GetSnapshotAsync();
+
+        Console.WriteLine(
+            $"     wifi={snapshot.WiFi}, bluetooth={snapshot.Bluetooth}");
+    }
+
     private static PnpDeviceDescriptor PnpDevice(
         string instanceId,
         Guid? containerId,
@@ -1475,6 +1570,41 @@ internal static class Program
         public List<string> Uris { get; } = [];
 
         public void Open(string settingsUri) => Uris.Add(settingsUri);
+    }
+
+    private sealed class FakeWirelessRadioBackend : IWirelessRadioBackend
+    {
+        public IReadOnlyList<WirelessRadioDevice> Radios { get; init; } = [];
+
+        public WirelessRadioControlStatus ControlStatus { get; init; } =
+            WirelessRadioControlStatus.Allowed;
+
+        public Exception? Exception { get; init; }
+
+        public List<(WirelessRadioKind Kind, bool Enabled)> SetCalls { get; } = [];
+
+        public Task<IReadOnlyList<WirelessRadioDevice>> GetRadiosAsync(
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(Radios);
+        }
+
+        public Task<WirelessRadioControlStatus> SetStateAsync(
+            WirelessRadioKind kind,
+            bool enabled,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (Exception is not null)
+            {
+                throw Exception;
+            }
+
+            SetCalls.Add((kind, enabled));
+            return Task.FromResult(ControlStatus);
+        }
     }
 
     private sealed class FakeDwmAttributeSetter : IDwmAttributeSetter

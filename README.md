@@ -92,6 +92,11 @@ The implementation and exact verification history are recorded in
 - Choose **Sound settings** for the general Windows **System > Sound** page.
 - In Audio, select an output and choose **Favorite**. Up to four outputs can be
   saved; choose **Favorite** again to remove a saved output.
+- In Devices, use the **Wi-Fi** and **Bluetooth** controls to request a radio
+  state change. Windows may request permission the first time; if radio control
+  is unavailable or denied, WinQuickSwitch opens the matching Settings page.
+- The Devices panel also links directly to Wi-Fi, Bluetooth, Airplane mode,
+  Network, and connected-device settings.
 - Press `Esc`, click elsewhere, or close the window to hide it. Select
   **Quit** to exit the resident process.
 - Starting WinQuickSwitch again reveals the existing instance instead of

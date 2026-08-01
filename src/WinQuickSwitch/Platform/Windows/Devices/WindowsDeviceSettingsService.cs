@@ -22,6 +22,15 @@ public sealed class WindowsDeviceSettingsService : IDeviceSettingsService
     public DeviceActionResult OpenConnectedDevicesSettings() =>
         Open("ms-settings:connecteddevices", "Connected devices settings");
 
+    public DeviceActionResult OpenWiFiSettings() =>
+        Open("ms-settings:network-wifi", "Wi-Fi settings");
+
+    public DeviceActionResult OpenNetworkSettings() =>
+        Open("ms-settings:network-status", "Network settings");
+
+    public DeviceActionResult OpenAirplaneModeSettings() =>
+        Open("ms-settings:network-airplanemode", "Airplane mode settings");
+
     private DeviceActionResult Open(string uri, string description)
     {
         try

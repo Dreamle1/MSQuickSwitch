@@ -968,3 +968,46 @@ Published Volume mixer variants:
 | --- | --- |
 | Lite | `5B1EA6CFCE9411DA652DF5B2D727FE1356BADF315B0FE2A1E15D439DB4F2809C` |
 | Portable | `6BDDE199D9B90EB7B6ACCB8517E0A02FAFB18074BEF4E383856235B067D609D6` |
+
+## 2026-07-31 - Wi-Fi and Bluetooth quick controls
+
+### Implemented
+
+- Added independent Wi-Fi and Bluetooth state controls to Devices using
+  `Windows.Devices.Radios`.
+- Reads radio state without requesting permission. Permission is requested only
+  after a user clicks a toggle; a denied or unavailable change opens the
+  matching Windows Settings page.
+- Added allowlisted Wi-Fi, Bluetooth, Airplane mode, Network, and connected
+  device Settings actions.
+- Refreshes radio state when Devices opens, after a requested state change, and
+  on manual refresh. No polling thread, service, elevation, PnP disable, or
+  shell command was added.
+- Updated the Windows target to Windows 11 version 22H2 (`22621`) so the .NET
+  build consumes the supported WinRT radio projection directly.
+
+### Verification
+
+- Format verification: passed with no changes required.
+- Release build: passed with 0 warnings and 0 errors.
+- Isolated checks: 62 passed, 0 failed.
+- Read-only live checks: 67 passed, 0 failed.
+- Live radio state: Wi-Fi on, Bluetooth on.
+- Live topology: extend, 3 active displays, 3 available displays.
+- Live audio: 4 playback endpoints, 3 recording endpoints, 1 active session.
+- Live normalized device inventory: 13 Bluetooth, 8 wired.
+- Computer-use automation could not attach to the WPF window in two attempts,
+  so this milestone does not claim an automated visual-layout pass.
+- Actual radio state-change requests invoked by automated verification: 0.
+- After the Windows target change, an explicit runtime-specific restore
+  refreshed the `win-x64` assets before publishing both
+  variants.
+- Final resident-state verification found exactly one hidden Lite process, and
+  the Windows startup entry points to that same executable with `--startup`.
+
+Published wireless-control variants:
+
+| Variant | SHA-256 |
+| --- | --- |
+| Lite | `6099E3B7083473F2EFEF4E3CECCCBF7A502D635FE76F384563D305A8CDFECA92` |
+| Portable | `6534610F8C5F184B846A85175A2025C11ABDA5E996F6199E9A1A941B7C42F963` |

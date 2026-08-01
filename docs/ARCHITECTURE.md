@@ -268,9 +268,19 @@ SetupAPI refresh while Devices is visible. Hidden changes only mark the
 inventory dirty for the next Devices activation. The hook and pending refresh
 are removed on process exit; there is no polling thread or resident service.
 
-The first release is read-only. Pair, remove, troubleshoot, and driver actions
-open the allowlisted `ms-settings:bluetooth` or
-`ms-settings:connecteddevices` page.
+Wireless power state uses the supported `Windows.Devices.Radios` boundary.
+Reading Wi-Fi and Bluetooth state does not request permission. A user-initiated
+toggle calls `Radio.RequestAccessAsync` and proceeds to `SetStateAsync` only
+when Windows returns `Allowed`; the application never requests radio access at
+startup. State is refreshed when Devices opens, after a requested change, and
+on manual refresh, without adding a polling thread.
+
+If radio control is denied by the user, Windows, hardware, or policy, the UI
+reports that result and opens the matching allowlisted Settings page. Pair,
+remove, troubleshoot, and driver actions remain outside the app. Device links
+are fixed to `ms-settings:network-wifi`, `ms-settings:bluetooth`,
+`ms-settings:network-airplanemode`, `ms-settings:network-status`, and
+`ms-settings:connecteddevices`.
 
 ## Threading and lifetime
 
@@ -286,8 +296,8 @@ open the allowlisted `ms-settings:bluetooth` or
 ## Security and privacy
 
 - No elevation manifest.
-- No device enable/disable, driver installation, or arbitrary command
-  execution.
+- No PnP device disable, driver installation, or arbitrary command execution;
+  wireless state changes use only the permission-gated Windows radio API.
 - Display arguments and Settings URIs are fixed allowlists.
 - No network client or telemetry package.
 - Local diagnostic logs exclude device serial numbers and full PnP identifiers.
