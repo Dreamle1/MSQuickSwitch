@@ -32,6 +32,7 @@ public partial class MainWindow : Window
     private readonly IStartupRegistrationService _startupRegistrationService;
     private readonly WindowsGlobalHotkey _globalHotkey = new();
     private readonly WindowsWidgetPlacementService _placementService = new();
+    private WindowsTrayIcon? _trayIcon;
     private readonly DebouncedActionScheduler _audioRefreshScheduler;
     private readonly DebouncedActionScheduler _deviceRefreshScheduler;
     private readonly SemaphoreSlim _audioRefreshGate = new(1, 1);
@@ -117,6 +118,17 @@ public partial class MainWindow : Window
         _windowSource?.AddHook(WindowMessageHook);
         HotkeyRegistrationResult result = ApplyHotkeyBindings(_widgetSettings);
 
+        try
+        {
+            _trayIcon = new WindowsTrayIcon(_windowHandle);
+            _trayIcon.OpenRequested += TrayIcon_OpenRequested;
+            _trayIcon.QuitRequested += TrayIcon_QuitRequested;
+        }
+        catch (Win32Exception)
+        {
+            // The widget remains usable if the shell cannot create a tray icon.
+        }
+
         if (!result.Succeeded)
         {
             OptionsStatusText.Text =
@@ -132,6 +144,13 @@ public partial class MainWindow : Window
         _audioChangeWatcher.Changed -= AudioChangeWatcher_Changed;
         _audioChangeWatcher.Dispose();
         _globalHotkey.Dispose();
+        if (_trayIcon is not null)
+        {
+            _trayIcon.OpenRequested -= TrayIcon_OpenRequested;
+            _trayIcon.QuitRequested -= TrayIcon_QuitRequested;
+            _trayIcon.Dispose();
+            _trayIcon = null;
+        }
         _windowSource?.RemoveHook(WindowMessageHook);
         _windowSource = null;
         _visibleCancellation.Cancel();
@@ -191,6 +210,10 @@ public partial class MainWindow : Window
                 out WidgetHotkeyAction action))
         {
             HandleGlobalHotkey(action);
+            handled = true;
+        }
+        else if (_trayIcon?.HandleWindowMessage(message, longParameter) == true)
+        {
             handled = true;
         }
         else if (message == WmDeviceChange)
@@ -558,6 +581,16 @@ public partial class MainWindow : Window
         HideWidget();
     }
 
+    private void TrayIcon_OpenRequested(object? sender, EventArgs e)
+    {
+        _ = ShowWidgetAsync();
+    }
+
+    private void TrayIcon_QuitRequested(object? sender, EventArgs e)
+    {
+        QuitWidget();
+    }
+
     private void MainWindow_Deactivated(object? sender, EventArgs e)
     {
         if (IsVisible &&
@@ -578,6 +611,16 @@ public partial class MainWindow : Window
 
     private void Quit_Click(object sender, RoutedEventArgs e)
     {
+        QuitWidget();
+    }
+
+    private void QuitWidget()
+    {
+        if (_isExiting)
+        {
+            return;
+        }
+
         _isExiting = true;
         Close();
     }

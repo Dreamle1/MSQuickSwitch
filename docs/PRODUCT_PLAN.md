@@ -138,7 +138,7 @@ as connected.
 - [x] Add optional per-user start-with-Windows behavior that launches hidden.
 - [x] Add configurable global shortcuts for all four projection modes.
 - [x] Add an explicit Unset action for clearing any configured shortcut.
-- Decide whether a tray icon adds enough value.
+- [x] Add a native notification-area icon with Open and Exit actions.
 - Complete screen-reader, high-contrast, and 100-200% DPI validation.
 - Cold-start and memory measurements on a release build.
 - MSIX and portable framework-dependent packaging experiments.
@@ -182,9 +182,7 @@ Test at minimum:
 ## Open product decisions
 
 1. Final product name and icon.
-2. Whether a tray icon adds enough value beyond the implemented resident
-   hotkey and visible Quit action.
-3. Whether changing all three Windows audio roles together should be the
+2. Whether changing all three Windows audio roles together should be the
    default behavior.
 4. Resolved: publish both a small framework-dependent Lite build and a larger
    self-contained Portable build.

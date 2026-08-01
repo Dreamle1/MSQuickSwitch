@@ -1011,3 +1011,38 @@ Published wireless-control variants:
 | --- | --- |
 | Lite | `6099E3B7083473F2EFEF4E3CECCCBF7A502D635FE76F384563D305A8CDFECA92` |
 | Portable | `6534610F8C5F184B846A85175A2025C11ABDA5E996F6199E9A1A941B7C42F963` |
+
+## 2026-08-01 - native notification-area tray icon
+
+### Implemented
+
+- Added a native `Shell_NotifyIcon` integration on the existing WPF window
+  handle, keeping the resident app lightweight and dependency-free.
+- Left-clicking the icon or choosing **Open WinQuickSwitch** reveals the widget.
+  Right-clicking exposes **Open WinQuickSwitch** and **Exit WinQuickSwitch**.
+- Closing, pressing `Esc`, or clicking away still hides the widget to the tray;
+  the explicit Quit action and the tray Exit action terminate the process.
+- Tray registration is best-effort and is removed during window shutdown. If the
+  Windows shell cannot register the icon, the resident hotkey and widget remain
+  available.
+
+### Verification
+
+- Release build: passed with 0 warnings and 0 errors.
+- Isolated checks: 62 passed, 0 failed.
+- Read-only live checks: 67 passed, 0 failed.
+- Published and launched the Lite build from the resident fast artifact path;
+  one responsive process was observed.
+- Computer-use tray/window automation could not attach to the hidden WPF window
+  after two launch attempts, so no automated claim is made about clicking the
+  tray menu. The native registration path is covered by the successful build
+  and the running resident process; perform one attended click check on the
+  notification-area icon after updating.
+- No display, audio, radio, or device state changes were invoked.
+
+Published tray-enabled variants:
+
+| Variant | SHA-256 |
+| --- | --- |
+| Lite | `A89967D7EB93B89CBAEC979FCE7EED338FA984299DCD6E0C63D89AF4FC8DD11E` |
+| Portable | `EA7E735451ABF98603C5CA0FCD1287F2B2369879BBBAB0565A57FB70F71D63B5` |

@@ -104,6 +104,9 @@ The implementation and exact verification history are recorded in
 - In Options, select a shortcut field and press a modified letter, number, or
   function key. Choose **Unset** (or press Delete) to clear it. Separate global
   shortcuts can toggle the widget or open Display, Audio, or Devices directly.
+- WinQuickSwitch keeps a native notification-area icon while resident. Left-click
+  the icon or choose **Open WinQuickSwitch** to reveal the widget; right-click it
+  for **Open** and **Exit**. Closing the widget hides it back to the tray.
 - Expand **Display mode shortcuts** to assign a global shortcut to PC screen
   only, Duplicate, Extend, or second screen only. Display mode actions apply
   immediately without a confirmation prompt.

@@ -102,8 +102,12 @@ or expanded shortcut section would cross the current monitor's work area.
 
 The close button, `Esc`, and click-away hide the window. A short activation
 grace prevents the launch or second-instance handoff from being immediately
-undone if Windows is still settling foreground focus. **Quit** is the explicit
-process-exit path. There is no tray icon.
+undone if Windows is still settling foreground focus. A native
+`Shell_NotifyIcon` keeps one notification-area icon for the resident process;
+left-click or **Open WinQuickSwitch** reveals the widget, while **Exit
+WinQuickSwitch** is the explicit process-exit path. The icon is registered on
+the existing WPF window handle and removed during `OnClosed`, so no tray
+process, polling loop, or third-party tray package is required.
 
 Optional sign-in startup writes one quoted command to
 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`. The command contains the
