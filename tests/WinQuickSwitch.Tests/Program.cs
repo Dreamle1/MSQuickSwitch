@@ -3,6 +3,7 @@ using System.Windows.Media;
 using WinQuickSwitch.Features.Audio;
 using WinQuickSwitch.Features.Devices;
 using WinQuickSwitch.Features.Display;
+using WinQuickSwitch.Features.Profiles;
 using WinQuickSwitch.Features.Taskbar;
 using WinQuickSwitch.Features.Widget;
 using WinQuickSwitch.Platform.Windows;
@@ -46,8 +47,10 @@ internal static class Program
             ("Session volume delegates the requested level", SessionVolumeDelegatesRequestedLevel),
             ("Invalid session volume is rejected", InvalidSessionVolumeIsRejected),
             ("Session mute delegates the requested state", SessionMuteDelegatesRequestedState),
+            ("Endpoint volume controls validate and delegate", EndpointVolumeControlsValidateAndDelegate),
             ("General endpoint selection updates both default roles", GeneralEndpointSelectionUpdatesBothRoles),
             ("Communications endpoint selection updates only calls", CommunicationsEndpointSelectionUpdatesCalls),
+            ("Both endpoint selection updates all roles", BothEndpointSelectionUpdatesAllRoles),
             ("Unsupported endpoint selection preserves Settings fallback", UnsupportedEndpointSelectionPreservesFallback),
             ("Volume mixer uses the exact Windows Settings URI", VolumeMixerUsesExactSettingsUri),
             ("Physical device interfaces are grouped by container", PhysicalDeviceInterfacesAreGrouped),
@@ -71,14 +74,19 @@ internal static class Program
             ("Widget settings remove duplicate shortcuts", WidgetSettingsRemoveDuplicates),
             ("Display and favorite shortcuts map to distinct actions", DisplayAndFavoriteShortcutsMapToActions),
             ("Favorite outputs normalize invalid and duplicate devices", FavoriteOutputsNormalizeDevices),
+            ("Favorite inputs normalize and map actions", FavoriteInputsNormalizeAndMapActions),
             ("Reset shortcuts preserves favorite output devices", ResetShortcutsPreservesFavorites),
             ("Widget settings persist without dependencies", WidgetSettingsPersist),
             ("Older widget settings migrate with new shortcuts empty", OlderWidgetSettingsMigrate),
+            ("Profile catalogs normalize duplicates and pinned profiles", ProfileCatalogNormalizes),
+            ("Profile catalogs persist independently", ProfileCatalogPersists),
+            ("Profile actions normalize unsupported values", ProfileActionsNormalize),
             ("Startup registration uses a quoted hidden-start command", StartupRegistrationUsesHiddenCommand),
             ("Startup registration recognizes only the current executable", StartupRegistrationRecognizesCurrentExecutable),
             ("Startup registration can be removed safely", StartupRegistrationCanBeRemoved),
             ("Startup registration failures remain nonfatal", StartupRegistrationFailuresRemainNonfatal),
             ("Global hotkeys register and resolve actions", GlobalHotkeysRegisterAndResolve),
+            ("Global hotkeys register and resolve profiles", GlobalHotkeysRegisterAndResolveProfiles),
             ("Global hotkey conflicts stay isolated", GlobalHotkeyConflictsStayIsolated),
             ("Widget opens below and right of the pointer", WidgetOpensBelowPointer),
             ("Widget flips away from monitor edges", WidgetFlipsAtMonitorEdges),
@@ -406,6 +414,45 @@ internal static class Program
         Equal(1, backend.MuteCallCount);
     }
 
+    private static async Task EndpointVolumeControlsValidateAndDelegate()
+    {
+        FakeAudioEndpointVolumeBackend backend = new()
+        {
+            Snapshot = new AudioEndpointControlSnapshot(0.6f, false),
+        };
+        WindowsAudioEndpointControlService service = new(backend);
+
+        AudioEndpointControlSnapshot? state = await service.GetStateAsync(
+            "endpoint-1");
+        Equal(0.6f, state?.MasterVolume);
+        Equal(false, state?.IsMuted);
+
+        AudioControlResult volumeResult =
+            await service.SetMasterVolumeAsync(
+                "endpoint-1",
+                "USB headset",
+                0.42f);
+        AudioControlResult muteResult = await service.SetMuteAsync(
+            "endpoint-1",
+            "USB headset",
+            true);
+
+        True(volumeResult.Succeeded, volumeResult.Message);
+        True(muteResult.Succeeded, muteResult.Message);
+        Equal(0.42f, backend.Volume);
+        True(backend.IsMuted, "The endpoint mute state should be delegated.");
+        Equal(1, backend.VolumeCallCount);
+        Equal(1, backend.MuteCallCount);
+
+        AudioControlResult invalidResult =
+            await service.SetMasterVolumeAsync(
+                "endpoint-1",
+                "USB headset",
+                1.1f);
+        True(!invalidResult.Succeeded, "Out-of-range master volume should fail.");
+        Equal(1, backend.VolumeCallCount);
+    }
+
     private static async Task GeneralEndpointSelectionUpdatesBothRoles()
     {
         FakeDefaultAudioEndpointSetter setter = new();
@@ -439,6 +486,25 @@ internal static class Program
         True(result.Succeeded, result.Message);
         Equal(1, setter.Calls.Count);
         Equal(("endpoint-2", AudioRole.Communications), setter.Calls[0]);
+    }
+
+    private static async Task BothEndpointSelectionUpdatesAllRoles()
+    {
+        FakeDefaultAudioEndpointSetter setter = new();
+        WindowsDefaultAudioEndpointService service = new(
+            setter,
+            new FakeWindowsSettingsLauncher());
+
+        AudioControlResult result = await service.SetDefaultAsync(
+            "endpoint-3",
+            "Dock headset",
+            AudioDefaultRoleSelection.Both);
+
+        True(result.Succeeded, result.Message);
+        Equal(3, setter.Calls.Count);
+        Equal(("endpoint-3", AudioRole.Console), setter.Calls[0]);
+        Equal(("endpoint-3", AudioRole.Multimedia), setter.Calls[1]);
+        Equal(("endpoint-3", AudioRole.Communications), setter.Calls[2]);
     }
 
     private static async Task UnsupportedEndpointSelectionPreservesFallback()
@@ -984,6 +1050,47 @@ internal static class Program
         return Task.CompletedTask;
     }
 
+    private static Task FavoriteInputsNormalizeAndMapActions()
+    {
+        WidgetShortcut shortcut = new(
+            WidgetHotkeyModifiers.Control | WidgetHotkeyModifiers.Alt,
+            0x49);
+        WidgetSettings settings = WidgetSettings.Default with
+        {
+            FavoriteInput1 = new(
+                "mic-1",
+                "  Desk microphone  ",
+                shortcut,
+                FavoriteEndpointRole.Communications,
+                new string('m', WidgetSettings.MaximumFavoriteAliasLength + 5)),
+            FavoriteInput2 = new("mic-1", "Duplicate microphone", null),
+            FavoriteInput3 = new("", "Missing identifier", null),
+            FavoriteInput4 = new("mic-4", "", null),
+        };
+
+        WidgetSettings normalized = settings.Normalize();
+
+        Equal("Desk microphone", normalized.FavoriteInput1?.Name);
+        Equal(FavoriteEndpointRole.Communications, normalized.FavoriteInput1?.Role);
+        Equal(
+            WidgetSettings.MaximumFavoriteAliasLength,
+            normalized.FavoriteInput1?.Alias?.Length);
+        Equal<FavoriteInputSetting?>(null, normalized.FavoriteInput2);
+        Equal<FavoriteInputSetting?>(null, normalized.FavoriteInput3);
+        Equal<FavoriteInputSetting?>(null, normalized.FavoriteInput4);
+        Equal(1, normalized.FindOpenInputFavoriteSlot());
+        Equal(
+            shortcut,
+            normalized.GetShortcut(WidgetHotkeyAction.FavoriteInput1));
+        True(
+            WidgetSettings.TryGetInputFavoriteSlot(
+                WidgetHotkeyAction.FavoriteInput1,
+                out int slot),
+            "The favorite-input action should resolve to a slot.");
+        Equal(0, slot);
+        return Task.CompletedTask;
+    }
+
     private static Task ResetShortcutsPreservesFavorites()
     {
         WidgetShortcut shortcut = new(
@@ -993,6 +1100,7 @@ internal static class Program
         {
             Duplicate = shortcut,
             FavoriteOutput1 = new("endpoint-1", "Headphones", shortcut),
+            FavoriteInput1 = new("mic-1", "Desk microphone", shortcut),
         };
 
         WidgetSettings reset = settings.ResetShortcuts();
@@ -1001,6 +1109,8 @@ internal static class Program
         Equal<WidgetShortcut?>(null, reset.Duplicate);
         Equal("endpoint-1", reset.FavoriteOutput1?.EndpointId);
         Equal<WidgetShortcut?>(null, reset.FavoriteOutput1?.Shortcut);
+        Equal("mic-1", reset.FavoriteInput1?.EndpointId);
+        Equal<WidgetShortcut?>(null, reset.FavoriteInput1?.Shortcut);
         return Task.CompletedTask;
     }
 
@@ -1082,6 +1192,106 @@ internal static class Program
             File.Delete(settingsPath + ".tmp");
         }
 
+        return Task.CompletedTask;
+    }
+
+    private static Task ProfileCatalogNormalizes()
+    {
+        WidgetShortcut shortcut = new(
+            WidgetHotkeyModifiers.Control | WidgetHotkeyModifiers.Alt,
+            0x50);
+
+        ProfileCatalog catalog = new ProfileCatalog(
+            0,
+            [
+                new ProfileDefinition("work", "  Work  ", true, shortcut),
+                new ProfileDefinition("work", "Duplicate", true, null),
+                new ProfileDefinition("gaming", "Gaming", true, null),
+                new ProfileDefinition("meeting", "Meeting", true, null),
+                new ProfileDefinition("focus", "Focus", true, null),
+                new ProfileDefinition("travel", "Travel", true, null),
+                new ProfileDefinition("", "Invalid", true, null),
+                new ProfileDefinition("missing-name", "", true, null),
+            ]).Normalize();
+
+        Equal(5, catalog.Profiles.Count);
+        Equal(1, catalog.SchemaVersion);
+        Equal("Work", catalog.Profiles[0].Name);
+        True(catalog.Profiles[0].IsPinned, "The first four valid profiles should remain pinned.");
+        True(!catalog.Profiles[4].IsPinned, "Additional pinned profiles should be unpinned.");
+        Equal("Ctrl + Alt + P", catalog.Profiles[0].Shortcut?.DisplayText);
+        return Task.CompletedTask;
+    }
+
+    private static Task ProfileCatalogPersists()
+    {
+        string profilesPath = Path.Combine(
+            Path.GetTempPath(),
+            $"WinQuickSwitch.Profiles.{Guid.NewGuid():N}.json");
+
+        try
+        {
+            ProfileDefinition expected = new(
+                "work",
+                "Work",
+                true,
+                null,
+                DisplayMode.Extend,
+                new ProfileEndpointTarget("speakers", "Desk speakers"),
+                null,
+                new ProfileEndpointTarget("microphone", "USB microphone"),
+                null,
+                TaskbarState.Visible,
+                true,
+                0.42f);
+            JsonProfileStore store = new(profilesPath);
+
+            True(
+                store.TrySave(new ProfileCatalog(0, [expected]), out string? saveError),
+                saveError ?? "Profile save failed.");
+
+            ProfileDefinition loaded = store.Load().Profiles.Single();
+            Equal(expected.Id, loaded.Id);
+            Equal(expected.Name, loaded.Name);
+            Equal(expected.DisplayMode, loaded.DisplayMode);
+            Equal(expected.PlaybackGeneral, loaded.PlaybackGeneral);
+            Equal(expected.RecordingGeneral, loaded.RecordingGeneral);
+            Equal(expected.TaskbarState, loaded.TaskbarState);
+            Equal(expected.MicrophoneMuted, loaded.MicrophoneMuted);
+            Equal(expected.MasterVolume, loaded.MasterVolume);
+        }
+        finally
+        {
+            File.Delete(profilesPath);
+            File.Delete(profilesPath + ".tmp");
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private static Task ProfileActionsNormalize()
+    {
+        ProfileDefinition normalized = new ProfileDefinition(
+            "profile",
+            "Profile",
+            false,
+            null,
+            null,
+            new ProfileEndpointTarget("", "Missing endpoint"),
+            new ProfileEndpointTarget("endpoint", "  Valid endpoint  "),
+            null,
+            null,
+            TaskbarState.Unavailable,
+            null,
+            1.5f).Normalize();
+
+        Equal<ProfileEndpointTarget?>(null, normalized.PlaybackGeneral);
+        Equal(
+            new ProfileEndpointTarget("endpoint", "Valid endpoint"),
+            normalized.PlaybackCommunications);
+        Equal<TaskbarState?>(null, normalized.TaskbarState);
+        Equal<float?>(null, normalized.MasterVolume);
+        True(normalized.HasActions, "A valid endpoint action should remain present.");
         return Task.CompletedTask;
     }
 
@@ -1181,13 +1391,20 @@ internal static class Program
                     WidgetHotkeyModifiers.Control |
                     WidgetHotkeyModifiers.Alt,
                     0x31)),
+            FavoriteInput1 = new FavoriteInputSetting(
+                "mic-1",
+                "Desk microphone",
+                new WidgetShortcut(
+                    WidgetHotkeyModifiers.Control |
+                    WidgetHotkeyModifiers.Alt,
+                    0x32)),
         };
 
         HotkeyRegistrationResult result =
             hotkeys.ApplyBindings(new IntPtr(44), settings);
 
         True(result.Succeeded, result.FirstFailure ?? "Registration failed.");
-        Equal(4, native.Registrations.Count);
+        Equal(5, native.Registrations.Count);
         True(
             hotkeys.TryResolveAction(
                 WindowsGlobalHotkey.GetId(WidgetHotkeyAction.ToggleWidget),
@@ -1212,6 +1429,12 @@ internal static class Program
                 out WidgetHotkeyAction favoriteAction),
             "The favorite-output shortcut was not registered.");
         Equal(WidgetHotkeyAction.FavoriteOutput1, favoriteAction);
+        True(
+            hotkeys.TryResolveAction(
+                WindowsGlobalHotkey.GetId(WidgetHotkeyAction.FavoriteInput1),
+                out WidgetHotkeyAction favoriteInputAction),
+            "The favorite-microphone shortcut was not registered.");
+        Equal(WidgetHotkeyAction.FavoriteInput1, favoriteInputAction);
         True(
             (native.Registrations[0].Modifiers & 0x4000) != 0,
             "MOD_NOREPEAT was not applied.");
@@ -1245,6 +1468,32 @@ internal static class Program
                 out WidgetHotkeyAction action),
             "A conflicting Audio binding should not disable the toggle binding.");
         Equal(WidgetHotkeyAction.ToggleWidget, action);
+        return Task.CompletedTask;
+    }
+
+    private static Task GlobalHotkeysRegisterAndResolveProfiles()
+    {
+        FakeGlobalHotkeyNative native = new();
+        using WindowsGlobalHotkey hotkeys = new(native);
+        ProfileHotkeyBinding binding = new(
+            "profile-work",
+            new WidgetShortcut(
+                WidgetHotkeyModifiers.Control | WidgetHotkeyModifiers.Alt,
+                0x57));
+
+        HotkeyRegistrationResult result = hotkeys.ApplyBindings(
+            new IntPtr(46),
+            WidgetSettings.Default,
+            [binding]);
+
+        True(result.Succeeded, result.FirstFailure ?? "Registration failed.");
+        Equal(2, native.Registrations.Count);
+        True(
+            hotkeys.TryResolveProfileId(
+                native.Registrations[1].Id,
+                out string profileId),
+            "The profile shortcut was not registered.");
+        Equal("profile-work", profileId);
         return Task.CompletedTask;
     }
 
@@ -1632,6 +1881,45 @@ internal static class Program
         {
             MuteCallCount++;
             SessionId = sessionId;
+            IsMuted = isMuted;
+            return AudioControlResult.Success("updated");
+        }
+    }
+
+    private sealed class FakeAudioEndpointVolumeBackend : IAudioEndpointVolumeBackend
+    {
+        public int VolumeCallCount { get; private set; }
+
+        public int MuteCallCount { get; private set; }
+
+        public float Volume { get; private set; }
+
+        public bool IsMuted { get; private set; }
+
+        public AudioEndpointControlSnapshot? Snapshot { get; init; }
+
+        public AudioEndpointControlSnapshot? GetState(
+            string endpointId,
+            CancellationToken cancellationToken) => Snapshot;
+
+        public AudioControlResult SetMasterVolume(
+            string endpointId,
+            string endpointName,
+            float volume,
+            CancellationToken cancellationToken)
+        {
+            VolumeCallCount++;
+            Volume = volume;
+            return AudioControlResult.Success("updated");
+        }
+
+        public AudioControlResult SetMute(
+            string endpointId,
+            string endpointName,
+            bool isMuted,
+            CancellationToken cancellationToken)
+        {
+            MuteCallCount++;
             IsMuted = isMuted;
             return AudioControlResult.Success("updated");
         }

@@ -368,3 +368,56 @@ internal interface ISimpleAudioVolume
 
     void GetMute([MarshalAs(UnmanagedType.Bool)] out bool isMuted);
 }
+
+[ComImport]
+[Guid("5CDF2C82-841E-4546-9722-0CF74078229A")]
+[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+internal interface IAudioEndpointVolume
+{
+    void RegisterControlChangeNotify(IntPtr notify);
+
+    void UnregisterControlChangeNotify(IntPtr notify);
+
+    void GetChannelCount(out uint channelCount);
+
+    void SetMasterVolumeLevel(float level, ref Guid eventContext);
+
+    void SetMasterVolumeLevelScalar(float level, ref Guid eventContext);
+
+    void GetMasterVolumeLevel(out float level);
+
+    void GetMasterVolumeLevelScalar(out float level);
+
+    void SetChannelVolumeLevel(
+        uint channelNumber,
+        float level,
+        ref Guid eventContext);
+
+    void SetChannelVolumeLevelScalar(
+        uint channelNumber,
+        float level,
+        ref Guid eventContext);
+
+    void GetChannelVolumeLevel(uint channelNumber, out float level);
+
+    void GetChannelVolumeLevelScalar(uint channelNumber, out float level);
+
+    void SetMute(
+        [MarshalAs(UnmanagedType.Bool)] bool isMuted,
+        ref Guid eventContext);
+
+    void GetMute([MarshalAs(UnmanagedType.Bool)] out bool isMuted);
+
+    void GetVolumeStepInfo(out uint step, out uint stepCount);
+
+    void VolumeStepUp(ref Guid eventContext);
+
+    void VolumeStepDown(ref Guid eventContext);
+
+    void QueryHardwareSupport(out uint hardwareSupportMask);
+
+    void GetVolumeRange(
+        out float minLevel,
+        out float maxLevel,
+        out float step);
+}

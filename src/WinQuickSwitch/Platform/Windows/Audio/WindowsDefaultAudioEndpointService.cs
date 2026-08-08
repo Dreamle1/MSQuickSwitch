@@ -79,19 +79,26 @@ public sealed class WindowsDefaultAudioEndpointService : IDefaultAudioEndpointSe
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (roleSelection == AudioDefaultRoleSelection.General)
+            if (roleSelection is
+                AudioDefaultRoleSelection.General or
+                AudioDefaultRoleSelection.Both)
             {
                 _endpointSetter.SetDefaultEndpoint(endpointId, AudioRole.Console);
                 cancellationToken.ThrowIfCancellationRequested();
                 _endpointSetter.SetDefaultEndpoint(endpointId, AudioRole.Multimedia);
 
-                return AudioControlResult.Success(
-                    $"{endpointName} is now the default device.");
+                if (roleSelection == AudioDefaultRoleSelection.General)
+                {
+                    return AudioControlResult.Success(
+                        $"{endpointName} is now the default device.");
+                }
             }
 
             _endpointSetter.SetDefaultEndpoint(endpointId, AudioRole.Communications);
-            return AudioControlResult.Success(
-                $"{endpointName} is now the communications device.");
+            return AudioControlResult.Success(roleSelection ==
+                AudioDefaultRoleSelection.Both
+                    ? $"{endpointName} is now the default and communications device."
+                    : $"{endpointName} is now the communications device.");
         }
         catch (OperationCanceledException)
         {

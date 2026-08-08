@@ -29,7 +29,7 @@
           <ColumnDefinition Width="*" />
           <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
-        <UniformGrid Grid.Column="0" Columns="4">
+        <UniformGrid Grid.Column="0" Columns="5">
           <ToggleButton x:Name="DisplayPanelTab"
                         Style="{StaticResource WidgetTabToggle}"
                         Tag="Display"
@@ -55,6 +55,12 @@
                         Checked="PanelTab_Checked"
                         Content="Options"
                         AutomationProperties.Name="Open widget options" />
+          <ToggleButton x:Name="ProfilesPanelTab"
+                        Style="{StaticResource WidgetTabToggle}"
+                        Tag="Profiles"
+                        Checked="PanelTab_Checked"
+                        Content="Profiles"
+                        AutomationProperties.Name="Open saved profiles" />
         </UniformGrid>
         <Button Grid.Column="1"
                 Style="{StaticResource CompactButton}"
@@ -215,6 +221,15 @@
                 </ListBox.ItemTemplate>
               </ListBox>
               <WrapPanel Margin="0,8,0,0">
+                <ComboBox x:Name="PlaybackFavoriteRoleBox"
+                          Width="82"
+                          Margin="0,0,6,0"
+                          SelectedIndex="0"
+                          ToolTip="Choose which Windows audio roles this favorite changes">
+                  <ComboBoxItem Tag="General" Content="Default" />
+                  <ComboBoxItem Tag="Communications" Content="Calls" />
+                  <ComboBoxItem Tag="Both" Content="Both" />
+                </ComboBox>
                 <Button Style="{StaticResource CompactButton}"
                         Tag="PlaybackGeneral"
                         Click="SetDefaultAudioEndpoint_Click"
@@ -227,8 +242,12 @@
                         ToolTip="Set the selected device as Windows' calls default; apps can override it" />
                 <Button Style="{StaticResource CompactButton}"
                         Click="AddFavoriteOutput_Click"
-                        Content="Favorite"
-                        ToolTip="Add the selected output to favorites, or remove it if already saved" />
+                        Content="Add favorite"
+                        ToolTip="Save the selected output as a favorite" />
+                <Button Style="{StaticResource CompactButton}"
+                        Click="RemoveFavoriteOutput_Click"
+                        Content="Remove"
+                        ToolTip="Remove the selected output from favorites" />
               </WrapPanel>
               <TextBlock x:Name="FavoriteOutputsSummaryText"
                          Margin="0,6,0,0"
@@ -247,6 +266,15 @@
                        ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                        ItemTemplate="{Binding ElementName=PlaybackEndpointsList, Path=ItemTemplate}" />
               <WrapPanel Margin="0,8,0,0">
+                <ComboBox x:Name="RecordingFavoriteRoleBox"
+                          Width="82"
+                          Margin="0,0,6,0"
+                          SelectedIndex="0"
+                          ToolTip="Choose which Windows audio roles this favorite changes">
+                  <ComboBoxItem Tag="General" Content="Default" />
+                  <ComboBoxItem Tag="Communications" Content="Calls" />
+                  <ComboBoxItem Tag="Both" Content="Both" />
+                </ComboBox>
                 <Button Style="{StaticResource CompactButton}"
                         Tag="RecordingGeneral"
                         Click="SetDefaultAudioEndpoint_Click"
@@ -257,7 +285,21 @@
                         Click="SetDefaultAudioEndpoint_Click"
                         Content="Calls"
                         ToolTip="Set the selected microphone as Windows' calls default; apps can override it" />
+                <Button Style="{StaticResource CompactButton}"
+                        Click="AddFavoriteInput_Click"
+                        Content="Add favorite"
+                        ToolTip="Save the selected microphone as a favorite" />
+                <Button Style="{StaticResource CompactButton}"
+                        Click="RemoveFavoriteInput_Click"
+                        Content="Remove"
+                        ToolTip="Remove the selected microphone from favorites" />
               </WrapPanel>
+              <TextBlock x:Name="FavoriteInputsSummaryText"
+                         Margin="0,6,0,0"
+                         Foreground="{DynamicResource SecondaryTextBrush}"
+                         Text="Favorites: none"
+                         TextTrimming="CharacterEllipsis"
+                         ToolTip="{Binding RelativeSource={RelativeSource Self}, Path=Text}" />
             </StackPanel>
           </Grid>
 
@@ -622,7 +664,7 @@
             <StackPanel Margin="0,8,0,0">
               <TextBlock x:Name="FavoriteOutputsEmptyText"
                          Foreground="{DynamicResource SecondaryTextBrush}"
-                         Text="In Audio, select an output and choose Favorite."
+                         Text="In Audio, select an output and choose Add favorite."
                          TextWrapping="Wrap" />
               <ItemsControl x:Name="FavoriteOutputShortcutItems">
                 <ItemsControl.ItemTemplate>
@@ -630,8 +672,11 @@
                     <Grid Margin="0,0,0,8">
                       <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="145" />
-                        <ColumnDefinition Width="68" />
+                        <ColumnDefinition Width="100" />
+                        <ColumnDefinition Width="115" />
+                        <ColumnDefinition Width="32" />
+                        <ColumnDefinition Width="32" />
+                        <ColumnDefinition Width="58" />
                       </Grid.ColumnDefinitions>
                       <TextBlock Margin="0,0,8,0"
                                  VerticalAlignment="Center"
@@ -640,11 +685,105 @@
                                  ToolTip="{Binding Name}" />
                       <TextBox Grid.Column="1"
                                Margin="0,0,6,0"
+                               Tag="{Binding Action}"
+                               Text="{Binding Alias, Mode=OneWay}"
+                               LostFocus="FavoriteAlias_LostFocus"
+                               ToolTip="Optional favorite alias"
+                               AutomationProperties.Name="{Binding Name, StringFormat=Alias for {0}}" />
+                      <Button Grid.Column="2"
+                              Margin="0,0,4,0"
+                              Padding="2,4"
+                              Style="{StaticResource CompactButton}"
+                              Tag="{Binding Action}"
+                              Click="MoveFavoriteUp_Click"
+                              Content="↑"
+                              ToolTip="Move favorite up"
+                              AutomationProperties.Name="Move favorite up" />
+                      <Button Grid.Column="3"
+                              Margin="0,0,4,0"
+                              Padding="2,4"
+                              Style="{StaticResource CompactButton}"
+                              Tag="{Binding Action}"
+                              Click="MoveFavoriteDown_Click"
+                              Content="↓"
+                              ToolTip="Move favorite down"
+                              AutomationProperties.Name="Move favorite down" />
+                      <TextBox Grid.Column="4"
+                               Margin="0,0,6,0"
                                IsReadOnly="True"
                                Tag="{Binding Action}"
                                Text="{Binding ShortcutText, Mode=OneWay}"
                                AutomationProperties.Name="{Binding EditorName}" />
+                      <Button Grid.Column="5"
+                              Style="{StaticResource CompactButton}"
+                              Tag="{Binding Action}"
+                              Click="UnsetShortcut_Click"
+                              Content="Unset"
+                              AutomationProperties.Name="{Binding EditorName, StringFormat=Unset {0}}" />
+                    </Grid>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </Expander>
+
+          <Expander x:Name="FavoriteInputShortcutsExpander"
+                    Margin="0,8,0,0"
+                    Header="Favorite microphone shortcuts">
+            <StackPanel Margin="0,8,0,0">
+              <TextBlock x:Name="FavoriteInputsEmptyText"
+                         Foreground="{DynamicResource SecondaryTextBrush}"
+                         Text="In Audio, select a microphone and choose Add favorite."
+                         TextWrapping="Wrap" />
+              <ItemsControl x:Name="FavoriteInputShortcutItems">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Grid Margin="0,0,0,8">
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="100" />
+                        <ColumnDefinition Width="115" />
+                        <ColumnDefinition Width="32" />
+                        <ColumnDefinition Width="32" />
+                        <ColumnDefinition Width="58" />
+                      </Grid.ColumnDefinitions>
+                      <TextBlock Margin="0,0,8,0"
+                                 VerticalAlignment="Center"
+                                 Text="{Binding Name}"
+                                 TextTrimming="CharacterEllipsis"
+                                 ToolTip="{Binding Name}" />
+                      <TextBox Grid.Column="1"
+                               Margin="0,0,6,0"
+                               Tag="{Binding Action}"
+                               Text="{Binding Alias, Mode=OneWay}"
+                               LostFocus="FavoriteAlias_LostFocus"
+                               ToolTip="Optional favorite alias"
+                               AutomationProperties.Name="{Binding Name, StringFormat=Alias for {0}}" />
                       <Button Grid.Column="2"
+                              Margin="0,0,4,0"
+                              Padding="2,4"
+                              Style="{StaticResource CompactButton}"
+                              Tag="{Binding Action}"
+                              Click="MoveFavoriteUp_Click"
+                              Content="↑"
+                              ToolTip="Move favorite up"
+                              AutomationProperties.Name="Move favorite up" />
+                      <Button Grid.Column="3"
+                              Margin="0,0,4,0"
+                              Padding="2,4"
+                              Style="{StaticResource CompactButton}"
+                              Tag="{Binding Action}"
+                              Click="MoveFavoriteDown_Click"
+                              Content="↓"
+                              ToolTip="Move favorite down"
+                              AutomationProperties.Name="Move favorite down" />
+                      <TextBox Grid.Column="4"
+                               Margin="0,0,6,0"
+                               IsReadOnly="True"
+                               Tag="{Binding Action}"
+                               Text="{Binding ShortcutText, Mode=OneWay}"
+                               AutomationProperties.Name="{Binding EditorName}" />
+                      <Button Grid.Column="5"
                               Style="{StaticResource CompactButton}"
                               Tag="{Binding Action}"
                               Click="UnsetShortcut_Click"
@@ -718,6 +857,189 @@
                      Margin="0,10,0,0"
                      Foreground="{DynamicResource SecondaryTextBrush}"
                      Text="Settings are saved automatically."
+                     TextWrapping="Wrap" />
+        </StackPanel>
+      </Border>
+
+      <Border x:Name="ProfilesPanel"
+              Grid.Row="1"
+              Style="{StaticResource SectionCard}"
+              Visibility="Collapsed">
+        <StackPanel>
+          <TextBlock FontSize="17"
+                     FontWeight="SemiBold"
+                     Text="Profiles" />
+          <TextBlock Margin="0,5,0,0"
+                     Foreground="{DynamicResource SecondaryTextBrush}"
+                     Text="Save the settings that define a desk mode. Unchecked items stay unchanged when you apply it."
+                     TextWrapping="Wrap" />
+
+          <TextBox x:Name="ProfileNameBox"
+                   Margin="0,12,0,0"
+                   MinHeight="32"
+                   Padding="8,5"
+                   Text="New profile"
+                   AutomationProperties.Name="Profile name" />
+
+          <UniformGrid Margin="0,10,0,0"
+                       Columns="2">
+            <CheckBox x:Name="ProfileIncludeDisplayCheckBox"
+                      Margin="0,0,8,8"
+                      IsChecked="True"
+                      Content="Display mode" />
+            <CheckBox x:Name="ProfileIncludeTaskbarCheckBox"
+                      Margin="0,0,0,8"
+                      IsChecked="True"
+                      Content="Taskbar" />
+            <CheckBox x:Name="ProfileIncludePlaybackCheckBox"
+                      Margin="0,0,8,0"
+                      IsChecked="True"
+                      Content="Playback" />
+            <CheckBox x:Name="ProfileIncludeRecordingCheckBox"
+                      IsChecked="True"
+                      Content="Recording" />
+          </UniformGrid>
+
+          <TextBlock Margin="0,10,0,0"
+                     FontWeight="SemiBold"
+                     Text="Favorite targets" />
+          <TextBlock Margin="0,3,0,0"
+                     Foreground="{DynamicResource SecondaryTextBrush}"
+                     Text="Optionally use a saved favorite when capturing audio."
+                     TextWrapping="Wrap" />
+          <TextBlock Margin="0,8,0,0"
+                     Text="Playback favorite (optional)" />
+          <ComboBox x:Name="ProfilePlaybackFavoriteBox"
+                    Margin="0,4,0,0"
+                    DisplayMemberPath="Name"
+                    SelectedIndex="0" />
+          <TextBlock Margin="0,8,0,0"
+                     Text="Microphone favorite (optional)" />
+          <ComboBox x:Name="ProfileRecordingFavoriteBox"
+                    Margin="0,4,0,0"
+                    DisplayMemberPath="Name"
+                    SelectedIndex="0" />
+
+          <CheckBox x:Name="ProfilePinCheckBox"
+                    Margin="0,8,0,0"
+                    Content="Pin after saving" />
+          <Button x:Name="SaveProfileButton"
+                  Margin="0,10,0,0"
+                  HorizontalAlignment="Left"
+                  Style="{StaticResource CompactButton}"
+                  Click="SaveCurrentProfile_Click"
+                  Content="Save current setup" />
+          <Button x:Name="CancelProfileEditButton"
+                  Margin="0,6,0,0"
+                  HorizontalAlignment="Left"
+                  Style="{StaticResource CompactButton}"
+                  Click="CancelProfileEdit_Click"
+                  Content="Cancel edit"
+                  Visibility="Collapsed" />
+          <Button x:Name="UndoProfileButton"
+                  Margin="0,6,0,0"
+                  HorizontalAlignment="Left"
+                  Style="{StaticResource CompactButton}"
+                  Click="UndoProfile_Click"
+                  Content="Undo last profile"
+                  Visibility="Collapsed" />
+
+          <TextBlock x:Name="ProfileEmptyText"
+                     Margin="0,14,0,0"
+                     Foreground="{DynamicResource SecondaryTextBrush}"
+                     Text="No profiles saved yet."
+                     TextWrapping="Wrap" />
+          <ItemsControl x:Name="ProfileItems"
+                        Margin="0,10,0,0">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Border Margin="0,0,0,8"
+                        Padding="8"
+                        BorderBrush="{DynamicResource BorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="4">
+                  <Grid>
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="132" />
+                      <ColumnDefinition Width="58" />
+                      <ColumnDefinition Width="58" />
+                      <ColumnDefinition Width="58" />
+                      <ColumnDefinition Width="58" />
+                      <ColumnDefinition Width="58" />
+                      <ColumnDefinition Width="58" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Margin="0,0,8,0">
+                      <TextBlock FontWeight="SemiBold"
+                                 Text="{Binding Name}"
+                                 TextTrimming="CharacterEllipsis"
+                                 ToolTip="{Binding Name}" />
+                      <TextBlock Margin="0,3,0,0"
+                                 Foreground="{DynamicResource SecondaryTextBrush}"
+                                 Text="{Binding Summary}"
+                                 TextWrapping="Wrap" />
+                    </StackPanel>
+                    <TextBox Grid.Column="1"
+                             Margin="0,0,4,0"
+                             MinHeight="28"
+                             Padding="5,3"
+                             HorizontalContentAlignment="Center"
+                             IsReadOnly="True"
+                             Text="{Binding ShortcutText}"
+                             Tag="{Binding Id}"
+                             PreviewKeyDown="ProfileShortcut_PreviewKeyDown"
+                             ToolTip="Click here, then press a shortcut. Delete clears it." />
+                    <Button Grid.Column="2"
+                            Margin="0,0,4,0"
+                            Style="{StaticResource CompactButton}"
+                            Tag="{Binding Id}"
+                            Click="UnsetProfileShortcut_Click"
+                            Content="Unset"
+                            ToolTip="Clear this profile shortcut" />
+                    <Button Grid.Column="3"
+                            Margin="0,0,4,0"
+                            Style="{StaticResource CompactButton}"
+                            Tag="{Binding Id}"
+                            Click="ApplyProfile_Click"
+                            Content="Apply"
+                            ToolTip="Apply this profile" />
+                    <Button Grid.Column="4"
+                            Margin="0,0,4,0"
+                            Style="{StaticResource CompactButton}"
+                            Tag="{Binding Id}"
+                            Click="EditProfile_Click"
+                            Content="Edit"
+                            ToolTip="Edit this profile" />
+                    <Button Grid.Column="5"
+                            Margin="0,0,4,0"
+                            Style="{StaticResource CompactButton}"
+                            Tag="{Binding Id}"
+                            Click="DuplicateProfile_Click"
+                            Content="Copy"
+                            ToolTip="Duplicate this profile" />
+                    <Button Grid.Column="6"
+                            Margin="0,0,4,0"
+                            Style="{StaticResource CompactButton}"
+                            Tag="{Binding Id}"
+                            Click="ToggleProfilePin_Click"
+                            Content="{Binding PinLabel}"
+                            ToolTip="Pin or unpin this profile" />
+                    <Button Grid.Column="7"
+                            Style="{StaticResource CompactButton}"
+                            Tag="{Binding Id}"
+                            Click="DeleteProfile_Click"
+                            Content="Delete"
+                            ToolTip="Delete this profile" />
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <TextBlock x:Name="ProfilesStatusText"
+                     Margin="0,6,0,0"
+                     Foreground="{DynamicResource SecondaryTextBrush}"
+                     Text="Profiles are saved locally."
                      TextWrapping="Wrap" />
         </StackPanel>
       </Border>

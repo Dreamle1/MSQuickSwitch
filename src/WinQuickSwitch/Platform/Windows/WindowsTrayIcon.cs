@@ -15,6 +15,7 @@ internal sealed class WindowsTrayIcon : IDisposable
     private const uint NotifyIconSetVersion = 0x00000004;
     private const uint NotifyIconVersion4 = 4;
     private const uint MenuString = 0x00000000;
+    private const uint MenuSeparator = 0x00000800;
     private const uint TrackMenuReturnCommand = 0x0100;
     private const uint TrackMenuRightButton = 0x0002;
     private const int MouseLeftButtonUp = 0x0202;
@@ -26,6 +27,7 @@ internal sealed class WindowsTrayIcon : IDisposable
     private readonly IntPtr _windowHandle;
     private readonly uint _iconId;
     private NOTIFYICONDATA _iconData;
+    private IReadOnlyList<string> _favoriteLabels = [];
     private bool _isRegistered;
     private bool _isDisposed;
 
@@ -66,6 +68,13 @@ internal sealed class WindowsTrayIcon : IDisposable
     public event EventHandler? OpenRequested;
 
     public event EventHandler? QuitRequested;
+
+    public event EventHandler<TrayFavoriteRequestedEventArgs>? FavoriteRequested;
+
+    public void SetFavoriteItems(IReadOnlyList<string> labels)
+    {
+        _favoriteLabels = labels.ToArray();
+    }
 
     public bool HandleWindowMessage(int message, IntPtr parameter)
     {
@@ -121,6 +130,31 @@ internal sealed class WindowsTrayIcon : IDisposable
                 MenuString,
                 (UIntPtr)TrayMenuCommand.Open,
                 "Open WinQuickSwitch");
+
+            if (_favoriteLabels.Count > 0)
+            {
+                AppendMenu(
+                    menu,
+                    MenuSeparator,
+                    UIntPtr.Zero,
+                    string.Empty);
+
+                for (int index = 0; index < _favoriteLabels.Count; index++)
+                {
+                    AppendMenu(
+                        menu,
+                        MenuString,
+                        (UIntPtr)((uint)TrayMenuCommand.FavoriteBase +
+                            (uint)index),
+                        _favoriteLabels[index]);
+                }
+            }
+
+            AppendMenu(
+                menu,
+                MenuSeparator,
+                UIntPtr.Zero,
+                string.Empty);
             AppendMenu(
                 menu,
                 MenuString,
@@ -146,6 +180,19 @@ internal sealed class WindowsTrayIcon : IDisposable
                 case TrayMenuCommand.Quit:
                     QuitRequested?.Invoke(this, EventArgs.Empty);
                     break;
+                default:
+                    if (command >= (uint)TrayMenuCommand.FavoriteBase &&
+                        command < (uint)TrayMenuCommand.FavoriteBase +
+                            (uint)_favoriteLabels.Count)
+                    {
+                        FavoriteRequested?.Invoke(
+                            this,
+                            new TrayFavoriteRequestedEventArgs(
+                                (int)(command -
+                                    (uint)TrayMenuCommand.FavoriteBase)));
+                    }
+
+                    break;
             }
         }
         finally
@@ -159,6 +206,7 @@ internal sealed class WindowsTrayIcon : IDisposable
     {
         Open = 1,
         Quit = 2,
+        FavoriteBase = 100,
     }
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
@@ -243,4 +291,9 @@ internal sealed class WindowsTrayIcon : IDisposable
         int message,
         IntPtr wordParameter,
         IntPtr longParameter);
+}
+
+internal sealed class TrayFavoriteRequestedEventArgs(int index) : EventArgs
+{
+    public int Index { get; } = index;
 }

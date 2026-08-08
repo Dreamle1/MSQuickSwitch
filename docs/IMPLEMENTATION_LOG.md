@@ -1080,3 +1080,30 @@ Published taskbar-control variants:
 | --- | --- |
 | Lite | `8E1E4580986A400D02766EA12EE81441FB4D99A0A68724467F4A01584D222623` |
 | Portable | `31717007932B61B9FFFAC952C3C8E913A498BBF2A195C9DC32B5B630CEF1EDFE` |
+
+## 2026-08-07 - favorites and profiles milestone
+
+### Implemented
+
+- Added four playback and four microphone favorites with aliases, ordering,
+  explicit removal, role selection, and disconnected-device persistence.
+- Added profile capture, editing, duplication, pinning, application, deletion,
+  partial-success warnings, and in-session undo.
+- Added profile playback/microphone favorite selectors and optional master
+  volume and microphone mute state.
+- Added role-aware favorites to the tray menu.
+- Added optional profile global shortcuts with collision-safe dynamic IDs.
+
+### Verification
+
+- Release build: passed with 0 warnings and 0 errors.
+- Automated checks: 73 passed, 0 failed.
+- Source diff check: passed.
+- Published both Lite and Portable EXE variants from the verified Release build.
+
+Published favorites-and-profiles variants:
+
+| Variant | SHA-256 | Size |
+| --- | --- | ---: |
+| Lite | `36FD1A603087ED897732F684A94E528863AFC266FAD15DD49D314BFAB5E7BA89` | 27,052,010 bytes |
+| Portable | `D8E7D97A1B6C2E3B19A7466A6563FDC7D72FF3E0555832945C3D53F9AF3B1C65` | 71,518,418 bytes |

@@ -9,6 +9,7 @@ using System.Windows.Threading;
 using WinQuickSwitch.Features.Audio;
 using WinQuickSwitch.Features.Devices;
 using WinQuickSwitch.Features.Display;
+using WinQuickSwitch.Features.Profiles;
 using WinQuickSwitch.Features.Taskbar;
 using WinQuickSwitch.Features.Widget;
 using WinQuickSwitch.Platform.Windows;
@@ -25,12 +26,14 @@ public partial class MainWindow : Window
     private readonly IAudioInventoryService _audioInventoryService;
     private readonly IAudioChangeWatcher _audioChangeWatcher;
     private readonly IAudioSessionControlService _audioSessionControlService;
+    private readonly IAudioEndpointControlService _audioEndpointControlService;
     private readonly IDefaultAudioEndpointService _defaultAudioEndpointService;
     private readonly IDeviceInventoryService _deviceInventoryService;
     private readonly IDeviceSettingsService _deviceSettingsService;
     private readonly IWirelessRadioService _wirelessRadioService;
     private readonly ITaskbarService _taskbarService;
     private readonly IWidgetSettingsStore _widgetSettingsStore;
+    private readonly IProfileStore _profileStore;
     private readonly IStartupRegistrationService _startupRegistrationService;
     private readonly WindowsGlobalHotkey _globalHotkey = new();
     private readonly WindowsWidgetPlacementService _placementService = new();
@@ -47,6 +50,10 @@ public partial class MainWindow : Window
     private DisplayMode? _currentDisplayMode;
     private WidgetPanel _activePanel = WidgetPanel.Display;
     private WidgetSettings _widgetSettings;
+    private ProfileCatalog _profileCatalog;
+    private string? _editingProfileId;
+    private ProfileDefinition? _profileUndo;
+    private bool _isApplyingProfile;
     private string? _audioWatcherStatusSuffix;
     private string? _hotkeyStatusSuffix;
     private bool _isAudioWatcherRunning;
@@ -64,12 +71,14 @@ public partial class MainWindow : Window
         new WindowsAudioInventoryService(),
         new WindowsAudioChangeWatcher(),
         new WindowsAudioSessionControlService(),
+        new WindowsAudioEndpointControlService(),
         new WindowsDefaultAudioEndpointService(),
         new WindowsDeviceInventoryService(),
         new WindowsDeviceSettingsService(),
         new WindowsWirelessRadioService(),
         new WindowsTaskbarService(),
         new JsonWidgetSettingsStore(),
+        new JsonProfileStore(),
         new WindowsStartupRegistrationService())
     {
     }
@@ -80,12 +89,14 @@ public partial class MainWindow : Window
         IAudioInventoryService audioInventoryService,
         IAudioChangeWatcher audioChangeWatcher,
         IAudioSessionControlService audioSessionControlService,
+        IAudioEndpointControlService audioEndpointControlService,
         IDefaultAudioEndpointService defaultAudioEndpointService,
         IDeviceInventoryService deviceInventoryService,
         IDeviceSettingsService deviceSettingsService,
         IWirelessRadioService wirelessRadioService,
         ITaskbarService taskbarService,
         IWidgetSettingsStore widgetSettingsStore,
+        IProfileStore profileStore,
         IStartupRegistrationService startupRegistrationService)
     {
         _displayModeService = displayModeService;
@@ -93,14 +104,17 @@ public partial class MainWindow : Window
         _audioInventoryService = audioInventoryService;
         _audioChangeWatcher = audioChangeWatcher;
         _audioSessionControlService = audioSessionControlService;
+        _audioEndpointControlService = audioEndpointControlService;
         _defaultAudioEndpointService = defaultAudioEndpointService;
         _deviceInventoryService = deviceInventoryService;
         _deviceSettingsService = deviceSettingsService;
         _wirelessRadioService = wirelessRadioService;
         _taskbarService = taskbarService;
         _widgetSettingsStore = widgetSettingsStore;
+        _profileStore = profileStore;
         _startupRegistrationService = startupRegistrationService;
         _widgetSettings = _widgetSettingsStore.Load();
+        _profileCatalog = _profileStore.Load();
         WidgetTheme.Apply(_widgetSettings.UseDarkTheme);
         InitializeComponent();
         UpdateOptionsControls();
@@ -128,6 +142,8 @@ public partial class MainWindow : Window
             _trayIcon = new WindowsTrayIcon(_windowHandle);
             _trayIcon.OpenRequested += TrayIcon_OpenRequested;
             _trayIcon.QuitRequested += TrayIcon_QuitRequested;
+            _trayIcon.FavoriteRequested += TrayIcon_FavoriteRequested;
+            _trayIcon.SetFavoriteItems(BuildTrayFavoriteLabels());
         }
         catch (Win32Exception)
         {
@@ -153,6 +169,7 @@ public partial class MainWindow : Window
         {
             _trayIcon.OpenRequested -= TrayIcon_OpenRequested;
             _trayIcon.QuitRequested -= TrayIcon_QuitRequested;
+            _trayIcon.FavoriteRequested -= TrayIcon_FavoriteRequested;
             _trayIcon.Dispose();
             _trayIcon = null;
         }
@@ -217,6 +234,14 @@ public partial class MainWindow : Window
             HandleGlobalHotkey(action);
             handled = true;
         }
+        else if (message == WindowsGlobalHotkey.WmHotkey &&
+            _globalHotkey.TryResolveProfileId(
+                wordParameter.ToInt32(),
+                out string profileId))
+        {
+            HandleProfileHotkey(profileId);
+            handled = true;
+        }
         else if (_trayIcon?.HandleWindowMessage(message, longParameter) == true)
         {
             handled = true;
@@ -267,8 +292,22 @@ public partial class MainWindow : Window
                 {
                     await ApplyFavoriteOutputFromHotkeyAsync(slot);
                 }
+                else if (WidgetSettings.TryGetInputFavoriteSlot(action, out int inputSlot))
+                {
+                    await ApplyFavoriteInputFromHotkeyAsync(inputSlot);
+                }
 
                 break;
+        }
+    }
+
+    private async void HandleProfileHotkey(string profileId)
+    {
+        ProfileDefinition? profile = FindProfile(profileId);
+
+        if (profile is not null)
+        {
+            await ApplyProfileAsync(profile);
         }
     }
 
@@ -331,14 +370,42 @@ public partial class MainWindow : Window
             return;
         }
 
+        await ApplyFavoriteEndpointFromHotkeyAsync(
+            favorite.EndpointId,
+            favorite.Name,
+            favorite.Role);
+    }
+
+    private async Task ApplyFavoriteInputFromHotkeyAsync(int slot)
+    {
+        FavoriteInputSetting? favorite = _widgetSettings.GetInputFavorite(slot);
+
+        if (favorite is null)
+        {
+            return;
+        }
+
+        await ApplyFavoriteEndpointFromHotkeyAsync(
+            favorite.EndpointId,
+            favorite.Name,
+            favorite.Role);
+    }
+
+    private async Task ApplyFavoriteEndpointFromHotkeyAsync(
+        string endpointId,
+        string endpointName,
+        FavoriteEndpointRole favoriteRole)
+    {
+        AudioDefaultRoleSelection roleSelection = ToAudioRoleSelection(favoriteRole);
+
         AudioControlResult result;
 
         try
         {
             result = await _defaultAudioEndpointService.SetDefaultAsync(
-                favorite.EndpointId,
-                favorite.Name,
-                AudioDefaultRoleSelection.General,
+                endpointId,
+                endpointName,
+                roleSelection,
                 _lifetimeCancellation.Token);
         }
         catch (OperationCanceledException) when (
@@ -359,6 +426,16 @@ public partial class MainWindow : Window
             _audioRefreshScheduler.Schedule();
         }
     }
+
+    private static AudioDefaultRoleSelection ToAudioRoleSelection(
+        FavoriteEndpointRole role) =>
+        role switch
+        {
+            FavoriteEndpointRole.Communications =>
+                AudioDefaultRoleSelection.Communications,
+            FavoriteEndpointRole.Both => AudioDefaultRoleSelection.Both,
+            _ => AudioDefaultRoleSelection.General,
+        };
 
     private static bool TryGetDisplayMode(
         WidgetHotkeyAction action,
@@ -408,6 +485,8 @@ public partial class MainWindow : Window
             panel == WidgetPanel.Devices ? Visibility.Visible : Visibility.Collapsed;
         OptionsPanel.Visibility =
             panel == WidgetPanel.Options ? Visibility.Visible : Visibility.Collapsed;
+        ProfilesPanel.Visibility =
+            panel == WidgetPanel.Profiles ? Visibility.Visible : Visibility.Collapsed;
 
         _isApplyingPanelSelection = true;
 
@@ -417,6 +496,7 @@ public partial class MainWindow : Window
             AudioPanelTab.IsChecked = panel == WidgetPanel.Audio;
             DevicesPanelTab.IsChecked = panel == WidgetPanel.Devices;
             OptionsPanelTab.IsChecked = panel == WidgetPanel.Options;
+            ProfilesPanelTab.IsChecked = panel == WidgetPanel.Profiles;
         }
         finally
         {
@@ -452,6 +532,10 @@ public partial class MainWindow : Window
                 UpdateOptionsControls();
                 RefreshTaskbarState();
                 ToggleShortcutBox.Focus();
+                break;
+            case WidgetPanel.Profiles:
+                UpdateProfilesControls();
+                ProfileNameBox.Focus();
                 break;
         }
     }
@@ -597,6 +681,24 @@ public partial class MainWindow : Window
         QuitWidget();
     }
 
+    private async void TrayIcon_FavoriteRequested(
+        object? sender,
+        TrayFavoriteRequestedEventArgs e)
+    {
+        List<TrayFavoriteTarget> targets = GetTrayFavoriteTargets();
+
+        if (e.Index < 0 || e.Index >= targets.Count)
+        {
+            return;
+        }
+
+        TrayFavoriteTarget target = targets[e.Index];
+        await ApplyFavoriteEndpointFromHotkeyAsync(
+            target.EndpointId,
+            target.Name,
+            target.Role);
+    }
+
     private void MainWindow_Deactivated(object? sender, EventArgs e)
     {
         if (IsVisible &&
@@ -631,10 +733,22 @@ public partial class MainWindow : Window
         Close();
     }
 
-    private HotkeyRegistrationResult ApplyHotkeyBindings(WidgetSettings settings)
+    private HotkeyRegistrationResult ApplyHotkeyBindings(
+        WidgetSettings settings,
+        ProfileCatalog? profileCatalog = null)
     {
+        ProfileCatalog catalog = profileCatalog ?? _profileCatalog;
+        List<ProfileHotkeyBinding> profileBindings = catalog.Profiles
+            .Where(profile => profile.Shortcut is { IsValid: true })
+            .Select(profile => new ProfileHotkeyBinding(
+                profile.Id,
+                profile.Shortcut!))
+            .ToList();
         HotkeyRegistrationResult result =
-            _globalHotkey.ApplyBindings(_windowHandle, settings);
+            _globalHotkey.ApplyBindings(
+                _windowHandle,
+                settings,
+                profileBindings);
 
         if (result.Succeeded)
         {
@@ -686,8 +800,10 @@ public partial class MainWindow : Window
                 }
 
                 favoriteOptions.Add(new(
+                    slot,
                     WidgetSettings.GetFavoriteAction(slot),
                     favorite.Name,
+                    favorite.Alias ?? string.Empty,
                     FormatShortcut(favorite.Shortcut),
                     $"{favorite.Name} shortcut"));
             }
@@ -696,10 +812,39 @@ public partial class MainWindow : Window
             FavoriteOutputsEmptyText.Visibility = favoriteOptions.Count == 0
                 ? Visibility.Visible
                 : Visibility.Collapsed;
+
+            List<FavoriteInputShortcutOption> favoriteInputOptions = [];
+
+            for (int slot = 0;
+                 slot < WidgetSettings.MaximumFavoriteInputs;
+                 slot++)
+            {
+                FavoriteInputSetting? favorite =
+                    _widgetSettings.GetInputFavorite(slot);
+
+                if (favorite is null)
+                {
+                    continue;
+                }
+
+                favoriteInputOptions.Add(new(
+                    slot,
+                    WidgetSettings.GetInputFavoriteAction(slot),
+                    favorite.Name,
+                    favorite.Alias ?? string.Empty,
+                    FormatShortcut(favorite.Shortcut),
+                    $"{favorite.Name} shortcut"));
+            }
+
+            FavoriteInputShortcutItems.ItemsSource = favoriteInputOptions;
+            FavoriteInputsEmptyText.Visibility = favoriteInputOptions.Count == 0
+                ? Visibility.Visible
+                : Visibility.Collapsed;
             DarkThemeCheckBox.IsChecked = _widgetSettings.UseDarkTheme;
             StartWithWindowsCheckBox.IsChecked =
                 _startupRegistrationService.IsEnabled;
             UpdateFavoriteOutputsSummary();
+            _trayIcon?.SetFavoriteItems(BuildTrayFavoriteLabels());
         }
         finally
         {
@@ -904,6 +1049,100 @@ public partial class MainWindow : Window
         ApplyShortcutChange(action, null);
     }
 
+    private void FavoriteAlias_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (sender is not TextBox { Tag: WidgetHotkeyAction action, Text: string alias })
+        {
+            return;
+        }
+
+        if (WidgetSettings.TryGetFavoriteSlot(action, out int outputSlot) &&
+            _widgetSettings.GetFavorite(outputSlot) is FavoriteOutputSetting outputFavorite)
+        {
+            _widgetSettings = _widgetSettings.WithFavorite(
+                outputSlot,
+                outputFavorite with { Alias = alias });
+            UpdateOptionsControls();
+            SaveSettings("Favorite alias saved.");
+            return;
+        }
+
+        if (WidgetSettings.TryGetInputFavoriteSlot(action, out int inputSlot) &&
+            _widgetSettings.GetInputFavorite(inputSlot) is FavoriteInputSetting inputFavorite)
+        {
+            _widgetSettings = _widgetSettings.WithInputFavorite(
+                inputSlot,
+                inputFavorite with { Alias = alias });
+            UpdateOptionsControls();
+            SaveSettings("Favorite alias saved.");
+        }
+    }
+
+    private void MoveFavoriteUp_Click(object sender, RoutedEventArgs e) =>
+        MoveFavorite(sender, -1);
+
+    private void MoveFavoriteDown_Click(object sender, RoutedEventArgs e) =>
+        MoveFavorite(sender, 1);
+
+    private void MoveFavorite(object sender, int offset)
+    {
+        if (sender is not Button { Tag: WidgetHotkeyAction action })
+        {
+            return;
+        }
+
+        if (WidgetSettings.TryGetFavoriteSlot(action, out int outputSlot))
+        {
+            int targetSlot = outputSlot + offset;
+
+            if (targetSlot is < 0 or >= WidgetSettings.MaximumFavoriteOutputs ||
+                _widgetSettings.GetFavorite(outputSlot) is not FavoriteOutputSetting favorite)
+            {
+                return;
+            }
+
+            FavoriteOutputSetting? displaced =
+                _widgetSettings.GetFavorite(targetSlot);
+            WidgetSettings candidate = _widgetSettings
+                .WithFavorite(outputSlot, displaced)
+                .WithFavorite(targetSlot, favorite);
+            HotkeyRegistrationResult result = ApplyHotkeyBindings(candidate);
+            _widgetSettings = candidate;
+            UpdateOptionsControls();
+            SaveSettings(
+                result.Succeeded
+                    ? "Favorite order updated."
+                    : result.FirstFailure ??
+                        "Favorite order updated; a shortcut is unavailable.");
+            return;
+        }
+
+        if (WidgetSettings.TryGetInputFavoriteSlot(action, out int inputSlot))
+        {
+            int targetSlot = inputSlot + offset;
+
+            if (targetSlot is < 0 or >= WidgetSettings.MaximumFavoriteInputs ||
+                _widgetSettings.GetInputFavorite(inputSlot) is not FavoriteInputSetting favorite)
+            {
+                return;
+            }
+
+            FavoriteInputSetting? displaced =
+                _widgetSettings.GetInputFavorite(targetSlot);
+            WidgetSettings candidate = _widgetSettings
+                .WithInputFavorite(inputSlot, displaced)
+                .WithInputFavorite(targetSlot, favorite);
+            HotkeyRegistrationResult result = ApplyHotkeyBindings(candidate);
+            _widgetSettings = candidate;
+            UpdateOptionsControls();
+            SaveSettings(
+                result.Succeeded
+                    ? "Favorite order updated."
+                    : result.FirstFailure ??
+                        "Favorite order updated; a shortcut is unavailable.");
+        }
+    }
+
     private void SaveSettings(
         string successMessage,
         TextBlock? statusText = null)
@@ -993,6 +1232,7 @@ public partial class MainWindow : Window
                 Key.D2 or Key.NumPad2 => WidgetPanel.Audio,
                 Key.D3 or Key.NumPad3 => WidgetPanel.Devices,
                 Key.D4 or Key.NumPad4 => WidgetPanel.Options,
+                Key.D5 or Key.NumPad5 => WidgetPanel.Profiles,
                 _ => null,
             };
 
@@ -1070,15 +1310,16 @@ public partial class MainWindow : Window
         await ApplyDisplayModeAsync(mode);
     }
 
-    private async Task ApplyDisplayModeAsync(DisplayMode mode)
+    private async Task<bool> ApplyDisplayModeAsync(DisplayMode mode)
     {
         if (_currentDisplayMode == mode)
         {
             SetDisplayModeSelection(mode);
-            return;
+            return true;
         }
 
         DisplayMode? previousMode = _currentDisplayMode;
+        bool succeeded = false;
         SetDisplayModeSelection(mode);
         DisplayModeButtons.IsEnabled = false;
         DisplayStatusText.Text = $"Switching to {mode.GetDisplayName()}...";
@@ -1091,6 +1332,7 @@ public partial class MainWindow : Window
 
             if (result.Succeeded)
             {
+                succeeded = true;
                 DisplayTopologySnapshot snapshot =
                     await DisplayTransitionMonitor.WaitForModeAsync(
                         _displayTopologyService,
@@ -1125,6 +1367,8 @@ public partial class MainWindow : Window
                 DisplayModeButtons.IsEnabled = true;
             }
         }
+
+        return succeeded;
     }
 
     private void RefreshDisplayTopology()
@@ -1366,21 +1610,10 @@ public partial class MainWindow : Window
             return;
         }
 
-        int existingSlot = _widgetSettings.FindFavoriteSlot(endpoint.Id);
-
-        if (existingSlot >= 0)
+        if (_widgetSettings.FindFavoriteSlot(endpoint.Id) >= 0)
         {
-            WidgetSettings candidate =
-                _widgetSettings.WithFavorite(existingSlot, null);
-            HotkeyRegistrationResult result = ApplyHotkeyBindings(candidate);
-            _widgetSettings = candidate;
-            UpdateOptionsControls();
-            SaveSettings(
-                result.Succeeded
-                    ? $"{endpoint.Name} removed from favorites."
-                    : result.FirstFailure ??
-                        "Favorite removed; a shortcut is unavailable.",
-                AudioStatusText);
+            AudioStatusText.Text =
+                "That output is already a favorite; choose Remove to delete it.";
             return;
         }
 
@@ -1393,14 +1626,147 @@ public partial class MainWindow : Window
             return;
         }
 
-        _widgetSettings = _widgetSettings.WithFavorite(
+        WidgetSettings candidate = _widgetSettings.WithFavorite(
             openSlot,
-            new FavoriteOutputSetting(endpoint.Id, endpoint.Name, null));
+            new FavoriteOutputSetting(
+                endpoint.Id,
+                endpoint.Name,
+                null,
+                GetSelectedFavoriteRole(PlaybackFavoriteRoleBox)));
+        HotkeyRegistrationResult result = ApplyHotkeyBindings(candidate);
+        _widgetSettings = candidate;
         UpdateOptionsControls();
         SaveSettings(
-            $"{endpoint.Name} added to favorites.",
+            result.Succeeded
+                ? $"{endpoint.Name} added to favorites."
+                : result.FirstFailure ??
+                    "Favorite added; a shortcut is unavailable.",
             AudioStatusText);
     }
+
+    private void RemoveFavoriteOutput_Click(object sender, RoutedEventArgs e)
+    {
+        if (PlaybackEndpointsList.SelectedItem is not AudioEndpointInfo endpoint)
+        {
+            AudioStatusText.Text = "Select an output device first.";
+            return;
+        }
+
+        int slot = _widgetSettings.FindFavoriteSlot(endpoint.Id);
+
+        if (slot < 0)
+        {
+            AudioStatusText.Text = "That output is not a favorite.";
+            return;
+        }
+
+        WidgetSettings candidate = _widgetSettings.WithFavorite(slot, null);
+        HotkeyRegistrationResult result = ApplyHotkeyBindings(candidate);
+        _widgetSettings = candidate;
+        UpdateOptionsControls();
+        SaveSettings(
+            result.Succeeded
+                ? $"{endpoint.Name} removed from favorites."
+                : result.FirstFailure ??
+                    "Favorite removed; a shortcut is unavailable.",
+            AudioStatusText);
+    }
+
+    private void AddFavoriteInput_Click(object sender, RoutedEventArgs e)
+    {
+        if (RecordingEndpointsList.SelectedItem is not AudioEndpointInfo endpoint)
+        {
+            AudioStatusText.Text = "Select a microphone first.";
+            return;
+        }
+
+        if (_widgetSettings.FindInputFavoriteSlot(endpoint.Id) >= 0)
+        {
+            AudioStatusText.Text =
+                "That microphone is already a favorite; choose Remove to delete it.";
+            return;
+        }
+
+        int openSlot = _widgetSettings.FindOpenInputFavoriteSlot();
+
+        if (openSlot < 0)
+        {
+            AudioStatusText.Text =
+                $"You can save up to {WidgetSettings.MaximumFavoriteInputs} microphone favorites.";
+            return;
+        }
+
+        WidgetSettings candidate = _widgetSettings.WithInputFavorite(
+            openSlot,
+            new FavoriteInputSetting(
+                endpoint.Id,
+                endpoint.Name,
+                null,
+                GetSelectedFavoriteRole(RecordingFavoriteRoleBox)));
+        HotkeyRegistrationResult result = ApplyHotkeyBindings(candidate);
+        _widgetSettings = candidate;
+        UpdateOptionsControls();
+        SaveSettings(
+            result.Succeeded
+                ? $"{endpoint.Name} added to microphone favorites."
+                : result.FirstFailure ??
+                    "Favorite added; a shortcut is unavailable.",
+            AudioStatusText);
+    }
+
+    private void RemoveFavoriteInput_Click(object sender, RoutedEventArgs e)
+    {
+        if (RecordingEndpointsList.SelectedItem is not AudioEndpointInfo endpoint)
+        {
+            AudioStatusText.Text = "Select a microphone first.";
+            return;
+        }
+
+        int slot = _widgetSettings.FindInputFavoriteSlot(endpoint.Id);
+
+        if (slot < 0)
+        {
+            AudioStatusText.Text = "That microphone is not a favorite.";
+            return;
+        }
+
+        WidgetSettings candidate = _widgetSettings.WithInputFavorite(slot, null);
+        HotkeyRegistrationResult result = ApplyHotkeyBindings(candidate);
+        _widgetSettings = candidate;
+        UpdateOptionsControls();
+        SaveSettings(
+            result.Succeeded
+                ? $"{endpoint.Name} removed from microphone favorites."
+                : result.FirstFailure ??
+                    "Favorite removed; a shortcut is unavailable.",
+            AudioStatusText);
+    }
+
+    private static FavoriteEndpointRole GetSelectedFavoriteRole(
+        ComboBox comboBox) =>
+        comboBox.SelectedItem is ComboBoxItem { Tag: string tag } &&
+        Enum.TryParse(tag, out FavoriteEndpointRole role)
+            ? role
+            : FavoriteEndpointRole.General;
+
+    private static string GetFavoriteDisplayName(
+        string name,
+        string? alias) =>
+        string.IsNullOrWhiteSpace(alias) ? name : alias;
+
+    private static string GetFavoriteRoleLabel(FavoriteEndpointRole role) =>
+        role switch
+        {
+            FavoriteEndpointRole.Communications => "calls",
+            FavoriteEndpointRole.Both => "default + calls",
+            _ => "default",
+        };
+
+    private static string FormatFavoriteSummary(
+        string name,
+        string? alias,
+        FavoriteEndpointRole role) =>
+        $"{GetFavoriteDisplayName(name, alias)} ({GetFavoriteRoleLabel(role)})";
 
     private void UpdateFavoriteOutputsSummary()
     {
@@ -1412,13 +1778,1023 @@ public partial class MainWindow : Window
         {
             if (_widgetSettings.GetFavorite(slot) is FavoriteOutputSetting favorite)
             {
-                names.Add(favorite.Name);
+                names.Add(FormatFavoriteSummary(
+                    favorite.Name,
+                    favorite.Alias,
+                    favorite.Role));
             }
         }
 
         FavoriteOutputsSummaryText.Text = names.Count == 0
             ? "Favorites: none"
             : $"Favorites: {string.Join(", ", names)}";
+
+        names.Clear();
+
+        for (int slot = 0;
+             slot < WidgetSettings.MaximumFavoriteInputs;
+             slot++)
+        {
+            if (_widgetSettings.GetInputFavorite(slot) is FavoriteInputSetting favorite)
+            {
+                names.Add(FormatFavoriteSummary(
+                    favorite.Name,
+                    favorite.Alias,
+                    favorite.Role));
+            }
+        }
+
+        FavoriteInputsSummaryText.Text = names.Count == 0
+            ? "Favorites: none"
+            : $"Favorites: {string.Join(", ", names)}";
+    }
+
+    private List<TrayFavoriteTarget> GetTrayFavoriteTargets()
+    {
+        List<TrayFavoriteTarget> targets = [];
+
+        for (int slot = 0;
+             slot < WidgetSettings.MaximumFavoriteOutputs;
+             slot++)
+        {
+            if (_widgetSettings.GetFavorite(slot) is FavoriteOutputSetting favorite)
+            {
+                targets.Add(new(
+                    favorite.EndpointId,
+                    favorite.Name,
+                    favorite.Role,
+                    false,
+                    favorite.Alias));
+            }
+        }
+
+        for (int slot = 0;
+             slot < WidgetSettings.MaximumFavoriteInputs;
+             slot++)
+        {
+            if (_widgetSettings.GetInputFavorite(slot) is FavoriteInputSetting favorite)
+            {
+                targets.Add(new(
+                    favorite.EndpointId,
+                    favorite.Name,
+                    favorite.Role,
+                    true,
+                    favorite.Alias));
+            }
+        }
+
+        return targets;
+    }
+
+    private List<string> BuildTrayFavoriteLabels() =>
+        GetTrayFavoriteTargets()
+            .Select(target =>
+                $"{(target.IsInput ? "Microphone" : "Output")}: " +
+                FormatFavoriteSummary(
+                    target.Name,
+                    target.Alias,
+                    target.Role))
+            .ToList();
+
+    private async void SaveCurrentProfile_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        string name = ProfileNameBox.Text.Trim();
+
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            ProfilesStatusText.Text = "Enter a profile name first.";
+            ProfileNameBox.Focus();
+            return;
+        }
+
+        try
+        {
+            ProfileDefinition? profile = await CaptureCurrentProfileAsync(name);
+
+            if (profile is null)
+            {
+                ProfilesStatusText.Text =
+                    "Select at least one setting to save in the profile.";
+                return;
+            }
+
+            ProfileDefinition savedProfile = profile;
+            ProfileDefinition? existingProfile = _editingProfileId is null
+                ? null
+                : FindProfile(_editingProfileId);
+
+            if (existingProfile is not null)
+            {
+                savedProfile = profile with
+                {
+                    Id = existingProfile.Id,
+                    IsPinned = ProfilePinCheckBox.IsChecked == true,
+                    Shortcut = existingProfile.Shortcut,
+                };
+            }
+
+            IReadOnlyList<ProfileDefinition> profiles = existingProfile is null
+                ? _profileCatalog.Profiles.Append(savedProfile).ToList()
+                : _profileCatalog.Profiles
+                    .Select(candidate => candidate.Id == existingProfile.Id
+                        ? savedProfile
+                        : candidate)
+                    .ToList();
+            ProfileCatalog candidate = new ProfileCatalog(
+                ProfileCatalog.CurrentSchemaVersion,
+                profiles).Normalize();
+
+            if (!TryApplyAndSaveProfileCatalog(
+                candidate,
+                out string? errorMessage))
+            {
+                ProfilesStatusText.Text = errorMessage;
+                return;
+            }
+
+            bool wasEditing = existingProfile is not null;
+            ResetProfileEditor();
+            UpdateProfilesControls();
+            ProfilesStatusText.Text = wasEditing
+                ? $"{savedProfile.Name} updated."
+                : $"{savedProfile.Name} saved.";
+        }
+        catch (OperationCanceledException) when (
+            _lifetimeCancellation.IsCancellationRequested)
+        {
+            // The window is closing; there is no status left to update.
+        }
+        catch (Exception exception)
+        {
+            ProfilesStatusText.Text =
+                $"The current setup could not be saved: {exception.Message}";
+        }
+    }
+
+    private async Task<ProfileDefinition?> CaptureCurrentProfileAsync(
+        string name)
+    {
+        bool includeDisplay = ProfileIncludeDisplayCheckBox.IsChecked == true;
+        bool includePlayback = ProfileIncludePlaybackCheckBox.IsChecked == true;
+        bool includeRecording = ProfileIncludeRecordingCheckBox.IsChecked == true;
+        bool includeTaskbar = ProfileIncludeTaskbarCheckBox.IsChecked == true;
+        AudioInventory? inventory = null;
+
+        if (includePlayback || includeRecording)
+        {
+            inventory = await _audioInventoryService.GetInventoryAsync(
+                _lifetimeCancellation.Token);
+        }
+
+        DisplayMode? displayMode = includeDisplay
+            ? _displayTopologyService.GetSnapshot().CurrentMode ?? _currentDisplayMode
+            : null;
+        TaskbarState? taskbarState = includeTaskbar
+            ? _taskbarService.GetSnapshot().State
+            : null;
+
+        if (taskbarState == Features.Taskbar.TaskbarState.Unavailable)
+        {
+            taskbarState = null;
+        }
+
+        AudioEndpointControlSnapshot? playbackState = null;
+        AudioEndpointControlSnapshot? recordingState = null;
+
+        if (inventory is not null && includePlayback)
+        {
+            AudioEndpointInfo? playbackDefault = inventory.PlaybackEndpoints
+                .FirstOrDefault(endpoint => endpoint.IsDefault);
+            playbackState = playbackDefault is null
+                ? null
+                : await _audioEndpointControlService.GetStateAsync(
+                    playbackDefault.Id,
+                    _lifetimeCancellation.Token);
+        }
+
+        if (inventory is not null && includeRecording)
+        {
+            AudioEndpointInfo? recordingDefault = inventory.RecordingEndpoints
+                .FirstOrDefault(endpoint => endpoint.IsDefault);
+            recordingState = recordingDefault is null
+                ? null
+                : await _audioEndpointControlService.GetStateAsync(
+                    recordingDefault.Id,
+                    _lifetimeCancellation.Token);
+        }
+
+        ProfileEndpointTarget? playbackGeneral = includePlayback
+            ? ToProfileEndpoint(inventory?.PlaybackEndpoints.FirstOrDefault(
+                endpoint => endpoint.IsDefault))
+            : null;
+        ProfileEndpointTarget? playbackCommunications = includePlayback
+            ? ToProfileEndpoint(inventory?.PlaybackEndpoints.FirstOrDefault(
+                endpoint => endpoint.IsCommunicationsDefault))
+            : null;
+        ProfileEndpointTarget? recordingGeneral = includeRecording
+            ? ToProfileEndpoint(inventory?.RecordingEndpoints.FirstOrDefault(
+                endpoint => endpoint.IsDefault))
+            : null;
+        ProfileEndpointTarget? recordingCommunications = includeRecording
+            ? ToProfileEndpoint(inventory?.RecordingEndpoints.FirstOrDefault(
+                endpoint => endpoint.IsCommunicationsDefault))
+            : null;
+
+        ApplySelectedProfileFavorite(
+            ProfilePlaybackFavoriteBox.SelectedItem as ProfileFavoriteOption,
+            ref playbackGeneral,
+            ref playbackCommunications);
+        ApplySelectedProfileFavorite(
+            ProfileRecordingFavoriteBox.SelectedItem as ProfileFavoriteOption,
+            ref recordingGeneral,
+            ref recordingCommunications);
+
+        ProfileDefinition profile = new(
+            Guid.NewGuid().ToString("N"),
+            name,
+            ProfilePinCheckBox.IsChecked == true,
+            null,
+            displayMode,
+            playbackGeneral,
+            playbackCommunications,
+            recordingGeneral,
+            recordingCommunications,
+            taskbarState,
+            recordingState?.IsMuted,
+            playbackState?.MasterVolume);
+
+        ProfileDefinition normalized = profile.Normalize();
+        return normalized.HasActions ? normalized : null;
+    }
+
+    private async Task<ProfileDefinition?> CaptureCurrentStateAsync()
+    {
+        AudioInventory inventory = await _audioInventoryService.GetInventoryAsync(
+            _lifetimeCancellation.Token);
+        DisplayTopologySnapshot displaySnapshot = _displayTopologyService.GetSnapshot();
+        TaskbarState? taskbarState = _taskbarService.GetSnapshot().State;
+
+        if (taskbarState == Features.Taskbar.TaskbarState.Unavailable)
+        {
+            taskbarState = null;
+        }
+
+        AudioEndpointInfo? playbackDefault = inventory.PlaybackEndpoints
+            .FirstOrDefault(endpoint => endpoint.IsDefault);
+        AudioEndpointInfo? recordingDefault = inventory.RecordingEndpoints
+            .FirstOrDefault(endpoint => endpoint.IsDefault);
+        AudioEndpointControlSnapshot? playbackState = playbackDefault is null
+            ? null
+            : await _audioEndpointControlService.GetStateAsync(
+                playbackDefault.Id,
+                _lifetimeCancellation.Token);
+        AudioEndpointControlSnapshot? recordingState = recordingDefault is null
+            ? null
+            : await _audioEndpointControlService.GetStateAsync(
+                recordingDefault.Id,
+                _lifetimeCancellation.Token);
+
+        ProfileDefinition profile = new(
+            Guid.NewGuid().ToString("N"),
+            "Previous setup",
+            false,
+            null,
+            displaySnapshot.CurrentMode ?? _currentDisplayMode,
+            ToProfileEndpoint(playbackDefault),
+            ToProfileEndpoint(inventory.PlaybackEndpoints.FirstOrDefault(
+                endpoint => endpoint.IsCommunicationsDefault)),
+            ToProfileEndpoint(recordingDefault),
+            ToProfileEndpoint(inventory.RecordingEndpoints.FirstOrDefault(
+                endpoint => endpoint.IsCommunicationsDefault)),
+            taskbarState,
+            recordingState?.IsMuted,
+            playbackState?.MasterVolume);
+
+        ProfileDefinition normalized = profile.Normalize();
+        return normalized.HasActions ? normalized : null;
+    }
+
+    private void UpdateProfilesControls()
+    {
+        UpdateProfileFavoriteControls();
+        List<ProfileOption> options = _profileCatalog.Profiles
+            .Select(profile => new ProfileOption(
+                profile.Id,
+                profile.Name,
+                BuildProfileSummary(profile),
+                FormatShortcut(profile.Shortcut),
+                profile.IsPinned ? "Unpin" : "Pin"))
+            .ToList();
+
+        ProfileItems.ItemsSource = options;
+        ProfileEmptyText.Visibility = options.Count == 0
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+
+        if (_editingProfileId is not null &&
+            FindProfile(_editingProfileId) is null)
+        {
+            ResetProfileEditor();
+        }
+    }
+
+    private void ProfileShortcut_PreviewKeyDown(
+        object sender,
+        KeyEventArgs e)
+    {
+        if (sender is not TextBox { Tag: string profileId })
+        {
+            return;
+        }
+
+        e.Handled = true;
+        Key key = e.Key == Key.System ? e.SystemKey : e.Key;
+
+        if (key is Key.LeftCtrl or
+            Key.RightCtrl or
+            Key.LeftAlt or
+            Key.RightAlt or
+            Key.LeftShift or
+            Key.RightShift or
+            Key.LWin or
+            Key.RWin)
+        {
+            ProfilesStatusText.Text =
+                "Keep holding the modifier and press a letter, number, or F-key.";
+            return;
+        }
+
+        if (key is Key.Delete or Key.Back &&
+            Keyboard.Modifiers == ModifierKeys.None)
+        {
+            ApplyProfileShortcutChange(profileId, null);
+            return;
+        }
+
+        WidgetHotkeyModifiers modifiers =
+            ConvertModifiers(Keyboard.Modifiers);
+        int virtualKey = KeyInterop.VirtualKeyFromKey(key);
+
+        if (!WidgetShortcut.TryCreate(
+            modifiers,
+            virtualKey,
+            out WidgetShortcut? shortcut))
+        {
+            ProfilesStatusText.Text =
+                "Use Ctrl, Alt, or Win with A-Z, 0-9, or F1-F12. Shift is optional.";
+            return;
+        }
+
+        if (IsShortcutUsedByWidgetAction(shortcut!) ||
+            IsShortcutUsedByAnotherProfile(profileId, shortcut!))
+        {
+            ProfilesStatusText.Text =
+                $"{shortcut!.DisplayText} is already assigned in WinQuickSwitch.";
+            return;
+        }
+
+        ApplyProfileShortcutChange(profileId, shortcut);
+    }
+
+    private void UnsetProfileShortcut_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: string profileId })
+        {
+            ApplyProfileShortcutChange(profileId, null);
+        }
+    }
+
+    private bool IsShortcutUsedByWidgetAction(WidgetShortcut shortcut) =>
+        Enum.GetValues<WidgetHotkeyAction>()
+            .Any(action => _widgetSettings.GetShortcut(action) == shortcut);
+
+    private bool IsShortcutUsedByAnotherProfile(
+        string profileId,
+        WidgetShortcut shortcut) =>
+        _profileCatalog.Profiles.Any(profile =>
+            !string.Equals(profile.Id, profileId, StringComparison.Ordinal) &&
+            profile.Shortcut == shortcut);
+
+    private void ApplyProfileShortcutChange(
+        string profileId,
+        WidgetShortcut? shortcut)
+    {
+        ProfileDefinition? profile = FindProfile(profileId);
+
+        if (profile is null)
+        {
+            return;
+        }
+
+        ProfileCatalog candidate = new ProfileCatalog(
+            ProfileCatalog.CurrentSchemaVersion,
+            _profileCatalog.Profiles
+                .Select(item => item.Id == profileId
+                    ? item with { Shortcut = shortcut }
+                    : item)
+                .ToList()).Normalize();
+
+        if (!TryApplyAndSaveProfileCatalog(candidate, out string? errorMessage))
+        {
+            ProfilesStatusText.Text = errorMessage;
+            return;
+        }
+
+        ProfilesStatusText.Text = shortcut is null
+            ? $"{profile.Name} shortcut cleared."
+            : $"{shortcut.DisplayText} now applies {profile.Name}.";
+    }
+
+    private void EditProfile_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string profileId } ||
+            FindProfile(profileId) is not ProfileDefinition profile)
+        {
+            return;
+        }
+
+        _editingProfileId = profile.Id;
+        ProfileNameBox.Text = profile.Name;
+        ProfileIncludeDisplayCheckBox.IsChecked = profile.DisplayMode is not null;
+        ProfileIncludePlaybackCheckBox.IsChecked =
+            profile.PlaybackGeneral is not null ||
+            profile.PlaybackCommunications is not null;
+        ProfileIncludeRecordingCheckBox.IsChecked =
+            profile.RecordingGeneral is not null ||
+            profile.RecordingCommunications is not null;
+        ProfileIncludeTaskbarCheckBox.IsChecked = profile.TaskbarState is not null;
+        ProfilePinCheckBox.IsChecked = profile.IsPinned;
+        SelectProfileFavorite(
+            ProfilePlaybackFavoriteBox,
+            profile.PlaybackGeneral,
+            profile.PlaybackCommunications);
+        SelectProfileFavorite(
+            ProfileRecordingFavoriteBox,
+            profile.RecordingGeneral,
+            profile.RecordingCommunications);
+        SaveProfileButton.Content = "Update profile";
+        CancelProfileEditButton.Visibility = Visibility.Visible;
+        ProfilesStatusText.Text = $"Editing {profile.Name}.";
+        ProfileNameBox.Focus();
+        ProfileNameBox.SelectAll();
+    }
+
+    private void CancelProfileEdit_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        ResetProfileEditor();
+        ProfilesStatusText.Text = "Profile edit canceled.";
+    }
+
+    private void DuplicateProfile_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string profileId } ||
+            FindProfile(profileId) is not ProfileDefinition profile)
+        {
+            return;
+        }
+
+        ProfileDefinition duplicate = profile with
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            Name = $"{profile.Name} copy",
+            IsPinned = false,
+            Shortcut = null,
+        };
+
+        SaveProfileCatalog(
+            _profileCatalog.Profiles.Append(duplicate).ToList(),
+            $"{duplicate.Name} created.");
+    }
+
+    private void ResetProfileEditor()
+    {
+        _editingProfileId = null;
+        ProfileNameBox.Text = "New profile";
+        ProfileIncludeDisplayCheckBox.IsChecked = true;
+        ProfileIncludePlaybackCheckBox.IsChecked = true;
+        ProfileIncludeRecordingCheckBox.IsChecked = true;
+        ProfileIncludeTaskbarCheckBox.IsChecked = true;
+        ProfilePinCheckBox.IsChecked = false;
+        ProfilePlaybackFavoriteBox.SelectedIndex = 0;
+        ProfileRecordingFavoriteBox.SelectedIndex = 0;
+        SaveProfileButton.Content = "Save current setup";
+        CancelProfileEditButton.Visibility = Visibility.Collapsed;
+    }
+
+    private async void ApplyProfile_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string profileId })
+        {
+            return;
+        }
+
+        ProfileDefinition? profile = FindProfile(profileId);
+
+        if (profile is not null)
+        {
+            await ApplyProfileAsync(profile);
+        }
+    }
+
+    private async Task ApplyProfileAsync(ProfileDefinition profile)
+    {
+        if (_isApplyingProfile)
+        {
+            return;
+        }
+
+        _isApplyingProfile = true;
+        ProfilesStatusText.Text = $"Applying {profile.Name}...";
+        ProfileItems.IsEnabled = false;
+        UndoProfileButton.IsEnabled = false;
+        List<string> warnings = [];
+
+        try
+        {
+            _profileUndo = null;
+            UndoProfileButton.Visibility = Visibility.Collapsed;
+
+            try
+            {
+                _profileUndo = await CaptureCurrentStateAsync();
+            }
+            catch (OperationCanceledException) when (
+                _lifetimeCancellation.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch
+            {
+                // Undo is best-effort and must not block profile application.
+            }
+
+            UndoProfileButton.Visibility = _profileUndo is null
+                ? Visibility.Collapsed
+                : Visibility.Visible;
+
+            if (profile.DisplayMode is DisplayMode displayMode &&
+                !await ApplyDisplayModeAsync(displayMode))
+            {
+                ProfilesStatusText.Text =
+                    $"{profile.Name} could not change the display mode.";
+                return;
+            }
+
+            bool needsPlayback =
+                profile.PlaybackGeneral is not null ||
+                profile.PlaybackCommunications is not null;
+            bool needsRecording =
+                profile.RecordingGeneral is not null ||
+                profile.RecordingCommunications is not null;
+            AudioInventory? inventory = null;
+
+            if (needsPlayback || needsRecording)
+            {
+                inventory = await _audioInventoryService.GetInventoryAsync(
+                    _lifetimeCancellation.Token);
+            }
+
+            if (inventory is not null)
+            {
+                await ApplyProfileEndpointAsync(
+                    profile.PlaybackGeneral,
+                    inventory.PlaybackEndpoints,
+                    AudioDefaultRoleSelection.General,
+                    warnings);
+                await ApplyProfileEndpointAsync(
+                    profile.PlaybackCommunications,
+                    inventory.PlaybackEndpoints,
+                    AudioDefaultRoleSelection.Communications,
+                    warnings);
+                await ApplyProfileEndpointAsync(
+                    profile.RecordingGeneral,
+                    inventory.RecordingEndpoints,
+                    AudioDefaultRoleSelection.General,
+                    warnings);
+                await ApplyProfileEndpointAsync(
+                    profile.RecordingCommunications,
+                    inventory.RecordingEndpoints,
+                    AudioDefaultRoleSelection.Communications,
+                    warnings);
+            }
+
+            if (profile.MasterVolume is not null ||
+                profile.MicrophoneMuted is not null)
+            {
+                AudioInventory controlInventory =
+                    await _audioInventoryService.GetInventoryAsync(
+                        _lifetimeCancellation.Token);
+                AudioEndpointInfo? playbackDefault = controlInventory
+                    .PlaybackEndpoints
+                    .FirstOrDefault(endpoint => endpoint.IsDefault);
+                AudioEndpointInfo? recordingDefault = controlInventory
+                    .RecordingEndpoints
+                    .FirstOrDefault(endpoint => endpoint.IsDefault);
+
+                if (profile.MasterVolume is float masterVolume)
+                {
+                    if (playbackDefault is null)
+                    {
+                        warnings.Add("There is no default playback device for master volume.");
+                    }
+                    else
+                    {
+                        AudioControlResult result =
+                            await _audioEndpointControlService.SetMasterVolumeAsync(
+                                playbackDefault.Id,
+                                playbackDefault.Name,
+                                masterVolume,
+                                _lifetimeCancellation.Token);
+
+                        if (!result.Succeeded)
+                        {
+                            warnings.Add(result.Message);
+                        }
+                    }
+                }
+
+                if (profile.MicrophoneMuted is bool microphoneMuted)
+                {
+                    if (recordingDefault is null)
+                    {
+                        warnings.Add("There is no default recording device for microphone mute.");
+                    }
+                    else
+                    {
+                        AudioControlResult result =
+                            await _audioEndpointControlService.SetMuteAsync(
+                                recordingDefault.Id,
+                                recordingDefault.Name,
+                                microphoneMuted,
+                                _lifetimeCancellation.Token);
+
+                        if (!result.Succeeded)
+                        {
+                            warnings.Add(result.Message);
+                        }
+                    }
+                }
+            }
+
+            if (profile.TaskbarState is TaskbarState taskbarState)
+            {
+                bool autoHide = taskbarState == Features.Taskbar.TaskbarState.AutoHidden;
+                TaskbarActionResult result = _taskbarService.SetAutoHide(autoHide);
+
+                if (!result.Succeeded)
+                {
+                    warnings.Add(result.Message);
+                }
+            }
+
+            if (warnings.Count == 0)
+            {
+                ProfilesStatusText.Text = $"{profile.Name} applied.";
+            }
+            else
+            {
+                ProfilesStatusText.Text =
+                    $"{profile.Name} applied with warnings: " +
+                    string.Join(" ", warnings);
+            }
+
+            RefreshDisplayTopology();
+            RefreshTaskbarState();
+        }
+        catch (OperationCanceledException) when (
+            _lifetimeCancellation.IsCancellationRequested)
+        {
+            // The window is closing; there is no status left to update.
+        }
+        catch (Exception exception)
+        {
+            ProfilesStatusText.Text =
+                $"{profile.Name} could not be applied: {exception.Message}";
+        }
+        finally
+        {
+            _isApplyingProfile = false;
+            ProfileItems.IsEnabled = true;
+            UndoProfileButton.IsEnabled = true;
+        }
+    }
+
+    private async void UndoProfile_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (_profileUndo is ProfileDefinition undoProfile)
+        {
+            await ApplyProfileAsync(undoProfile);
+        }
+    }
+
+    private async Task ApplyProfileEndpointAsync(
+        ProfileEndpointTarget? target,
+        IReadOnlyList<AudioEndpointInfo> endpoints,
+        AudioDefaultRoleSelection role,
+        ICollection<string> warnings)
+    {
+        if (target is null)
+        {
+            return;
+        }
+
+        AudioEndpointInfo? endpoint = endpoints.FirstOrDefault(candidate =>
+            string.Equals(
+                candidate.Id,
+                target.EndpointId,
+                StringComparison.Ordinal));
+
+        if (endpoint is null)
+        {
+            warnings.Add($"{target.Name} is not connected.");
+            return;
+        }
+
+        AudioControlResult result = await _defaultAudioEndpointService.SetDefaultAsync(
+            endpoint.Id,
+            endpoint.Name,
+            role,
+            _lifetimeCancellation.Token);
+
+        if (!result.Succeeded)
+        {
+            warnings.Add(result.Message);
+        }
+    }
+
+    private void ToggleProfilePin_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string profileId } ||
+            FindProfile(profileId) is not ProfileDefinition profile)
+        {
+            return;
+        }
+
+        if (!profile.IsPinned &&
+            _profileCatalog.Profiles.Count(candidate => candidate.IsPinned) >=
+                ProfileCatalog.MaximumPinnedProfiles)
+        {
+            ProfilesStatusText.Text =
+                $"You can pin up to {ProfileCatalog.MaximumPinnedProfiles} profiles.";
+            return;
+        }
+
+        SaveProfileCatalog(
+            _profileCatalog.Profiles
+                .Select(candidate => candidate.Id == profileId
+                    ? candidate with { IsPinned = !candidate.IsPinned }
+                    : candidate)
+                .ToList(),
+            profile.IsPinned ? "Profile unpinned." : "Profile pinned.");
+    }
+
+    private void DeleteProfile_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string profileId })
+        {
+            return;
+        }
+
+        ProfileDefinition? profile = FindProfile(profileId);
+
+        if (profile is null)
+        {
+            return;
+        }
+
+        SaveProfileCatalog(
+            _profileCatalog.Profiles
+                .Where(candidate => candidate.Id != profileId)
+                .ToList(),
+            $"{profile.Name} deleted.");
+    }
+
+    private void SaveProfileCatalog(
+        IReadOnlyList<ProfileDefinition> profiles,
+        string successMessage)
+    {
+        ProfileCatalog candidate = new ProfileCatalog(
+            ProfileCatalog.CurrentSchemaVersion,
+            profiles).Normalize();
+
+        if (!TryApplyAndSaveProfileCatalog(
+            candidate,
+            out string? errorMessage))
+        {
+            ProfilesStatusText.Text = errorMessage;
+            return;
+        }
+
+        ProfilesStatusText.Text = successMessage;
+    }
+
+    private bool TryApplyAndSaveProfileCatalog(
+        ProfileCatalog candidate,
+        out string? errorMessage)
+    {
+        HotkeyRegistrationResult result =
+            ApplyHotkeyBindings(_widgetSettings, candidate);
+
+        if (!result.Succeeded)
+        {
+            ApplyHotkeyBindings(_widgetSettings, _profileCatalog);
+            errorMessage = result.FirstFailure ??
+                "One or more profile shortcuts are unavailable.";
+            return false;
+        }
+
+        if (!_profileStore.TrySave(candidate, out errorMessage))
+        {
+            ApplyHotkeyBindings(_widgetSettings, _profileCatalog);
+            return false;
+        }
+
+        _profileCatalog = candidate;
+        UpdateProfilesControls();
+        errorMessage = null;
+        return true;
+    }
+
+    private ProfileDefinition? FindProfile(string profileId) =>
+        _profileCatalog.Profiles.FirstOrDefault(profile =>
+            string.Equals(profile.Id, profileId, StringComparison.Ordinal));
+
+    private static ProfileEndpointTarget? ToProfileEndpoint(
+        AudioEndpointInfo? endpoint) =>
+        endpoint is null
+            ? null
+            : new ProfileEndpointTarget(endpoint.Id, endpoint.Name);
+
+    private void UpdateProfileFavoriteControls()
+    {
+        List<ProfileFavoriteOption> playbackOptions =
+        [
+            new("", "Use current default", "", "", FavoriteEndpointRole.General),
+        ];
+
+        for (int slot = 0;
+             slot < WidgetSettings.MaximumFavoriteOutputs;
+             slot++)
+        {
+            if (_widgetSettings.GetFavorite(slot) is FavoriteOutputSetting favorite)
+            {
+                playbackOptions.Add(new(
+                    $"output:{slot}",
+                    FormatFavoriteSummary(
+                        favorite.Name,
+                        favorite.Alias,
+                        favorite.Role),
+                    favorite.EndpointId,
+                    favorite.Name,
+                    favorite.Role));
+            }
+        }
+
+        List<ProfileFavoriteOption> recordingOptions =
+        [
+            new("", "Use current default", "", "", FavoriteEndpointRole.General),
+        ];
+
+        for (int slot = 0;
+             slot < WidgetSettings.MaximumFavoriteInputs;
+             slot++)
+        {
+            if (_widgetSettings.GetInputFavorite(slot) is FavoriteInputSetting favorite)
+            {
+                recordingOptions.Add(new(
+                    $"input:{slot}",
+                    FormatFavoriteSummary(
+                        favorite.Name,
+                        favorite.Alias,
+                        favorite.Role),
+                    favorite.EndpointId,
+                    favorite.Name,
+                    favorite.Role));
+            }
+        }
+
+        ProfilePlaybackFavoriteBox.ItemsSource = playbackOptions;
+        ProfileRecordingFavoriteBox.ItemsSource = recordingOptions;
+
+        if (_editingProfileId is null)
+        {
+            ProfilePlaybackFavoriteBox.SelectedIndex = 0;
+            ProfileRecordingFavoriteBox.SelectedIndex = 0;
+        }
+    }
+
+    private static void ApplySelectedProfileFavorite(
+        ProfileFavoriteOption? favorite,
+        ref ProfileEndpointTarget? general,
+        ref ProfileEndpointTarget? communications)
+    {
+        if (favorite is null || string.IsNullOrWhiteSpace(favorite.Id))
+        {
+            return;
+        }
+
+        ProfileEndpointTarget target = new(
+            favorite.EndpointId,
+            favorite.EndpointName);
+
+        switch (favorite.Role)
+        {
+            case FavoriteEndpointRole.Communications:
+                general = null;
+                communications = target;
+                break;
+            case FavoriteEndpointRole.Both:
+                general = target;
+                communications = target;
+                break;
+            default:
+                general = target;
+                communications = null;
+                break;
+        }
+    }
+
+    private static void SelectProfileFavorite(
+        ComboBox comboBox,
+        ProfileEndpointTarget? general,
+        ProfileEndpointTarget? communications)
+    {
+        ProfileEndpointTarget? target = general ?? communications;
+
+        if (target is null)
+        {
+            comboBox.SelectedIndex = 0;
+            return;
+        }
+
+        FavoriteEndpointRole role = general is not null &&
+            communications is not null &&
+            string.Equals(general.EndpointId, communications.EndpointId, StringComparison.Ordinal)
+            ? FavoriteEndpointRole.Both
+            : general is not null
+                ? FavoriteEndpointRole.General
+                : FavoriteEndpointRole.Communications;
+
+        ProfileFavoriteOption? option = comboBox.Items
+            .OfType<ProfileFavoriteOption>()
+            .FirstOrDefault(candidate =>
+                string.Equals(candidate.EndpointId, target.EndpointId, StringComparison.Ordinal) &&
+                candidate.Role == role);
+
+        comboBox.SelectedItem = option;
+        if (option is null)
+        {
+            comboBox.SelectedIndex = 0;
+        }
+    }
+
+    private static string BuildProfileSummary(ProfileDefinition profile)
+    {
+        List<string> parts = [];
+
+        if (profile.DisplayMode is DisplayMode displayMode)
+        {
+            parts.Add(displayMode.GetDisplayName());
+        }
+
+        if (profile.PlaybackGeneral is not null)
+        {
+            parts.Add(profile.PlaybackGeneral.Name);
+        }
+
+        if (profile.RecordingGeneral is not null)
+        {
+            parts.Add(profile.RecordingGeneral.Name);
+        }
+
+        if (profile.TaskbarState is Features.Taskbar.TaskbarState taskbarState)
+        {
+            parts.Add(taskbarState == Features.Taskbar.TaskbarState.AutoHidden
+                ? "Taskbar auto-hide"
+                : "Taskbar visible");
+        }
+
+        return parts.Count == 0
+            ? "No settings selected"
+            : string.Join(" · ", parts);
     }
 
     private async void SetDefaultAudioEndpoint_Click(object sender, RoutedEventArgs e)
@@ -1685,7 +3061,38 @@ public partial class MainWindow : Window
 }
 
 internal sealed record FavoriteOutputShortcutOption(
+    int Slot,
     WidgetHotkeyAction Action,
     string Name,
+    string Alias,
     string ShortcutText,
     string EditorName);
+
+internal sealed record FavoriteInputShortcutOption(
+    int Slot,
+    WidgetHotkeyAction Action,
+    string Name,
+    string Alias,
+    string ShortcutText,
+    string EditorName);
+
+internal sealed record TrayFavoriteTarget(
+    string EndpointId,
+    string Name,
+    FavoriteEndpointRole Role,
+    bool IsInput,
+    string? Alias);
+
+internal sealed record ProfileFavoriteOption(
+    string Id,
+    string Name,
+    string EndpointId,
+    string EndpointName,
+    FavoriteEndpointRole Role);
+
+internal sealed record ProfileOption(
+    string Id,
+    string Name,
+    string Summary,
+    string ShortcutText,
+    string PinLabel);

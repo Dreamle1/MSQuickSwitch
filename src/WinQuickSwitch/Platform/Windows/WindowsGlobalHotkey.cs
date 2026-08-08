@@ -7,10 +7,12 @@ internal sealed class WindowsGlobalHotkey : IDisposable
 {
     public const int WmHotkey = 0x0312;
     private const int FirstHotkeyId = 0x5157;
+    private const int FirstProfileHotkeyId = 0x5257;
     private const uint ModNoRepeat = 0x4000;
 
     private readonly IGlobalHotkeyNative _native;
     private readonly Dictionary<int, WidgetHotkeyAction> _actionsById = [];
+    private readonly Dictionary<int, string> _profileIdsById = [];
     private IntPtr _windowHandle;
 
     public WindowsGlobalHotkey() : this(NativeGlobalHotkey.Instance)
@@ -24,11 +26,18 @@ internal sealed class WindowsGlobalHotkey : IDisposable
 
     public HotkeyRegistrationResult ApplyBindings(
         IntPtr windowHandle,
-        WidgetSettings settings)
+        WidgetSettings settings) =>
+        ApplyBindings(windowHandle, settings, []);
+
+    public HotkeyRegistrationResult ApplyBindings(
+        IntPtr windowHandle,
+        WidgetSettings settings,
+        IReadOnlyList<ProfileHotkeyBinding> profileBindings)
     {
         UnregisterAll();
         _windowHandle = windowHandle;
         Dictionary<WidgetHotkeyAction, string> failures = [];
+        Dictionary<string, string> profileFailures = [];
 
         foreach (WidgetHotkeyAction action in Enum.GetValues<WidgetHotkeyAction>())
         {
@@ -58,11 +67,42 @@ internal sealed class WindowsGlobalHotkey : IDisposable
             }
         }
 
-        return new HotkeyRegistrationResult(failures);
+        int profileIndex = 0;
+
+        foreach (ProfileHotkeyBinding binding in profileBindings)
+        {
+            if (!binding.Shortcut.IsValid)
+            {
+                continue;
+            }
+
+            int id = FirstProfileHotkeyId + profileIndex++;
+            uint modifiers = (uint)binding.Shortcut.Modifiers | ModNoRepeat;
+
+            if (_native.Register(
+                windowHandle,
+                id,
+                modifiers,
+                (uint)binding.Shortcut.VirtualKey,
+                out int errorCode))
+            {
+                _profileIdsById[id] = binding.ProfileId;
+            }
+            else
+            {
+                profileFailures[binding.ProfileId] =
+                    $"Could not register {binding.Shortcut.DisplayText} (Windows error {errorCode}).";
+            }
+        }
+
+        return new HotkeyRegistrationResult(failures, profileFailures);
     }
 
     public bool TryResolveAction(int id, out WidgetHotkeyAction action) =>
         _actionsById.TryGetValue(id, out action);
+
+    public bool TryResolveProfileId(int id, out string profileId) =>
+        _profileIdsById.TryGetValue(id, out profileId!);
 
     public void Dispose()
     {
@@ -75,6 +115,7 @@ internal sealed class WindowsGlobalHotkey : IDisposable
         if (_windowHandle == IntPtr.Zero)
         {
             _actionsById.Clear();
+            _profileIdsById.Clear();
             return;
         }
 
@@ -84,6 +125,7 @@ internal sealed class WindowsGlobalHotkey : IDisposable
         }
 
         _actionsById.Clear();
+        _profileIdsById.Clear();
     }
 
     internal static int GetId(WidgetHotkeyAction action) =>
@@ -91,12 +133,21 @@ internal sealed class WindowsGlobalHotkey : IDisposable
 }
 
 internal sealed record HotkeyRegistrationResult(
-    IReadOnlyDictionary<WidgetHotkeyAction, string> Failures)
+    IReadOnlyDictionary<WidgetHotkeyAction, string> Failures,
+    IReadOnlyDictionary<string, string>? ProfileFailures = null)
 {
-    public bool Succeeded => Failures.Count == 0;
+    public bool Succeeded =>
+        Failures.Count == 0 &&
+        (ProfileFailures?.Count ?? 0) == 0;
 
-    public string? FirstFailure => Failures.Values.FirstOrDefault();
+    public string? FirstFailure =>
+        Failures.Values.FirstOrDefault() ??
+        ProfileFailures?.Values.FirstOrDefault();
 }
+
+internal sealed record ProfileHotkeyBinding(
+    string ProfileId,
+    WidgetShortcut Shortcut);
 
 internal interface IGlobalHotkeyNative
 {

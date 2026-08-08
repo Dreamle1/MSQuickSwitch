@@ -196,3 +196,54 @@ Test at minimum:
    default behavior.
 3. Resolved: publish both a small framework-dependent Lite build and a larger
    self-contained Portable build.
+
+## M6 - favorites and profiles
+
+The next implementation phase combines the existing quick audio favorites
+with named, partial desk profiles. A favorite is one fast endpoint action; a
+profile is a named bundle whose omitted fields leave the current state alone.
+
+### M6.1 - profile foundation
+
+- [x] Add a versioned profile catalog with atomic local persistence.
+- [x] Normalize duplicate IDs, invalid endpoints, unsupported taskbar states,
+  invalid volume values, and excess pinned profiles.
+- [ ] Replace fixed hotkey action IDs with dynamic built-in, favorite, and
+  profile targets.
+- [ ] Preserve existing settings and favorite-output shortcuts during migration.
+
+### M6.2 - favorites
+
+- [x] Keep four playback favorites and add four microphone favorites.
+- [x] Add editable aliases and explicit ordering.
+- [x] Add role selection and explicit remove behavior.
+- [x] Keep disconnected favorites saved for later reconnection.
+- [x] Expose favorites in the Audio panel and shortcut editor.
+- [x] Expose favorites in the Profiles editor and tray menu.
+
+### M6.3 - profiles v1
+
+- [x] Add a Profiles panel with save-current, pin, apply, and delete actions.
+- [x] Add profile editing and duplication.
+- [x] Store optional display topology, playback/recording endpoints, and
+  taskbar state values.
+- [x] Store and apply microphone mute and master volume values.
+- [x] Apply display first, wait for topology settlement, refresh audio, then
+  apply endpoint and taskbar changes.
+- [x] Report partial success by component when an endpoint or taskbar change
+  cannot be completed.
+- [x] Provide an in-session undo action.
+- [x] Give profiles optional dynamic global shortcuts with collision-safe registration.
+- [x] Keep global projection actions immediate; reserve timed rollback for
+  future custom per-monitor display profiles.
+
+### M6 acceptance criteria
+
+- Existing settings migrate without losing shortcuts or favorite outputs.
+- A disconnected endpoint remains in a favorite or profile until the user
+  removes it.
+- A profile can omit any component without changing that component's state.
+- Profile hotkeys remain hidden on success and reveal the Profiles panel on a
+  warning or failure.
+- Profile application is covered by fake platform backends; real hardware
+  mutations remain attended checks.

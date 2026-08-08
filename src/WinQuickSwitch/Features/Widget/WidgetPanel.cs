@@ -6,4 +6,5 @@ internal enum WidgetPanel
     Audio,
     Devices,
     Options,
+    Profiles,
 }

@@ -14,6 +14,17 @@ internal enum WidgetHotkeyAction
     FavoriteOutput2,
     FavoriteOutput3,
     FavoriteOutput4,
+    FavoriteInput1,
+    FavoriteInput2,
+    FavoriteInput3,
+    FavoriteInput4,
+}
+
+internal enum FavoriteEndpointRole
+{
+    General,
+    Communications,
+    Both,
 }
 
 [Flags]
@@ -105,9 +116,15 @@ internal sealed record WidgetSettings(
     FavoriteOutputSetting? FavoriteOutput1 = null,
     FavoriteOutputSetting? FavoriteOutput2 = null,
     FavoriteOutputSetting? FavoriteOutput3 = null,
-    FavoriteOutputSetting? FavoriteOutput4 = null)
+    FavoriteOutputSetting? FavoriteOutput4 = null,
+    FavoriteInputSetting? FavoriteInput1 = null,
+    FavoriteInputSetting? FavoriteInput2 = null,
+    FavoriteInputSetting? FavoriteInput3 = null,
+    FavoriteInputSetting? FavoriteInput4 = null)
 {
     public const int MaximumFavoriteOutputs = 4;
+    public const int MaximumFavoriteInputs = 4;
+    public const int MaximumFavoriteAliasLength = 60;
 
     public static WidgetSettings Default { get; } = new(
         true,
@@ -133,6 +150,10 @@ internal sealed record WidgetSettings(
             WidgetHotkeyAction.FavoriteOutput2 => FavoriteOutput2?.Shortcut,
             WidgetHotkeyAction.FavoriteOutput3 => FavoriteOutput3?.Shortcut,
             WidgetHotkeyAction.FavoriteOutput4 => FavoriteOutput4?.Shortcut,
+            WidgetHotkeyAction.FavoriteInput1 => FavoriteInput1?.Shortcut,
+            WidgetHotkeyAction.FavoriteInput2 => FavoriteInput2?.Shortcut,
+            WidgetHotkeyAction.FavoriteInput3 => FavoriteInput3?.Shortcut,
+            WidgetHotkeyAction.FavoriteInput4 => FavoriteInput4?.Shortcut,
             _ => null,
         };
 
@@ -156,6 +177,10 @@ internal sealed record WidgetSettings(
             WidgetHotkeyAction.FavoriteOutput2 => WithFavoriteShortcut(1, shortcut),
             WidgetHotkeyAction.FavoriteOutput3 => WithFavoriteShortcut(2, shortcut),
             WidgetHotkeyAction.FavoriteOutput4 => WithFavoriteShortcut(3, shortcut),
+            WidgetHotkeyAction.FavoriteInput1 => WithInputFavoriteShortcut(0, shortcut),
+            WidgetHotkeyAction.FavoriteInput2 => WithInputFavoriteShortcut(1, shortcut),
+            WidgetHotkeyAction.FavoriteInput3 => WithInputFavoriteShortcut(2, shortcut),
+            WidgetHotkeyAction.FavoriteInput4 => WithInputFavoriteShortcut(3, shortcut),
             _ => this,
         };
 
@@ -183,6 +208,10 @@ internal sealed record WidgetSettings(
             FavoriteOutput2 = NormalizeFavorite(FavoriteOutput2),
             FavoriteOutput3 = NormalizeFavorite(FavoriteOutput3),
             FavoriteOutput4 = NormalizeFavorite(FavoriteOutput4),
+            FavoriteInput1 = NormalizeInputFavorite(FavoriteInput1),
+            FavoriteInput2 = NormalizeInputFavorite(FavoriteInput2),
+            FavoriteInput3 = NormalizeInputFavorite(FavoriteInput3),
+            FavoriteInput4 = NormalizeInputFavorite(FavoriteInput4),
         };
 
         HashSet<string> endpointIds = new(StringComparer.Ordinal);
@@ -194,6 +223,18 @@ internal sealed record WidgetSettings(
             if (favorite is not null && !endpointIds.Add(favorite.EndpointId))
             {
                 normalized = normalized.WithFavorite(slot, null);
+            }
+        }
+
+        HashSet<string> inputEndpointIds = new(StringComparer.Ordinal);
+
+        for (int slot = 0; slot < MaximumFavoriteInputs; slot++)
+        {
+            FavoriteInputSetting? favorite = normalized.GetInputFavorite(slot);
+
+            if (favorite is not null && !inputEndpointIds.Add(favorite.EndpointId))
+            {
+                normalized = normalized.WithInputFavorite(slot, null);
             }
         }
 
@@ -234,6 +275,28 @@ internal sealed record WidgetSettings(
             _ => this,
         };
 
+    public FavoriteInputSetting? GetInputFavorite(int slot) =>
+        slot switch
+        {
+            0 => FavoriteInput1,
+            1 => FavoriteInput2,
+            2 => FavoriteInput3,
+            3 => FavoriteInput4,
+            _ => null,
+        };
+
+    public WidgetSettings WithInputFavorite(
+        int slot,
+        FavoriteInputSetting? favorite) =>
+        slot switch
+        {
+            0 => this with { FavoriteInput1 = favorite },
+            1 => this with { FavoriteInput2 = favorite },
+            2 => this with { FavoriteInput3 = favorite },
+            3 => this with { FavoriteInput4 = favorite },
+            _ => this,
+        };
+
     public int FindFavoriteSlot(string endpointId)
     {
         for (int slot = 0; slot < MaximumFavoriteOutputs; slot++)
@@ -263,6 +326,35 @@ internal sealed record WidgetSettings(
         return -1;
     }
 
+    public int FindInputFavoriteSlot(string endpointId)
+    {
+        for (int slot = 0; slot < MaximumFavoriteInputs; slot++)
+        {
+            if (string.Equals(
+                GetInputFavorite(slot)?.EndpointId,
+                endpointId,
+                StringComparison.Ordinal))
+            {
+                return slot;
+            }
+        }
+
+        return -1;
+    }
+
+    public int FindOpenInputFavoriteSlot()
+    {
+        for (int slot = 0; slot < MaximumFavoriteInputs; slot++)
+        {
+            if (GetInputFavorite(slot) is null)
+            {
+                return slot;
+            }
+        }
+
+        return -1;
+    }
+
     public WidgetSettings ResetShortcuts()
     {
         WidgetSettings reset = this with
@@ -282,6 +374,16 @@ internal sealed record WidgetSettings(
             if (reset.GetFavorite(slot) is FavoriteOutputSetting favorite)
             {
                 reset = reset.WithFavorite(
+                    slot,
+                    favorite with { Shortcut = null });
+            }
+        }
+
+        for (int slot = 0; slot < MaximumFavoriteInputs; slot++)
+        {
+            if (reset.GetInputFavorite(slot) is FavoriteInputSetting favorite)
+            {
+                reset = reset.WithInputFavorite(
                     slot,
                     favorite with { Shortcut = null });
             }
@@ -316,6 +418,32 @@ internal sealed record WidgetSettings(
         return slot >= 0;
     }
 
+    public static WidgetHotkeyAction GetInputFavoriteAction(int slot) =>
+        slot switch
+        {
+            0 => WidgetHotkeyAction.FavoriteInput1,
+            1 => WidgetHotkeyAction.FavoriteInput2,
+            2 => WidgetHotkeyAction.FavoriteInput3,
+            3 => WidgetHotkeyAction.FavoriteInput4,
+            _ => throw new ArgumentOutOfRangeException(nameof(slot)),
+        };
+
+    public static bool TryGetInputFavoriteSlot(
+        WidgetHotkeyAction action,
+        out int slot)
+    {
+        slot = action switch
+        {
+            WidgetHotkeyAction.FavoriteInput1 => 0,
+            WidgetHotkeyAction.FavoriteInput2 => 1,
+            WidgetHotkeyAction.FavoriteInput3 => 2,
+            WidgetHotkeyAction.FavoriteInput4 => 3,
+            _ => -1,
+        };
+
+        return slot >= 0;
+    }
+
     private WidgetSettings WithFavoriteShortcut(
         int slot,
         WidgetShortcut? shortcut)
@@ -325,6 +453,17 @@ internal sealed record WidgetSettings(
         return favorite is null
             ? this
             : WithFavorite(slot, favorite with { Shortcut = shortcut });
+    }
+
+    private WidgetSettings WithInputFavoriteShortcut(
+        int slot,
+        WidgetShortcut? shortcut)
+    {
+        FavoriteInputSetting? favorite = GetInputFavorite(slot);
+
+        return favorite is null
+            ? this
+            : WithInputFavorite(slot, favorite with { Shortcut = shortcut });
     }
 
     private static WidgetShortcut? NormalizeShortcut(WidgetShortcut? shortcut) =>
@@ -338,14 +477,58 @@ internal sealed record WidgetSettings(
             ? favorite with
             {
                 Shortcut = NormalizeShortcut(favorite.Shortcut),
+                Name = favorite.Name.Trim(),
+                Role = NormalizeRole(favorite.Role),
+                Alias = NormalizeAlias(favorite.Alias),
             }
             : null;
+
+    private static FavoriteInputSetting? NormalizeInputFavorite(
+        FavoriteInputSetting? favorite) =>
+        favorite is not null &&
+        !string.IsNullOrWhiteSpace(favorite.EndpointId) &&
+        !string.IsNullOrWhiteSpace(favorite.Name)
+            ? favorite with
+            {
+                Shortcut = NormalizeShortcut(favorite.Shortcut),
+                Name = favorite.Name.Trim(),
+                Role = NormalizeRole(favorite.Role),
+                Alias = NormalizeAlias(favorite.Alias),
+            }
+            : null;
+
+    private static string? NormalizeAlias(string? alias)
+    {
+        string normalized = (alias ?? string.Empty).Trim();
+
+        if (normalized.Length == 0)
+        {
+            return null;
+        }
+
+        return normalized.Length > MaximumFavoriteAliasLength
+            ? normalized[..MaximumFavoriteAliasLength]
+            : normalized;
+    }
+
+    private static FavoriteEndpointRole NormalizeRole(
+        FavoriteEndpointRole role) =>
+        Enum.IsDefined(role) ? role : FavoriteEndpointRole.General;
 }
 
 internal sealed record FavoriteOutputSetting(
     string EndpointId,
     string Name,
-    WidgetShortcut? Shortcut);
+    WidgetShortcut? Shortcut,
+    FavoriteEndpointRole Role = FavoriteEndpointRole.General,
+    string? Alias = null);
+
+internal sealed record FavoriteInputSetting(
+    string EndpointId,
+    string Name,
+    WidgetShortcut? Shortcut,
+    FavoriteEndpointRole Role = FavoriteEndpointRole.General,
+    string? Alias = null);
 
 internal interface IWidgetSettingsStore
 {

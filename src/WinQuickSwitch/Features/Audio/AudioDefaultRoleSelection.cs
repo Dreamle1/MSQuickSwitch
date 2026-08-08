@@ -4,4 +4,5 @@ public enum AudioDefaultRoleSelection
 {
     General,
     Communications,
+    Both,
 }
