@@ -209,10 +209,10 @@
     <Style x:Key="WidgetTabToggle"
            TargetType="ToggleButton"
            BasedOn="{StaticResource DisplayModeToggle}">
-      <Setter Property="MinWidth" Value="78" />
+      <Setter Property="MinWidth" Value="64" />
       <Setter Property="MinHeight" Value="30" />
-      <Setter Property="Margin" Value="0,0,6,8" />
-      <Setter Property="Padding" Value="9,4" />
+      <Setter Property="Margin" Value="0,0,4,8" />
+      <Setter Property="Padding" Value="7,4" />
     </Style>
 
     <Style x:Key="CompactButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">

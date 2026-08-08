@@ -1107,3 +1107,29 @@ Published favorites-and-profiles variants:
 | --- | --- | ---: |
 | Lite | `36FD1A603087ED897732F684A94E528863AFC266FAD15DD49D314BFAB5E7BA89` | 27,052,010 bytes |
 | Portable | `D8E7D97A1B6C2E3B19A7466A6563FDC7D72FF3E0555832945C3D53F9AF3B1C65` | 71,518,418 bytes |
+
+## 2026-08-08 - About and sharing disclaimer
+
+### Implemented
+
+- Added an About page to the main navigation.
+- Added a clear warning not to copy, upload, redistribute, or publish the
+  application without permission.
+- Added privacy guidance for local settings, saved profiles, device names,
+  and shortcuts.
+- Added responsible-use guidance because the app can change Windows display,
+  audio, wireless, and taskbar settings.
+- Added `Ctrl + 6` as a keyboard shortcut for the About page.
+- Tightened the tab sizing so all six navigation tabs fit in the compact shell.
+
+### Verification
+
+- Release build: passed with 0 warnings and 0 errors.
+- Automated checks: 73 passed, 0 failed.
+- Published the updated Lite EXE.
+
+Published About/disclaimer variant:
+
+| Variant | SHA-256 | Size |
+| --- | --- | ---: |
+| Lite | `0CC95494E2073D6EBEE206E2AA39A58449D60189F9696703299E87A79F51CA7B` | 27,052,010 bytes |

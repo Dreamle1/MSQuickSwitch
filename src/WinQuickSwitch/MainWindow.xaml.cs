@@ -487,6 +487,8 @@ public partial class MainWindow : Window
             panel == WidgetPanel.Options ? Visibility.Visible : Visibility.Collapsed;
         ProfilesPanel.Visibility =
             panel == WidgetPanel.Profiles ? Visibility.Visible : Visibility.Collapsed;
+        AboutPanel.Visibility =
+            panel == WidgetPanel.About ? Visibility.Visible : Visibility.Collapsed;
 
         _isApplyingPanelSelection = true;
 
@@ -497,6 +499,7 @@ public partial class MainWindow : Window
             DevicesPanelTab.IsChecked = panel == WidgetPanel.Devices;
             OptionsPanelTab.IsChecked = panel == WidgetPanel.Options;
             ProfilesPanelTab.IsChecked = panel == WidgetPanel.Profiles;
+            AboutPanelTab.IsChecked = panel == WidgetPanel.About;
         }
         finally
         {
@@ -536,6 +539,9 @@ public partial class MainWindow : Window
             case WidgetPanel.Profiles:
                 UpdateProfilesControls();
                 ProfileNameBox.Focus();
+                break;
+            case WidgetPanel.About:
+                AboutPanelTab.Focus();
                 break;
         }
     }
@@ -1233,6 +1239,7 @@ public partial class MainWindow : Window
                 Key.D3 or Key.NumPad3 => WidgetPanel.Devices,
                 Key.D4 or Key.NumPad4 => WidgetPanel.Options,
                 Key.D5 or Key.NumPad5 => WidgetPanel.Profiles,
+                Key.D6 or Key.NumPad6 => WidgetPanel.About,
                 _ => null,
             };
 

@@ -29,7 +29,7 @@
           <ColumnDefinition Width="*" />
           <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
-        <UniformGrid Grid.Column="0" Columns="5">
+        <UniformGrid Grid.Column="0" Columns="6">
           <ToggleButton x:Name="DisplayPanelTab"
                         Style="{StaticResource WidgetTabToggle}"
                         Tag="Display"
@@ -61,6 +61,12 @@
                         Checked="PanelTab_Checked"
                         Content="Profiles"
                         AutomationProperties.Name="Open saved profiles" />
+          <ToggleButton x:Name="AboutPanelTab"
+                        Style="{StaticResource WidgetTabToggle}"
+                        Tag="About"
+                        Checked="PanelTab_Checked"
+                        Content="About"
+                        AutomationProperties.Name="Open About and disclaimer" />
         </UniformGrid>
         <Button Grid.Column="1"
                 Style="{StaticResource CompactButton}"
@@ -1040,6 +1046,52 @@
                      Margin="0,6,0,0"
                      Foreground="{DynamicResource SecondaryTextBrush}"
                      Text="Profiles are saved locally."
+                     TextWrapping="Wrap" />
+        </StackPanel>
+      </Border>
+
+      <Border x:Name="AboutPanel"
+              Grid.Row="1"
+              Style="{StaticResource SectionCard}"
+              Visibility="Collapsed">
+        <StackPanel>
+          <TextBlock FontSize="17"
+                     FontWeight="SemiBold"
+                     Text="About WinQuickSwitch" />
+          <TextBlock Margin="0,5,0,0"
+                     Foreground="{DynamicResource SecondaryTextBrush}"
+                     Text="A local Windows utility for quick display, audio, device, taskbar, favorite, and profile controls."
+                     TextWrapping="Wrap" />
+
+          <Border Margin="0,14,0,0"
+                  Padding="10"
+                  Background="{DynamicResource SelectionBrush}"
+                  CornerRadius="5">
+            <StackPanel>
+              <TextBlock FontWeight="SemiBold"
+                         Foreground="{DynamicResource SelectionTextBrush}"
+                         Text="Do not share this application" />
+              <TextBlock Margin="0,5,0,0"
+                         Foreground="{DynamicResource SelectionTextBrush}"
+                         Text="This build is intended for its authorized user. Do not copy, upload, redistribute, or publish the EXE or packaged application without permission."
+                         TextWrapping="Wrap" />
+              <TextBlock Margin="0,5,0,0"
+                         Foreground="{DynamicResource SelectionTextBrush}"
+                         Text="Keep local settings, saved profiles, device names, and shortcuts private."
+                         TextWrapping="Wrap" />
+            </StackPanel>
+          </Border>
+
+          <TextBlock Margin="0,14,0,0"
+                     FontWeight="SemiBold"
+                     Text="Use responsibly" />
+          <TextBlock Margin="0,4,0,0"
+                     Foreground="{DynamicResource SecondaryTextBrush}"
+                     Text="WinQuickSwitch can change display, audio, microphone, wireless, and taskbar settings. Review each action before applying it and use the app at your own risk."
+                     TextWrapping="Wrap" />
+          <TextBlock Margin="0,14,0,0"
+                     Foreground="{DynamicResource SecondaryTextBrush}"
+                     Text="This is a local/private build. Contact the owner or maintainer if you need an authorized copy."
                      TextWrapping="Wrap" />
         </StackPanel>
       </Border>

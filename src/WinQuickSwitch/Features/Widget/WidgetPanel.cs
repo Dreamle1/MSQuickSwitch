@@ -7,4 +7,5 @@ internal enum WidgetPanel
     Devices,
     Options,
     Profiles,
+    About,
 }
