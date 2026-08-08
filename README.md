@@ -173,9 +173,9 @@ Customer use of a compiled Store release is covered by the
 [End User License Agreement](docs/EULA.md) and applicable Microsoft Store
 terms.
 
-Before a commercial release, replace the publisher and contact placeholders in
-the EULA, obtain legal review for the publisher's jurisdiction and sales
-markets, and make the final terms available from the Store listing or app.
+The publisher is Andrew Chang and the support contact is
+`andrew.chang0@outlook.com`. Before commercial release, obtain legal review and
+publish the final EULA and [privacy policy](docs/PRIVACY_POLICY.md).
 
 See [Microsoft Store licensing guide](docs/STORE_LICENSING.md) for the proposed
 paid-app model, entitlement flow, and remaining publication work.

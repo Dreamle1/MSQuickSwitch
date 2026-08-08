@@ -1161,3 +1161,29 @@ Published About/disclaimer variant:
 | Variant | SHA-256 | Size |
 | --- | --- | ---: |
 | Lite | `78C4328A2240454EFC73176E4D30694F381A793548771458186C081894A6DAB5` | 27,052,010 bytes |
+
+## 2026-08-08 - publisher identity and in-app legal documents
+
+### Implemented
+
+- Set the legal publisher to Andrew Chang and the support contact to
+  `andrew.chang0@outlook.com` in the source notice and EULA.
+- Versioned the EULA as 1.0 and removed publication placeholders.
+- Added a privacy policy describing local settings, profiles, device data,
+  startup registration, retention, deletion, and Microsoft Store boundaries.
+- Embedded the EULA and privacy policy into the application assembly.
+- Added themed, selectable, scrollable in-app document viewers from About.
+- Recorded a one-time paid model, target price near CAD $1.00, no trial, and no
+  mandatory first-run EULA screen for the first Store release.
+- Added automated checks for embedded publisher and support details and for
+  readable legal-document rendering.
+
+### Verification
+
+- Release build: passed with 0 warnings and 0 errors.
+- Automated checks: 75 passed, 0 failed.
+- Published and restarted the updated Lite EXE.
+
+| Variant | SHA-256 | Size |
+| --- | --- | ---: |
+| Lite | `72919E213592CD34BC8A548F8CF00F4E780D5B8CA4EB5151C535F322D90B05D9` | 27,068,394 bytes |

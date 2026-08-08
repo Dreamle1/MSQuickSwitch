@@ -2,13 +2,11 @@
 
 Effective date: August 8, 2026
 
-Publisher: **[PUBLISHER LEGAL NAME]**
+Version: 1.0
 
-Contact: **[SUPPORT EMAIL OR SUPPORT URL]**
+Publisher: **Andrew Chang**
 
-> Publication checklist: Replace the two bracketed fields above before using
-> this agreement in a Microsoft Store submission. This draft should be reviewed
-> by a qualified lawyer for the publisher's business and target markets.
+Contact: **andrew.chang0@outlook.com**
 
 ## 1. Agreement
 

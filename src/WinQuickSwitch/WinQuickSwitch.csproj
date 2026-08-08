@@ -7,4 +7,9 @@
     <RootNamespace>WinQuickSwitch</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\docs\EULA.md" LogicalName="WinQuickSwitch.Legal.EULA.md" />
+    <EmbeddedResource Include="..\..\docs\PRIVACY_POLICY.md" LogicalName="WinQuickSwitch.Legal.PRIVACY_POLICY.md" />
+  </ItemGroup>
 </Project>

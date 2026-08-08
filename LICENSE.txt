@@ -1,6 +1,6 @@
 WinQuickSwitch Proprietary Software Notice
 
-Copyright (c) 2026 [PUBLISHER LEGAL NAME]. All rights reserved.
+Copyright (c) 2026 Andrew Chang. All rights reserved.
 
 WinQuickSwitch, including its source code, executable files, user interface,
 documentation, graphics, and other accompanying materials, is proprietary

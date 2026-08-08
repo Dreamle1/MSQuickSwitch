@@ -3,6 +3,7 @@ using System.Windows.Media;
 using WinQuickSwitch.Features.Audio;
 using WinQuickSwitch.Features.Devices;
 using WinQuickSwitch.Features.Display;
+using WinQuickSwitch.Features.Legal;
 using WinQuickSwitch.Features.Profiles;
 using WinQuickSwitch.Features.Taskbar;
 using WinQuickSwitch.Features.Widget;
@@ -70,6 +71,8 @@ internal static class Program
             ("Wireless radio API failures remain nonfatal", WirelessRadioApiFailuresRemainNonfatal),
             ("Dark title bar uses the application palette", DarkTitleBarUsesAppPalette),
             ("Light title bar uses the application palette", LightTitleBarUsesAppPalette),
+            ("Embedded legal documents include publisher details", EmbeddedLegalDocumentsIncludePublisher),
+            ("Legal documents render without Markdown markers", LegalDocumentsRenderPlainText),
             ("Widget shortcuts validate and format supported chords", WidgetShortcutsValidateAndFormat),
             ("Widget settings remove duplicate shortcuts", WidgetSettingsRemoveDuplicates),
             ("Display and favorite shortcuts map to distinct actions", DisplayAndFavoriteShortcutsMapToActions),
@@ -124,6 +127,38 @@ internal static class Program
         Console.WriteLine();
         Console.WriteLine($"{tests.Count - failed}/{tests.Count} tests passed.");
         return failed == 0 ? 0 : 1;
+    }
+
+    private static Task EmbeddedLegalDocumentsIncludePublisher()
+    {
+        LegalDocument eula = LegalDocuments.Get(LegalDocumentKind.Eula);
+        LegalDocument privacy =
+            LegalDocuments.Get(LegalDocumentKind.PrivacyPolicy);
+
+        True(
+            eula.DisplayText.Contains("Andrew Chang", StringComparison.Ordinal),
+            "The embedded EULA should identify the publisher.");
+        True(
+            privacy.DisplayText.Contains(
+                "andrew.chang0@outlook.com",
+                StringComparison.Ordinal),
+            "The embedded privacy policy should include the support contact.");
+        return Task.CompletedTask;
+    }
+
+    private static Task LegalDocumentsRenderPlainText()
+    {
+        string displayText = LegalDocuments.ToDisplayText(
+            "# Heading\n\nUse **important** and `local` settings.");
+
+        True(
+            displayText.StartsWith("Heading", StringComparison.Ordinal),
+            "Markdown headings should be readable in the legal window.");
+        True(
+            !displayText.Contains("**", StringComparison.Ordinal) &&
+            !displayText.Contains('`'),
+            "Markdown emphasis markers should be removed.");
+        return Task.CompletedTask;
     }
 
     private static Task SingleInternalDisplayIsClassified()

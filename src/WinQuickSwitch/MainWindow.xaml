@@ -1094,9 +1094,26 @@
                      Text="WinQuickSwitch can change display, audio, microphone, wireless, and taskbar settings. Review each action before applying it and use the app at your own risk."
                      TextWrapping="Wrap" />
           <TextBlock Margin="0,14,0,0"
+                     FontWeight="SemiBold"
+                     Text="Publisher" />
+          <TextBlock Margin="0,4,0,0"
+                     Foreground="{DynamicResource SecondaryTextBrush}"
+                     Text="Andrew Chang — andrew.chang0@outlook.com"
+                     TextWrapping="Wrap" />
+          <TextBlock Margin="0,14,0,0"
                      Foreground="{DynamicResource SecondaryTextBrush}"
                      Text="Use is subject to the WinQuickSwitch End User License Agreement and applicable Microsoft Store terms. Mandatory consumer rights still apply."
                      TextWrapping="Wrap" />
+          <WrapPanel Margin="0,12,0,0">
+            <Button Style="{StaticResource CompactButton}"
+                    Click="ViewLicense_Click"
+                    Content="View license"
+                    AutomationProperties.Name="View end user license agreement" />
+            <Button Style="{StaticResource CompactButton}"
+                    Click="ViewPrivacyPolicy_Click"
+                    Content="Privacy policy"
+                    AutomationProperties.Name="View privacy policy" />
+          </WrapPanel>
         </StackPanel>
       </Border>
     </Grid>

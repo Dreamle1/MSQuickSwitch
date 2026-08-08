@@ -1,0 +1,51 @@
+<Window x:Class="WinQuickSwitch.LegalDocumentWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="WinQuickSwitch legal document"
+        Width="720"
+        Height="640"
+        MinWidth="520"
+        MinHeight="420"
+        Background="{DynamicResource PageBrush}"
+        ShowInTaskbar="False"
+        Topmost="True"
+        WindowStartupLocation="CenterOwner">
+  <Grid Margin="16">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+
+    <StackPanel Grid.Row="0" Margin="0,0,0,12">
+      <TextBlock x:Name="DocumentTitleText"
+                 FontSize="18"
+                 FontWeight="SemiBold" />
+      <TextBlock Margin="0,4,0,0"
+                 Foreground="{DynamicResource SecondaryTextBrush}"
+                 Text="WinQuickSwitch — published by Andrew Chang" />
+    </StackPanel>
+
+    <TextBox x:Name="DocumentTextBox"
+             Grid.Row="1"
+             Padding="12"
+             FontFamily="Segoe UI"
+             FontSize="13"
+             IsReadOnly="True"
+             AcceptsReturn="True"
+             TextWrapping="Wrap"
+             VerticalContentAlignment="Top"
+             VerticalScrollBarVisibility="Auto"
+             HorizontalScrollBarVisibility="Disabled"
+             AutomationProperties.Name="Legal document text" />
+
+    <Button Grid.Row="2"
+            Margin="0,12,0,0"
+            MinWidth="90"
+            HorizontalAlignment="Right"
+            IsDefault="True"
+            IsCancel="True"
+            Click="Close_Click"
+            Content="Close" />
+  </Grid>
+</Window>

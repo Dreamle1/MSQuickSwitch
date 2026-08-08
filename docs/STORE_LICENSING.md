@@ -21,21 +21,28 @@ This divides responsibility cleanly:
 A purchase is a license to use the app. It does not transfer ownership of the
 app or source code to the customer.
 
+## Confirmed commercial configuration
+
+- Publisher: Andrew Chang
+- Support contact: `andrew.chang0@outlook.com`
+- Model: one-time paid purchase
+- Target price: the Microsoft Store price tier closest to CAD $1.00
+- Trial: none for the first release
+- EULA presentation: available in the Store listing and the app's About page;
+  no mandatory first-run acceptance screen
+
 ## Before submission
 
-1. Choose the legal publisher name that will own the app and receive Store
-   payouts. Use the same identity consistently in Partner Center, the Store
-   listing, the EULA, support information, and privacy policy.
-2. Replace `[PUBLISHER LEGAL NAME]` in `LICENSE.txt` and `docs/EULA.md`.
-3. Replace `[SUPPORT EMAIL OR SUPPORT URL]` in `docs/EULA.md`.
-4. Have a qualified lawyer review the EULA, especially the governing-law,
+1. Confirm the Partner Center publisher and payout identity is consistent with
+   Andrew Chang and the intended legal seller.
+2. Have a qualified lawyer review the EULA, especially the governing-law,
    warranty, liability, refund, and consumer-rights sections for target markets.
-5. Publish the final EULA at a stable HTTPS URL and make it available from the
+3. Publish the final EULA at a stable HTTPS URL and make it available from the
    Store listing or inside the packaged app.
-6. Publish a privacy policy at a stable HTTPS URL. Even if the current release
+4. Publish the privacy policy at a stable HTTPS URL. Even if the current release
    does not transmit personal data, the policy should plainly describe local
    settings and state whether telemetry or network collection occurs.
-7. Inventory third-party libraries, icons, fonts, and other assets and retain
+5. Inventory third-party libraries, icons, fonts, and other assets and retain
    their required notices and licenses.
 
 ## Store submission flow
@@ -45,8 +52,9 @@ app or source code to the customer.
 3. Create an **MSIX or PWA app** submission and package the WPF application as
    MSIX. The current `artifacts/win-x64-lite/WinQuickSwitch.exe` is an
    unpackaged direct-download build and is not the planned Store package.
-4. In **Pricing and availability**, choose a one-time paid price, markets,
-   visibility, and whether to offer a trial.
+4. In **Pricing and availability**, choose the paid price tier closest to
+   CAD $1.00, no free trial, the intended markets, and normal Store
+   discoverability.
 5. Upload the MSIX package and complete the Store listing, age rating,
    screenshots, product declarations, support details, and privacy information.
 6. Include the final license terms where Partner Center or the listing permits,
@@ -103,17 +111,18 @@ material. Legal counsel should confirm the acceptance design for sales markets.
 Completed:
 
 - Proprietary source and repository notice.
-- Customer-facing Store EULA draft.
-- Commercial licensed-use wording in the About page.
+- Customer-facing Store EULA version 1.0 with publisher and support details.
+- Local-data privacy policy with publisher and support details.
+- Commercial licensed-use wording and embedded legal-document viewers in the
+  About page.
+- One-time purchase, target price, no-trial, and EULA-presentation decisions.
 - Verified Release build, automated checks, and Lite EXE publication.
 
 Still required for Store release:
 
-- Final publisher identity and support contact.
 - Legal review and hosted final EULA.
-- Privacy policy.
+- Hosted final privacy policy.
 - MSIX packaging, Store identity, package assets, and Store certification test.
-- A decision on Store-listing notice versus first-run acceptance.
 
 ## Official references
 

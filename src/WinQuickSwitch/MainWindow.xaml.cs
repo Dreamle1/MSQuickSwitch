@@ -9,6 +9,7 @@ using System.Windows.Threading;
 using WinQuickSwitch.Features.Audio;
 using WinQuickSwitch.Features.Devices;
 using WinQuickSwitch.Features.Display;
+using WinQuickSwitch.Features.Legal;
 using WinQuickSwitch.Features.Profiles;
 using WinQuickSwitch.Features.Taskbar;
 using WinQuickSwitch.Features.Widget;
@@ -726,6 +727,37 @@ public partial class MainWindow : Window
     private void Quit_Click(object sender, RoutedEventArgs e)
     {
         QuitWidget();
+    }
+
+    private void ViewLicense_Click(object sender, RoutedEventArgs e) =>
+        ShowLegalDocument(LegalDocumentKind.Eula);
+
+    private void ViewPrivacyPolicy_Click(object sender, RoutedEventArgs e) =>
+        ShowLegalDocument(LegalDocumentKind.PrivacyPolicy);
+
+    private void ShowLegalDocument(LegalDocumentKind kind)
+    {
+        _autoHideAllowedAfterUtc = DateTime.MaxValue;
+
+        try
+        {
+            LegalDocument document = LegalDocuments.Get(kind);
+            LegalDocumentWindow window = new(
+                this,
+                document,
+                _widgetSettings.UseDarkTheme);
+            window.ShowDialog();
+        }
+        finally
+        {
+            _autoHideAllowedAfterUtc =
+                DateTime.UtcNow.AddMilliseconds(350);
+
+            if (IsVisible)
+            {
+                Activate();
+            }
+        }
     }
 
     private void QuitWidget()
