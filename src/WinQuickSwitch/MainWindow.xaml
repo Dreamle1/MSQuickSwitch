@@ -679,9 +679,9 @@
                       <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="100" />
+                        <ColumnDefinition Width="32" />
+                        <ColumnDefinition Width="32" />
                         <ColumnDefinition Width="115" />
-                        <ColumnDefinition Width="32" />
-                        <ColumnDefinition Width="32" />
                         <ColumnDefinition Width="58" />
                       </Grid.ColumnDefinitions>
                       <TextBlock Margin="0,0,8,0"
@@ -748,9 +748,9 @@
                       <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="100" />
+                        <ColumnDefinition Width="32" />
+                        <ColumnDefinition Width="32" />
                         <ColumnDefinition Width="115" />
-                        <ColumnDefinition Width="32" />
-                        <ColumnDefinition Width="32" />
                         <ColumnDefinition Width="58" />
                       </Grid.ColumnDefinitions>
                       <TextBlock Margin="0,0,8,0"
