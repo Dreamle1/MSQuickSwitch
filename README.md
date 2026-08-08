@@ -165,6 +165,21 @@ Both variants are Windows x64 single-file executables. Trimming and ReadyToRun
 are intentionally disabled because this WPF/COM application prioritizes
 correctness and compact output over speculative publish optimizations.
 
+## Licensing
+
+WinQuickSwitch is proprietary software and is not released under an open-source
+license. Repository contents are covered by [LICENSE.txt](LICENSE.txt).
+Customer use of a compiled Store release is covered by the
+[End User License Agreement](docs/EULA.md) and applicable Microsoft Store
+terms.
+
+Before a commercial release, replace the publisher and contact placeholders in
+the EULA, obtain legal review for the publisher's jurisdiction and sales
+markets, and make the final terms available from the Store listing or app.
+
+See [Microsoft Store licensing guide](docs/STORE_LICENSING.md) for the proposed
+paid-app model, entitlement flow, and remaining publication work.
+
 ## Repository layout
 
 ```text

@@ -1070,10 +1070,14 @@
             <StackPanel>
               <TextBlock FontWeight="SemiBold"
                          Foreground="{DynamicResource SelectionTextBrush}"
-                         Text="Do not share this application" />
+                         Text="Licensed software" />
               <TextBlock Margin="0,5,0,0"
                          Foreground="{DynamicResource SelectionTextBrush}"
-                         Text="This build is intended for its authorized user. Do not copy, upload, redistribute, or publish the EXE or packaged application without permission."
+                         Text="A Microsoft Store purchase grants permission to use WinQuickSwitch; it does not transfer ownership of the app or its source code."
+                         TextWrapping="Wrap" />
+              <TextBlock Margin="0,5,0,0"
+                         Foreground="{DynamicResource SelectionTextBrush}"
+                         Text="Install it on devices allowed by Microsoft Store. Do not copy, upload, redistribute, resell, sublicense, or share the app package or executable with another person."
                          TextWrapping="Wrap" />
               <TextBlock Margin="0,5,0,0"
                          Foreground="{DynamicResource SelectionTextBrush}"
@@ -1091,7 +1095,7 @@
                      TextWrapping="Wrap" />
           <TextBlock Margin="0,14,0,0"
                      Foreground="{DynamicResource SecondaryTextBrush}"
-                     Text="This is a local/private build. Contact the owner or maintainer if you need an authorized copy."
+                     Text="Use is subject to the WinQuickSwitch End User License Agreement and applicable Microsoft Store terms. Mandatory consumer rights still apply."
                      TextWrapping="Wrap" />
         </StackPanel>
       </Border>

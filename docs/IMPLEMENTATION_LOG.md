@@ -1133,3 +1133,31 @@ Published About/disclaimer variant:
 | Variant | SHA-256 | Size |
 | --- | --- | ---: |
 | Lite | `0CC95494E2073D6EBEE206E2AA39A58449D60189F9696703299E87A79F51CA7B` | 27,052,010 bytes |
+
+## 2026-08-08 - commercial licensing milestone
+
+### Implemented
+
+- Added a proprietary repository and source-code notice in `LICENSE.txt`.
+- Added a customer-facing Microsoft Store EULA covering the license grant,
+  permitted personal and internal business use, redistribution restrictions,
+  Store terms, updates, privacy boundaries, termination, warranties, liability,
+  consumer rights, and British Columbia governing law.
+- Left explicit publisher legal-name and support-contact placeholders that must
+  be completed before Store submission.
+- Updated the About page from private-build wording to commercial licensed-use
+  wording that permits Store-managed multi-device installation while prohibiting
+  unauthorized sharing, resale, sublicensing, and redistribution.
+- Added licensing guidance to the repository README.
+- Added a Store licensing guide covering MSIX distribution, purchase
+  entitlement, optional runtime checks, EULA acceptance, and remaining work.
+
+### Verification
+
+- Release build: passed with 0 warnings and 0 errors.
+- Automated checks: 73 passed, 0 failed.
+- Published and restarted the updated Lite EXE.
+
+| Variant | SHA-256 | Size |
+| --- | --- | ---: |
+| Lite | `78C4328A2240454EFC73176E4D30694F381A793548771458186C081894A6DAB5` | 27,052,010 bytes |

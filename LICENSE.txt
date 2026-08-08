@@ -1,0 +1,20 @@
+WinQuickSwitch Proprietary Software Notice
+
+Copyright (c) 2026 [PUBLISHER LEGAL NAME]. All rights reserved.
+
+WinQuickSwitch, including its source code, executable files, user interface,
+documentation, graphics, and other accompanying materials, is proprietary
+software.
+
+No permission is granted to copy, modify, publish, distribute, sublicense,
+sell, rent, lease, host, disclose, or create derivative works from the source
+code or other repository contents, except under a separate written agreement
+signed by the copyright owner.
+
+A person who lawfully acquires the compiled WinQuickSwitch application through
+the Microsoft Store receives only the end-user rights stated in the
+WinQuickSwitch End User License Agreement in docs/EULA.md and the applicable
+Microsoft Store terms. Acquisition of the application does not transfer
+ownership of WinQuickSwitch or any intellectual-property rights.
+
+THE SOFTWARE IS PROVIDED ONLY UNDER THE EXPRESS TERMS OF THOSE AGREEMENTS.
