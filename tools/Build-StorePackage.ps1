@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [ValidatePattern('^\d{1,5}\.\d{1,5}\.\d{1,5}\.\d{1,5}$')]
-    [string]$Version = '1.0.0.0'
+    [string]$Version = '1.0.0.1'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -130,8 +130,9 @@ if ($LASTEXITCODE -ne 0) {
 $uploadPackagePath = Join-Path $uploadDirectory $packageName
 Copy-Item -LiteralPath $packagePath -Destination $uploadPackagePath
 
-$zipPath = Join-Path $artifactRoot 'WinQuickSwitch_StoreUpload.zip'
-$uploadPath = Join-Path $artifactRoot 'WinQuickSwitch_StoreUpload.msixupload'
+$uploadBaseName = "WinQuickSwitch_${Version}_x64"
+$zipPath = Join-Path $artifactRoot "${uploadBaseName}.zip"
+$uploadPath = Join-Path $artifactRoot "${uploadBaseName}.msixupload"
 
 foreach ($oldUpload in @($zipPath, $uploadPath)) {
     if (Test-Path -LiteralPath $oldUpload) {

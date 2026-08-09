@@ -20,7 +20,7 @@ identity and will break Store association and updates.
 From the repository root:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\Build-StorePackage.ps1 -Version 1.0.0.0
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\Build-StorePackage.ps1 -Version 1.0.0.1
 ```
 
 The build:
@@ -33,8 +33,13 @@ The build:
 
 Expected outputs:
 
-- `artifacts/store-msix/WinQuickSwitch_1.0.0.0_x64.msix`
-- `artifacts/store-msix/WinQuickSwitch_StoreUpload.msixupload`
+- `artifacts/store-msix/WinQuickSwitch_1.0.0.1_x64.msix`
+- `artifacts/store-msix/WinQuickSwitch_1.0.0.1_x64.msixupload`
+
+When replacing a rejected Partner Center package, first choose **Delete** on
+the invalid uploaded package, then select the newly versioned `.msixupload`
+file. **Retry** only validates the bytes already uploaded and does not select
+the replacement file.
 
 Microsoft Store signs an accepted MSIX submission. The unsigned local package
 is intended for structural validation and Partner Center upload; it is not the

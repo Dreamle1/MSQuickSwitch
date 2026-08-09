@@ -1215,12 +1215,12 @@ Published About/disclaimer variant:
 - Automated checks: 75 passed, 0 failed.
 - Published the updated Lite EXE.
 
-Store package candidate:
+Store package candidate (version `1.0.0.1`):
 
 | Artifact | SHA-256 | Size |
 | --- | --- | ---: |
-| MSIX | `F0C25179537B9344DAEEE79A61B42C12230E441D7AEB1569C1B18D8D421347A6` | 70,945,037 bytes |
-| MSIX upload | `81C965E223DA49EF2517FDB32A12A2D2D83BD940B1BA3384785CD8F07021F75A` | 70,324,644 bytes |
+| MSIX | `F98AF434FB3C103C5D234C0D174BB4444DE7A1425588609EA9CC43A2348A1ED6` | 70,945,064 bytes |
+| MSIX upload | `6DD05782D9D06009B0B6292AA167728C84D1B141DC88EBC35EE5B0F8536EBADA` | 70,324,617 bytes |
 
 Republished desktop executable:
 
@@ -1250,3 +1250,24 @@ complete signed/private-flight and Windows App Certification Kit testing.
   uncompressed size matches the rebuilt package.
 - Release build: passed with 0 warnings and 0 errors.
 - Automated checks: 75 passed, 0 failed.
+
+## 2026-08-08 - uniquely versioned Partner Center replacement
+
+### Corrected
+
+- Incremented the replacement package from `1.0.0.0` to `1.0.0.1` so its full
+  name cannot conflict with either previously uploaded package.
+- Changed `.msixupload` output names to include the package version and
+  architecture, preventing the old browser upload from being mistaken for the
+  replacement.
+- Moved older local Store artifacts into the ignored `obsolete` folder, leaving
+  only the `1.0.0.1` MSIX and upload at the artifact root.
+
+### Verification
+
+- Inspected `AppxManifest.xml` inside the MSIX inside the final `.msixupload`.
+- Embedded identity: `Dreamle.WinQuickSwitch`, version `1.0.0.1`, x64.
+- Expected full name:
+  `Dreamle.WinQuickSwitch_1.0.0.1_x64__sth8w7gs4yt8p`.
+- Expected family name: `Dreamle.WinQuickSwitch_sth8w7gs4yt8p`.
+- Upload contains exactly one MSIX and passes the guarded package build.
