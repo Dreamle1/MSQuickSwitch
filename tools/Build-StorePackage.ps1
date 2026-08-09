@@ -1,10 +1,21 @@
 [CmdletBinding()]
 param(
     [ValidatePattern('^\d{1,5}\.\d{1,5}\.\d{1,5}\.\d{1,5}$')]
-    [string]$Version = '1.0.0.1'
+    [string]$Version = '1.0.1.0'
 )
 
 $ErrorActionPreference = 'Stop'
+
+$versionParts = @($Version.Split('.') | ForEach-Object { [uint32]$_ })
+
+if (@($versionParts | Where-Object { $_ -gt 65535 }).Count -gt 0) {
+    throw 'Every MSIX version component must be between 0 and 65535.'
+}
+
+if ($versionParts[3] -ne 0) {
+    throw ('Microsoft Store requires the fourth version component to be 0. ' +
+        'Increment the third component for a new Store package instead.')
+}
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $artifactRoot = Join-Path $repoRoot 'artifacts\store-msix'

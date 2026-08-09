@@ -20,7 +20,7 @@ identity and will break Store association and updates.
 From the repository root:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\Build-StorePackage.ps1 -Version 1.0.0.1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\Build-StorePackage.ps1 -Version 1.0.1.0
 ```
 
 The build:
@@ -33,8 +33,8 @@ The build:
 
 Expected outputs:
 
-- `artifacts/store-msix/WinQuickSwitch_1.0.0.1_x64.msix`
-- `artifacts/store-msix/WinQuickSwitch_1.0.0.1_x64.msixupload`
+- `artifacts/store-msix/WinQuickSwitch_1.0.1.0_x64.msix`
+- `artifacts/store-msix/WinQuickSwitch_1.0.1.0_x64.msixupload`
 
 When replacing a rejected Partner Center package, first choose **Delete** on
 the invalid uploaded package, then select the newly versioned `.msixupload`
@@ -58,9 +58,12 @@ same as a normally installable production package.
 
 ## Versioning
 
-MSIX versions have four numeric parts. Every Store update must use a version
-higher than the previously submitted package. Keep release tags, assembly
-versions, documentation, and the MSIX version aligned before public release.
+MSIX versions have four numeric parts, but Microsoft Store app submissions
+require the fourth (revision) component to be zero. Increment the third
+component for replacement packages and updates; for example, follow `1.0.0.0`
+with `1.0.1.0`, not `1.0.0.1`. Every Store update must use a version higher
+than the previously submitted package. Keep release tags, assembly versions,
+documentation, and the MSIX version aligned before public release.
 
 ## Why this is manual
 

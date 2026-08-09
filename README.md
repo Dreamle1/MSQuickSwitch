@@ -168,13 +168,13 @@ correctness and compact output over speculative publish optimizations.
 Microsoft Store package:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\Build-StorePackage.ps1 -Version 1.0.0.1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\Build-StorePackage.ps1 -Version 1.0.1.0
 ```
 
 Outputs:
 
-- `artifacts\store-msix\WinQuickSwitch_1.0.0.1_x64.msix`
-- `artifacts\store-msix\WinQuickSwitch_1.0.0.1_x64.msixupload`
+- `artifacts\store-msix\WinQuickSwitch_1.0.1.0_x64.msix`
+- `artifacts\store-msix\WinQuickSwitch_1.0.1.0_x64.msixupload`
 
 The Store package uses the reserved `Dreamle.WinQuickSwitch` identity. See
 [store/README.md](store/README.md) for package details, versioning rules, and

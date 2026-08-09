@@ -1215,12 +1215,12 @@ Published About/disclaimer variant:
 - Automated checks: 75 passed, 0 failed.
 - Published the updated Lite EXE.
 
-Store package candidate (version `1.0.0.1`):
+Store package candidate (version `1.0.1.0`):
 
 | Artifact | SHA-256 | Size |
 | --- | --- | ---: |
-| MSIX | `F98AF434FB3C103C5D234C0D174BB4444DE7A1425588609EA9CC43A2348A1ED6` | 70,945,064 bytes |
-| MSIX upload | `6DD05782D9D06009B0B6292AA167728C84D1B141DC88EBC35EE5B0F8536EBADA` | 70,324,617 bytes |
+| MSIX | `BDB4674AECCEFE2DD969592B7D2E3DB1DD239C0EF1A506A8858B9C666E5C1460` | 70,945,063 bytes |
+| MSIX upload | `ED3A993B1C4C03F2B6ADB4A4BBA99E020583F546A5E10A77CC2E74C6071C7A48` | 70,324,606 bytes |
 
 Republished desktop executable:
 
@@ -1271,3 +1271,24 @@ complete signed/private-flight and Windows App Certification Kit testing.
   `Dreamle.WinQuickSwitch_1.0.0.1_x64__sth8w7gs4yt8p`.
 - Expected family name: `Dreamle.WinQuickSwitch_sth8w7gs4yt8p`.
 - Upload contains exactly one MSIX and passes the guarded package build.
+
+## 2026-08-08 - Microsoft Store revision-number correction
+
+### Corrected
+
+- Partner Center reported that Store app packages cannot use a nonzero fourth
+  version component, making `1.0.0.1` invalid.
+- Incremented the third component and rebuilt the replacement as `1.0.1.0`.
+- Added a build-time rule that rejects nonzero fourth components and version
+  components above the MSIX limit of 65535.
+- Moved the rejected `1.0.0.1` artifacts out of the active upload folder.
+
+### Verification
+
+- Confirmed that the build rejects `1.0.0.1` before creating artifacts.
+- Inspected the manifest nested inside the final `1.0.1.0` `.msixupload`.
+- Embedded identity: `Dreamle.WinQuickSwitch`, version `1.0.1.0`, x64.
+- Expected full name:
+  `Dreamle.WinQuickSwitch_1.0.1.0_x64__sth8w7gs4yt8p`.
+- Expected family name: `Dreamle.WinQuickSwitch_sth8w7gs4yt8p`.
+- Upload contains exactly one MSIX and the guarded package build passed.

@@ -8,7 +8,7 @@
   <Identity
     Name="Dreamle.WinQuickSwitch"
     Publisher="CN=E047B488-2EDF-444A-8C22-4FF1BD29B2B8"
-    Version="1.0.0.1"
+    Version="1.0.1.0"
     ProcessorArchitecture="x64" />
   <Properties>
     <DisplayName>WinQuickSwitch</DisplayName>

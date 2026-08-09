@@ -122,7 +122,7 @@ Completed:
   `Dreamle`.
 - Reproducible x64 MSIX and `.msixupload` build script using the installed
   Windows SDK packaging tools.
-- Structurally verified version `1.0.0.1` Store upload candidate.
+- Structurally verified version `1.0.1.0` Store upload candidate.
 
 Still required for Store release:
 
