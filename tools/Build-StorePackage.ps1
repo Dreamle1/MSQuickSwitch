@@ -16,6 +16,10 @@ $assetSource = Join-Path $repoRoot 'store\Assets'
 $dotnet = Join-Path $repoRoot '.dotnet\dotnet.exe'
 $assetGenerator = Join-Path $PSScriptRoot 'Generate-StoreAssets.ps1'
 
+$expectedIdentityName = 'Dreamle.WinQuickSwitch'
+$expectedPublisher = 'CN=E047B488-2EDF-444A-8C22-4FF1BD29B2B8'
+$expectedFamilyName = 'Dreamle.WinQuickSwitch_sth8w7gs4yt8p'
+
 function Reset-ArtifactDirectory {
     param(
         [Parameter(Mandatory)]
@@ -81,6 +85,16 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 [xml]$manifest = Get-Content -LiteralPath $manifestTemplate -Raw
+$manifestIdentity = $manifest.Package.Identity
+
+if ($manifestIdentity.Name -ne $expectedIdentityName) {
+    throw "Package identity must match Partner Center: $expectedIdentityName"
+}
+
+if ($manifestIdentity.Publisher -ne $expectedPublisher) {
+    throw "Package publisher must match Partner Center: $expectedPublisher"
+}
+
 $manifest.Package.Identity.Version = $Version
 $manifestPath = Join-Path $stageDirectory 'AppxManifest.xml'
 $xmlSettings = [System.Xml.XmlWriterSettings]::new()
@@ -131,7 +145,6 @@ Compress-Archive `
     -CompressionLevel Optimal
 Move-Item -LiteralPath $zipPath -Destination $uploadPath
 
-$manifestIdentity = $manifest.Package.Identity
 $packageHash = Get-FileHash -LiteralPath $packagePath -Algorithm SHA256
 $uploadHash = Get-FileHash -LiteralPath $uploadPath -Algorithm SHA256
 
@@ -139,6 +152,7 @@ Write-Host ''
 Write-Host 'Store package created successfully.'
 Write-Host "Identity: $($manifestIdentity.Name)"
 Write-Host "Publisher: $($manifestIdentity.Publisher)"
+Write-Host "Expected family name: $expectedFamilyName"
 Write-Host "Version: $($manifestIdentity.Version)"
 Write-Host "Package: $packagePath"
 Write-Host "Package SHA-256: $($packageHash.Hash)"

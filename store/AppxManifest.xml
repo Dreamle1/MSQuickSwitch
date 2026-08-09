@@ -6,7 +6,7 @@
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
   IgnorableNamespaces="uap uap10 rescap">
   <Identity
-    Name="Dreamle.MSQuickSwitch"
+    Name="Dreamle.WinQuickSwitch"
     Publisher="CN=E047B488-2EDF-444A-8C22-4FF1BD29B2B8"
     Version="1.0.0.0"
     ProcessorArchitecture="x64" />

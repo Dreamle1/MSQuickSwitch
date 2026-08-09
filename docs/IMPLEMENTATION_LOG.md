@@ -1192,7 +1192,7 @@ Published About/disclaimer variant:
 
 ### Implemented
 
-- Recorded the reserved Partner Center identity `Dreamle.MSQuickSwitch`,
+- Recorded the reserved Partner Center identity `Dreamle.WinQuickSwitch`,
   publisher `CN=E047B488-2EDF-444A-8C22-4FF1BD29B2B8`, and publisher display
   name `Dreamle` in the package manifest.
 - Added an x64 packaged-classic-app manifest with medium-integrity full-trust
@@ -1219,8 +1219,8 @@ Store package candidate:
 
 | Artifact | SHA-256 | Size |
 | --- | --- | ---: |
-| MSIX | `51F85EDC848B3FA939A70FB56B166C88F7D45A98F3B6854171433C7E861C36FC` | 70,945,065 bytes |
-| MSIX upload | `4707CDF00F1234B23AB161B51D7A7E8257ABCDEBF7EFF3CBA98683FF2BA7B63D` | 70,324,634 bytes |
+| MSIX | `F0C25179537B9344DAEEE79A61B42C12230E441D7AEB1569C1B18D8D421347A6` | 70,945,037 bytes |
+| MSIX upload | `81C965E223DA49EF2517FDB32A12A2D2D83BD940B1BA3384785CD8F07021F75A` | 70,324,644 bytes |
 
 Republished desktop executable:
 
@@ -1231,3 +1231,22 @@ Republished desktop executable:
 Remaining before submission: replace placeholder artwork, migrate sign-in
 startup to a package-aware mechanism, host the EULA and privacy policy, and
 complete signed/private-flight and Windows App Certification Kit testing.
+
+## 2026-08-08 - Partner Center package identity correction
+
+### Corrected
+
+- Replaced the rejected `Dreamle.MSQuickSwitch` package name with Partner
+  Center's reserved `Dreamle.WinQuickSwitch` identity.
+- Recorded the expected package family name
+  `Dreamle.WinQuickSwitch_sth8w7gs4yt8p`.
+- Rebuilt the x64 MSIX and `.msixupload` candidate at version `1.0.0.0`.
+
+### Verification
+
+- Package manifest identity: `Dreamle.WinQuickSwitch`.
+- Package publisher: `CN=E047B488-2EDF-444A-8C22-4FF1BD29B2B8`.
+- Upload archive: exactly one `WinQuickSwitch_1.0.0.0_x64.msix` entry whose
+  uncompressed size matches the rebuilt package.
+- Release build: passed with 0 warnings and 0 errors.
+- Automated checks: 75 passed, 0 failed.

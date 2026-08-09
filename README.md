@@ -176,7 +176,7 @@ Outputs:
 - `artifacts\store-msix\WinQuickSwitch_1.0.0.0_x64.msix`
 - `artifacts\store-msix\WinQuickSwitch_StoreUpload.msixupload`
 
-The Store package uses the reserved `Dreamle.MSQuickSwitch` identity. See
+The Store package uses the reserved `Dreamle.WinQuickSwitch` identity. See
 [store/README.md](store/README.md) for package details, versioning rules, and
 the remaining certification work.
 

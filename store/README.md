@@ -5,9 +5,10 @@ Generated packages stay under the ignored `artifacts/store-msix` directory.
 
 ## Product identity
 
-- Package name: `Dreamle.MSQuickSwitch`
+- Package name: `Dreamle.WinQuickSwitch`
 - Publisher: `CN=E047B488-2EDF-444A-8C22-4FF1BD29B2B8`
 - Publisher display name: `Dreamle`
+- Expected package family name: `Dreamle.WinQuickSwitch_sth8w7gs4yt8p`
 - Application ID: `WinQuickSwitch`
 
 These values must remain identical to the Partner Center product identity.

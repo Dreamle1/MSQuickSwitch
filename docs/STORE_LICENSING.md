@@ -117,7 +117,7 @@ Completed:
   About page.
 - One-time purchase, target price, no-trial, and EULA-presentation decisions.
 - Verified Release build, automated checks, and Lite EXE publication.
-- Partner Center package identity recorded as `Dreamle.MSQuickSwitch`, with
+- Partner Center package identity recorded as `Dreamle.WinQuickSwitch`, with
   publisher `CN=E047B488-2EDF-444A-8C22-4FF1BD29B2B8` and display name
   `Dreamle`.
 - Reproducible x64 MSIX and `.msixupload` build script using the installed
