@@ -117,12 +117,22 @@ Completed:
   About page.
 - One-time purchase, target price, no-trial, and EULA-presentation decisions.
 - Verified Release build, automated checks, and Lite EXE publication.
+- Partner Center package identity recorded as `Dreamle.MSQuickSwitch`, with
+  publisher `CN=E047B488-2EDF-444A-8C22-4FF1BD29B2B8` and display name
+  `Dreamle`.
+- Reproducible x64 MSIX and `.msixupload` build script using the installed
+  Windows SDK packaging tools.
+- Structurally verified version `1.0.0.0` Store upload candidate.
 
 Still required for Store release:
 
 - Legal review and hosted final EULA.
 - Hosted final privacy policy.
-- MSIX packaging, Store identity, package assets, and Store certification test.
+- Final package and Store-listing artwork.
+- Package-aware sign-in startup behavior.
+- Signed installation or private-flight testing and Windows App Certification
+  Kit validation.
+- Partner Center package validation and certification.
 
 ## Official references
 

@@ -1187,3 +1187,47 @@ Published About/disclaimer variant:
 | Variant | SHA-256 | Size |
 | --- | --- | ---: |
 | Lite | `72919E213592CD34BC8A548F8CF00F4E780D5B8CA4EB5151C535F322D90B05D9` | 27,068,394 bytes |
+
+## 2026-08-08 - Microsoft Store package identity and MSIX build
+
+### Implemented
+
+- Recorded the reserved Partner Center identity `Dreamle.MSQuickSwitch`,
+  publisher `CN=E047B488-2EDF-444A-8C22-4FF1BD29B2B8`, and publisher display
+  name `Dreamle` in the package manifest.
+- Added an x64 packaged-classic-app manifest with medium-integrity full-trust
+  execution for the existing WPF desktop application.
+- Added deterministic placeholder package logos and their generation script.
+- Added a reproducible Store build that publishes the self-contained Release
+  application, creates an unsigned MSIX with the Windows SDK, and wraps it in
+  a `.msixupload` archive for Partner Center.
+- Documented package versioning, local signing boundaries, and remaining Store
+  certification work.
+
+### Verification
+
+- Unpacked the MSIX and verified the manifest identity, publisher, version,
+  architecture, executable, and all declared logo files.
+- Verified that the `.msixupload` archive contains exactly the generated MSIX.
+- Confirmed that the local MSIX is unsigned, as expected for this Store upload
+  candidate; Microsoft Store supplies the production signature after acceptance.
+- Release build: passed with 0 warnings and 0 errors.
+- Automated checks: 75 passed, 0 failed.
+- Published the updated Lite EXE.
+
+Store package candidate:
+
+| Artifact | SHA-256 | Size |
+| --- | --- | ---: |
+| MSIX | `51F85EDC848B3FA939A70FB56B166C88F7D45A98F3B6854171433C7E861C36FC` | 70,945,065 bytes |
+| MSIX upload | `4707CDF00F1234B23AB161B51D7A7E8257ABCDEBF7EFF3CBA98683FF2BA7B63D` | 70,324,634 bytes |
+
+Republished desktop executable:
+
+| Variant | SHA-256 | Size |
+| --- | --- | ---: |
+| Lite | `351DFBF6294DD540462079FBD8529BF2443D017B665DA73F6AB0E3F9CEA3AA77` | 27,068,394 bytes |
+
+Remaining before submission: replace placeholder artwork, migrate sign-in
+startup to a package-aware mechanism, host the EULA and privacy policy, and
+complete signed/private-flight and Windows App Certification Kit testing.

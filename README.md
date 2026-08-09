@@ -165,6 +165,21 @@ Both variants are Windows x64 single-file executables. Trimming and ReadyToRun
 are intentionally disabled because this WPF/COM application prioritizes
 correctness and compact output over speculative publish optimizations.
 
+Microsoft Store package:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\Build-StorePackage.ps1 -Version 1.0.0.0
+```
+
+Outputs:
+
+- `artifacts\store-msix\WinQuickSwitch_1.0.0.0_x64.msix`
+- `artifacts\store-msix\WinQuickSwitch_StoreUpload.msixupload`
+
+The Store package uses the reserved `Dreamle.MSQuickSwitch` identity. See
+[store/README.md](store/README.md) for package details, versioning rules, and
+the remaining certification work.
+
 ## Licensing
 
 WinQuickSwitch is proprietary software and is not released under an open-source
@@ -207,8 +222,3 @@ refresh work and the audio watcher, so residency does not turn into continuous
 polling. Optional per-user sign-in startup is implemented and starts hidden.
 Tray integration, accessibility/DPI validation, and release signing remain M5
 work.
-
-## License
-
-No open-source license has been selected yet. Until one is added, all rights
-are reserved.
