@@ -56,6 +56,27 @@ internal sealed class WindowsStartupRegistrationService :
         {
             if (!enabled)
             {
+                string? registeredExecutablePath = _executablePathProvider();
+
+                if (string.IsNullOrWhiteSpace(registeredExecutablePath))
+                {
+                    return new(
+                        false,
+                        "The app location could not be found.");
+                }
+
+                string? currentCommand = _registry.ReadValue();
+
+                if (!string.Equals(
+                        currentCommand,
+                        BuildCommand(registeredExecutablePath),
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    return new(
+                        true,
+                        "Start with Windows was already disabled for this edition.");
+                }
+
                 _registry.DeleteValue();
                 return new(
                     true,

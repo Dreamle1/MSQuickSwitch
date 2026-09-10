@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.Json;
+using WinQuickSwitch.Features.Product;
 
 namespace WinQuickSwitch.Features.Widget;
 
@@ -11,19 +12,46 @@ internal sealed class JsonWidgetSettingsStore : IWidgetSettingsStore
     };
 
     private readonly string _settingsPath;
+    private readonly bool _profilesEnabled;
 
     public JsonWidgetSettingsStore() : this(
-        Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "WinQuickSwitch",
-            "settings.json"))
+        ProductConfiguration.Default)
+    {
+    }
+
+    internal JsonWidgetSettingsStore(ProductConfiguration configuration) : this(
+        GetDefaultPath(configuration),
+        configuration.HasFeature(ProductFeature.Profiles))
     {
     }
 
     internal JsonWidgetSettingsStore(string settingsPath)
+        : this(settingsPath, profilesEnabled: true)
+    {
+    }
+
+    internal JsonWidgetSettingsStore(
+        string settingsPath,
+        ProductConfiguration configuration)
+        : this(
+            settingsPath,
+            configuration.HasFeature(ProductFeature.Profiles))
+    {
+    }
+
+    private JsonWidgetSettingsStore(
+        string settingsPath,
+        bool profilesEnabled)
     {
         _settingsPath = settingsPath;
+        _profilesEnabled = profilesEnabled;
     }
+
+    internal static string GetDefaultPath(ProductConfiguration configuration) =>
+        Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            configuration.SettingsDirectoryName,
+            "settings.json");
 
     public WidgetSettings Load()
     {
@@ -35,11 +63,16 @@ internal sealed class JsonWidgetSettingsStore : IWidgetSettingsStore
             }
 
             string json = File.ReadAllText(_settingsPath);
-            return (
+            // Optional WidgetSettings constructor parameters supply defaults for
+            // settings files written before newer options (such as the overlay)
+            // existed. Normalize after deserialization so invalid new values do
+            // not make a legacy settings file unusable.
+            WidgetSettings settings =
                 JsonSerializer.Deserialize<WidgetSettings>(
                     json,
                     SerializerOptions) ??
-                WidgetSettings.Default).Normalize();
+                WidgetSettings.Default;
+            return settings.Normalize(_profilesEnabled);
         }
         catch (Exception exception) when (
             exception is IOException or
@@ -65,7 +98,7 @@ internal sealed class JsonWidgetSettingsStore : IWidgetSettingsStore
             }
 
             string json = JsonSerializer.Serialize(
-                settings.Normalize(),
+                settings.Normalize(_profilesEnabled),
                 SerializerOptions);
             File.WriteAllText(temporaryPath, json);
             File.Move(temporaryPath, _settingsPath, true);

@@ -2,85 +2,121 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="WinQuickSwitch"
-        Width="500"
-        MinWidth="460"
-        MinHeight="0"
-        SizeToContent="Height"
+        Width="900"
+        Height="720"
+        MinWidth="600"
+        MinHeight="420"
+        SizeToContent="Manual"
+        MaxWidth="{Binding Source={x:Static SystemParameters.WorkArea}, Path=Width}"
         MaxHeight="{Binding Source={x:Static SystemParameters.WorkArea}, Path=Height}"
         Background="{DynamicResource PageBrush}"
+        FontFamily="Segoe UI"
+        FontSize="12"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        TextOptions.TextFormattingMode="Display"
         Loaded="MainWindow_Loaded"
         SizeChanged="MainWindow_SizeChanged"
         Closing="MainWindow_Closing"
         Deactivated="MainWindow_Deactivated"
         PreviewKeyDown="MainWindow_PreviewKeyDown"
-        ResizeMode="NoResize"
-        ShowInTaskbar="False"
-        Topmost="True"
+        ResizeMode="CanResize"
+        ShowInTaskbar="True"
         WindowStartupLocation="Manual">
-  <ScrollViewer VerticalScrollBarVisibility="Auto">
-    <Grid Margin="16">
-      <Grid.RowDefinitions>
-        <RowDefinition Height="Auto" />
-        <RowDefinition Height="Auto" />
-      </Grid.RowDefinitions>
+  <Grid Margin="16">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+    </Grid.RowDefinitions>
 
       <Grid Grid.Row="0">
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="*" />
           <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
-        <UniformGrid Grid.Column="0" Columns="6">
+        <Grid x:Name="PanelTabs" Grid.Column="0">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="*" />
+          </Grid.ColumnDefinitions>
           <ToggleButton x:Name="DisplayPanelTab"
+                        Grid.Column="0"
                         Style="{StaticResource WidgetTabToggle}"
                         Tag="Display"
                         IsChecked="True"
-                        Checked="PanelTab_Checked"
+                        Click="PanelTab_Click"
                         Content="Display"
                         AutomationProperties.Name="Open display controls" />
           <ToggleButton x:Name="AudioPanelTab"
+                        Grid.Column="1"
                         Style="{StaticResource WidgetTabToggle}"
                         Tag="Audio"
-                        Checked="PanelTab_Checked"
+                        Click="PanelTab_Click"
                         Content="Audio"
                         AutomationProperties.Name="Open audio controls" />
           <ToggleButton x:Name="DevicesPanelTab"
+                        Grid.Column="2"
                         Style="{StaticResource WidgetTabToggle}"
                         Tag="Devices"
-                        Checked="PanelTab_Checked"
+                        Click="PanelTab_Click"
                         Content="Devices"
                         AutomationProperties.Name="Open connected devices" />
           <ToggleButton x:Name="OptionsPanelTab"
+                        Grid.Column="3"
                         Style="{StaticResource WidgetTabToggle}"
                         Tag="Options"
-                        Checked="PanelTab_Checked"
+                        Click="PanelTab_Click"
                         Content="Options"
                         AutomationProperties.Name="Open widget options" />
           <ToggleButton x:Name="ProfilesPanelTab"
+                        Grid.Column="4"
                         Style="{StaticResource WidgetTabToggle}"
                         Tag="Profiles"
-                        Checked="PanelTab_Checked"
+                        Click="PanelTab_Click"
                         Content="Profiles"
                         AutomationProperties.Name="Open saved profiles" />
           <ToggleButton x:Name="AboutPanelTab"
+                        Grid.Column="5"
                         Style="{StaticResource WidgetTabToggle}"
                         Tag="About"
-                        Checked="PanelTab_Checked"
+                        Click="PanelTab_Click"
                         Content="About"
                         AutomationProperties.Name="Open About and disclaimer" />
-        </UniformGrid>
-        <Button Grid.Column="1"
-                Style="{StaticResource CompactButton}"
-                Margin="0,0,0,8"
-                Click="Quit_Click"
-                Content="Quit"
-                ToolTip="Exit WinQuickSwitch completely" />
+        </Grid>
+        <WrapPanel Grid.Column="1">
+          <ToggleButton x:Name="PinWindowButton"
+                        Style="{StaticResource DisplayModeToggle}"
+                        MinWidth="60"
+                        Margin="0,0,6,8"
+                        Checked="WindowPinnedCheckBox_Changed"
+                        Unchecked="WindowPinnedCheckBox_Changed"
+                        Content="Pin"
+                        ToolTip="Keep the main window visible when focus changes" />
+          <Button Style="{StaticResource CompactButton}"
+                  Margin="0,0,0,8"
+                  Click="Quit_Click"
+                  Content="Quit"
+                  ToolTip="Exit WinQuickSwitch completely" />
+        </WrapPanel>
       </Grid>
 
+    <ScrollViewer x:Name="PanelScrollViewer"
+                  Grid.Row="1"
+                  HorizontalScrollBarVisibility="Disabled"
+                  VerticalScrollBarVisibility="Auto"
+                  PanningMode="VerticalOnly">
+      <Grid MinHeight="{Binding ElementName=PanelScrollViewer, Path=ViewportHeight}">
       <Border x:Name="DisplayPanel"
-              Grid.Row="1"
               Style="{StaticResource SectionCard}">
         <StackPanel>
-          <TextBlock FontSize="17" FontWeight="SemiBold" Text="Display" />
+          <TextBlock FontSize="17" FontWeight="SemiBold" Text="Quick switch" />
+          <TextBlock Margin="0,4,0,0"
+                     Foreground="{DynamicResource SecondaryTextBrush}"
+                     Text="Choose a display mode or open one of the detailed controls." />
 
           <UniformGrid x:Name="DisplayModeButtons"
                        Margin="0,12,0,2"
@@ -118,14 +154,77 @@
                      Margin="0,4,0,0"
                      Foreground="{DynamicResource SecondaryTextBrush}"
                      Text="Choose a projection mode." />
+
+          <Border Margin="0,12,0,0"
+                  Padding="12"
+                  Background="{DynamicResource PageBrush}"
+                  BorderBrush="{DynamicResource BorderBrush}"
+                  BorderThickness="1"
+                  CornerRadius="6">
+            <StackPanel>
+              <TextBlock FontWeight="SemiBold" Text="At a glance" />
+              <UniformGrid Margin="0,8,0,2" Columns="3">
+                <StackPanel Margin="0,0,8,0">
+                  <TextBlock Foreground="{DynamicResource SecondaryTextBrush}" Text="Display" />
+                  <TextBlock x:Name="QuickDisplaySummaryText" Text="Reading state..." TextWrapping="Wrap" />
+                </StackPanel>
+                <StackPanel Margin="0,0,8,0">
+                  <TextBlock Foreground="{DynamicResource SecondaryTextBrush}" Text="Audio" />
+                  <TextBlock x:Name="QuickAudioSummaryText" Text="Open Audio for details." TextWrapping="Wrap" />
+                </StackPanel>
+                <StackPanel>
+                  <TextBlock Foreground="{DynamicResource SecondaryTextBrush}" Text="Devices" />
+                  <TextBlock x:Name="QuickDeviceSummaryText" Text="Open Devices for details." TextWrapping="Wrap" />
+                </StackPanel>
+              </UniformGrid>
+              <WrapPanel Margin="0,10,0,0">
+                <Button x:Name="OpenOverlayButton"
+                        Style="{StaticResource CompactButton}"
+                        Click="OpenOverlay_Click"
+                        Content="Open overlay"
+                        ToolTip="Open the dimmed sidebar overlay" />
+                <Button Style="{StaticResource CompactButton}"
+                        Click="OpenAudioPanel_Click"
+                        Content="Audio details"
+                        ToolTip="Open detailed audio controls" />
+                <Button Style="{StaticResource CompactButton}"
+                        Click="OpenDevicesPanel_Click"
+                        Content="Device details"
+                        ToolTip="Open connected-device controls" />
+                <Button Style="{StaticResource CompactButton}"
+                        Click="OpenFloatingDisplayWidget_Click"
+                        Content="Floating display"
+                        ToolTip="Detach display controls into a small floating widget" />
+                <Button Style="{StaticResource CompactButton}"
+                        Click="OpenFloatingAudioWidget_Click"
+                        Content="Floating audio"
+                        ToolTip="Detach audio favorites into a small floating widget" />
+                <Button Style="{StaticResource CompactButton}"
+                        Click="OpenFloatingDevicesWidget_Click"
+                        Content="Floating devices"
+                        ToolTip="Detach wireless controls into a small floating widget" />
+              </WrapPanel>
+              <TextBlock x:Name="QuickShortcutHintText"
+                         Margin="0,8,0,0"
+                         Foreground="{DynamicResource SecondaryTextBrush}"
+                         Text="Shortcut hints are available in Options."
+                         TextWrapping="Wrap" />
+            </StackPanel>
+          </Border>
         </StackPanel>
       </Border>
 
       <Border x:Name="AudioPanel"
-              Grid.Row="1"
               Style="{StaticResource SectionCard}"
               Visibility="Collapsed">
-        <StackPanel>
+        <Grid>
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+          </Grid.RowDefinitions>
           <Grid>
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="*" />
@@ -156,23 +255,31 @@
           </Grid>
 
           <TextBlock x:Name="AudioStatusText"
+                     Grid.Row="1"
                      Margin="0,8,0,0"
                      Foreground="{DynamicResource SecondaryTextBrush}"
                      Text="Loading..." />
 
-          <Grid Margin="0,10,0,0">
+          <Grid Grid.Row="2" Margin="0,10,0,0">
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="*" />
               <ColumnDefinition Width="16" />
               <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
-            <StackPanel Grid.Column="0">
-              <TextBlock Margin="0,0,0,6"
+            <Grid Grid.Column="0">
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+              </Grid.RowDefinitions>
+              <TextBlock Grid.Row="0"
+                         Margin="0,0,0,6"
                          FontWeight="SemiBold"
                          Text="Output" />
               <ListBox x:Name="PlaybackEndpointsList"
+                       Grid.Row="1"
                        MinHeight="72"
-                       MaxHeight="135"
                        ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                 <ListBox.ItemTemplate>
                   <DataTemplate>
@@ -226,10 +333,12 @@
                   </DataTemplate>
                 </ListBox.ItemTemplate>
               </ListBox>
-              <WrapPanel Margin="0,8,0,0">
+              <WrapPanel Grid.Row="2" Margin="0,8,0,0">
                 <ComboBox x:Name="PlaybackFavoriteRoleBox"
                           Width="82"
                           Margin="0,0,6,0"
+                          Style="{StaticResource {x:Type ComboBox}}"
+                          ItemContainerStyle="{StaticResource {x:Type ComboBoxItem}}"
                           SelectedIndex="0"
                           ToolTip="Choose which Windows audio roles this favorite changes">
                   <ComboBoxItem Tag="General" Content="Default" />
@@ -256,25 +365,35 @@
                         ToolTip="Remove the selected output from favorites" />
               </WrapPanel>
               <TextBlock x:Name="FavoriteOutputsSummaryText"
+                         Grid.Row="3"
                          Margin="0,6,0,0"
                          Foreground="{DynamicResource SecondaryTextBrush}"
                          Text="Favorites: none"
                          TextTrimming="CharacterEllipsis"
                          ToolTip="{Binding RelativeSource={RelativeSource Self}, Path=Text}" />
-            </StackPanel>
-            <StackPanel Grid.Column="2">
-              <TextBlock Margin="0,0,0,6"
+            </Grid>
+            <Grid Grid.Column="2">
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+              </Grid.RowDefinitions>
+              <TextBlock Grid.Row="0"
+                         Margin="0,0,0,6"
                          FontWeight="SemiBold"
                          Text="Input" />
               <ListBox x:Name="RecordingEndpointsList"
+                       Grid.Row="1"
                        MinHeight="72"
-                       MaxHeight="135"
                        ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                        ItemTemplate="{Binding ElementName=PlaybackEndpointsList, Path=ItemTemplate}" />
-              <WrapPanel Margin="0,8,0,0">
+              <WrapPanel Grid.Row="2" Margin="0,8,0,0">
                 <ComboBox x:Name="RecordingFavoriteRoleBox"
                           Width="82"
                           Margin="0,0,6,0"
+                          Style="{StaticResource {x:Type ComboBox}}"
+                          ItemContainerStyle="{StaticResource {x:Type ComboBoxItem}}"
                           SelectedIndex="0"
                           ToolTip="Choose which Windows audio roles this favorite changes">
                   <ComboBoxItem Tag="General" Content="Default" />
@@ -301,78 +420,146 @@
                         ToolTip="Remove the selected microphone from favorites" />
               </WrapPanel>
               <TextBlock x:Name="FavoriteInputsSummaryText"
+                         Grid.Row="3"
                          Margin="0,6,0,0"
                          Foreground="{DynamicResource SecondaryTextBrush}"
                          Text="Favorites: none"
                          TextTrimming="CharacterEllipsis"
                          ToolTip="{Binding RelativeSource={RelativeSource Self}, Path=Text}" />
-            </StackPanel>
+            </Grid>
           </Grid>
 
-          <TextBlock Margin="0,12,0,6"
+          <TextBlock Grid.Row="3"
+                     Margin="0,12,0,6"
                      FontWeight="SemiBold"
                      Text="App volumes" />
-          <ListView x:Name="AudioSessionsList"
-                    MinHeight="72"
-                    MaxHeight="115"
-                    ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-            <ListView.View>
-              <GridView>
-                <GridViewColumn Width="95"
-                                Header="Application"
-                                DisplayMemberBinding="{Binding ApplicationName}" />
-                <GridViewColumn Width="105"
-                                Header="Output"
-                                DisplayMemberBinding="{Binding EndpointName}" />
-                <GridViewColumn Width="155" Header="Volume">
-                  <GridViewColumn.CellTemplate>
+          <Border Grid.Row="4"
+                  MinHeight="104"
+                  Background="{DynamicResource ControlBrush}"
+                  BorderBrush="{DynamicResource ControlBorderBrush}"
+                  BorderThickness="1"
+                  Padding="2">
+            <Grid>
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+              </Grid.RowDefinitions>
+              <Grid Margin="6,3,6,4">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="140" />
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="170" />
+                  <ColumnDefinition Width="70" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Foreground="{DynamicResource SecondaryTextBrush}"
+                           Text="Application" />
+                <TextBlock Grid.Column="1"
+                           Margin="8,0"
+                           Foreground="{DynamicResource SecondaryTextBrush}"
+                           Text="Output" />
+                <TextBlock Grid.Column="2"
+                           Foreground="{DynamicResource SecondaryTextBrush}"
+                           Text="Volume" />
+                <TextBlock Grid.Column="3"
+                           Margin="8,0,0,0"
+                           Foreground="{DynamicResource SecondaryTextBrush}"
+                           Text="Mute" />
+              </Grid>
+              <Border Grid.Row="0"
+                      Height="1"
+                      Margin="6,24,6,0"
+                      Background="{DynamicResource BorderBrush}" />
+              <ScrollViewer Grid.Row="1"
+                            Margin="0,4,0,0"
+                            HorizontalScrollBarVisibility="Disabled"
+                            VerticalScrollBarVisibility="Auto">
+                <ItemsControl x:Name="AudioSessionsList">
+                  <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                      <Grid Margin="0,1">
+                      <Grid Margin="6,4">
                         <Grid.ColumnDefinitions>
-                          <ColumnDefinition Width="98" />
-                          <ColumnDefinition Width="Auto" />
+                          <ColumnDefinition Width="140" />
+                          <ColumnDefinition Width="*" />
+                          <ColumnDefinition Width="170" />
+                          <ColumnDefinition Width="70" />
                         </Grid.ColumnDefinitions>
-                        <Slider Grid.Column="0"
-                                Minimum="0"
-                                Maximum="100"
-                                SmallChange="2"
-                                LargeChange="10"
-                                Tag="{Binding Id}"
-                                Value="{Binding VolumePercent, Mode=OneWay}"
-                                PreviewMouseLeftButtonUp="SessionVolumeSlider_Commit"
-                                KeyUp="SessionVolumeSlider_KeyUp"
-                                AutomationProperties.Name="{Binding ApplicationName, StringFormat=Volume for {0}}" />
+                        <TextBlock VerticalAlignment="Center"
+                                   Text="{Binding ApplicationName}"
+                                   TextTrimming="CharacterEllipsis"
+                                   ToolTip="{Binding ApplicationName}" />
                         <TextBlock Grid.Column="1"
-                                   Width="42"
-                                   Margin="8,0,0,0"
+                                   Margin="8,0"
                                    VerticalAlignment="Center"
-                                   Text="{Binding VolumeLabel}" />
+                                   Foreground="{DynamicResource SecondaryTextBrush}"
+                                   Text="{Binding EndpointName}"
+                                   TextTrimming="CharacterEllipsis"
+                                   ToolTip="{Binding EndpointName}" />
+                        <Grid Grid.Column="2">
+                          <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="42" />
+                          </Grid.ColumnDefinitions>
+                          <Slider Minimum="0"
+                                  Maximum="100"
+                                  SmallChange="2"
+                                  LargeChange="10"
+                                  Value="{Binding VolumePercent, Mode=OneWay}"
+                                  Tag="{Binding Id}"
+                                  PreviewMouseLeftButtonUp="SessionVolumeSlider_Commit"
+                                  KeyUp="SessionVolumeSlider_KeyUp"
+                                  AutomationProperties.Name="{Binding ApplicationName, StringFormat=Volume for {0}}" />
+                          <TextBlock Grid.Column="1"
+                                     Margin="6,0,0,0"
+                                     VerticalAlignment="Center"
+                                     Text="{Binding VolumeLabel}" />
+                        </Grid>
+                        <CheckBox Grid.Column="3"
+                                  Margin="8,0,0,0"
+                                  VerticalAlignment="Center"
+                                  Content="Mute"
+                                  Tag="{Binding Id}"
+                                  IsChecked="{Binding IsMuted, Mode=OneWay}"
+                                  Click="SessionMute_Click"
+                                  AutomationProperties.Name="{Binding ApplicationName, StringFormat=Mute {0}}" />
                       </Grid>
                     </DataTemplate>
-                  </GridViewColumn.CellTemplate>
-                </GridViewColumn>
-                <GridViewColumn Width="55" Header="Mute">
-                  <GridViewColumn.CellTemplate>
-                    <DataTemplate>
-                      <CheckBox HorizontalAlignment="Center"
-                                Tag="{Binding Id}"
-                                IsChecked="{Binding IsMuted, Mode=OneWay}"
-                                Click="SessionMute_Click"
-                                AutomationProperties.Name="{Binding ApplicationName, StringFormat=Mute {0}}" />
-                    </DataTemplate>
-                  </GridViewColumn.CellTemplate>
-                </GridViewColumn>
-              </GridView>
-            </ListView.View>
-          </ListView>
-        </StackPanel>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </ScrollViewer>
+              <TextBlock Grid.Row="1"
+                         HorizontalAlignment="Center"
+                         VerticalAlignment="Center"
+                         Foreground="{DynamicResource SecondaryTextBrush}"
+                         Text="No active app volume sessions.">
+                <TextBlock.Style>
+                  <Style TargetType="TextBlock">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                    <Style.Triggers>
+                      <DataTrigger Binding="{Binding ElementName=AudioSessionsList, Path=HasItems}"
+                                   Value="False">
+                        <Setter Property="Visibility" Value="Visible" />
+                      </DataTrigger>
+                    </Style.Triggers>
+                  </Style>
+                </TextBlock.Style>
+              </TextBlock>
+            </Grid>
+          </Border>
+        </Grid>
       </Border>
 
       <Border x:Name="DevicesPanel"
-              Grid.Row="1"
               Style="{StaticResource SectionCard}"
               Visibility="Collapsed">
-        <StackPanel>
+        <Grid>
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+          </Grid.RowDefinitions>
           <Grid>
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="*" />
@@ -392,11 +579,12 @@
           </Grid>
 
           <TextBlock x:Name="DeviceStatusText"
+                     Grid.Row="1"
                      Margin="0,8,0,0"
                      Foreground="{DynamicResource SecondaryTextBrush}"
                      Text="Loading..." />
 
-          <UniformGrid Margin="0,10,0,0" Columns="2">
+          <UniformGrid Grid.Row="2" Margin="0,10,0,0" Columns="2">
             <ToggleButton x:Name="WiFiRadioToggle"
                           Style="{StaticResource DisplayModeToggle}"
                           Margin="0,0,6,0"
@@ -414,15 +602,16 @@
           </UniformGrid>
 
           <TextBlock x:Name="WirelessStatusText"
+                     Grid.Row="3"
                      Margin="0,7,0,0"
                      Foreground="{DynamicResource SecondaryTextBrush}"
                      TextWrapping="Wrap"
                      Visibility="Collapsed" />
 
           <ListView x:Name="ConnectedDevicesList"
+                    Grid.Row="4"
                     Margin="0,10,0,0"
                     MinHeight="80"
-                    MaxHeight="145"
                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
             <ListView.View>
               <GridView>
@@ -442,7 +631,7 @@
             </ListView.View>
           </ListView>
 
-          <WrapPanel Margin="0,10,0,0">
+          <WrapPanel Grid.Row="5" Margin="0,10,0,0">
             <Button Style="{StaticResource CompactButton}"
                     Click="OpenWiFiSettings_Click"
                     Content="Wi-Fi settings"
@@ -464,11 +653,10 @@
                     Content="Devices settings"
                     ToolTip="Manage connected devices in Windows Settings" />
           </WrapPanel>
-        </StackPanel>
+        </Grid>
       </Border>
 
       <Border x:Name="OptionsPanel"
-              Grid.Row="1"
               Style="{StaticResource SectionCard}"
               Visibility="Collapsed">
         <StackPanel>
@@ -846,6 +1034,20 @@
                     Unchecked="DarkThemeCheckBox_Changed"
                     Content="Use dark theme" />
 
+          <CheckBox x:Name="OverlayEnabledCheckBox"
+                    Margin="0,10,0,0"
+                    Checked="OverlayEnabledCheckBox_Changed"
+                    Unchecked="OverlayEnabledCheckBox_Changed"
+                    Content="Use the dimmed sidebar overlay"
+                    ToolTip="Win + Shift + Q opens the sidebar overlay instead of the compact window" />
+
+          <CheckBox x:Name="WindowPinnedCheckBox"
+                    Margin="0,10,0,0"
+                    Checked="WindowPinnedCheckBox_Changed"
+                    Unchecked="WindowPinnedCheckBox_Changed"
+                    Content="Pin the main window open"
+                    ToolTip="Keep the normal window visible when another window receives focus" />
+
           <CheckBox x:Name="StartWithWindowsCheckBox"
                     Margin="0,10,0,0"
                     Checked="StartWithWindowsCheckBox_Changed"
@@ -868,7 +1070,6 @@
       </Border>
 
       <Border x:Name="ProfilesPanel"
-              Grid.Row="1"
               Style="{StaticResource SectionCard}"
               Visibility="Collapsed">
         <StackPanel>
@@ -1051,14 +1252,15 @@
       </Border>
 
       <Border x:Name="AboutPanel"
-              Grid.Row="1"
               Style="{StaticResource SectionCard}"
               Visibility="Collapsed">
         <StackPanel>
-          <TextBlock FontSize="17"
+          <TextBlock x:Name="AboutTitleText"
+                     FontSize="17"
                      FontWeight="SemiBold"
                      Text="About WinQuickSwitch" />
-          <TextBlock Margin="0,5,0,0"
+          <TextBlock x:Name="AboutDescriptionText"
+                     Margin="0,5,0,0"
                      Foreground="{DynamicResource SecondaryTextBrush}"
                      Text="A local Windows utility for quick display, audio, device, taskbar, favorite, and profile controls."
                      TextWrapping="Wrap" />
@@ -1068,14 +1270,17 @@
                   Background="{DynamicResource SelectionBrush}"
                   CornerRadius="5">
             <StackPanel>
-              <TextBlock FontWeight="SemiBold"
+              <TextBlock x:Name="AboutLicenseHeadingText"
+                         FontWeight="SemiBold"
                          Foreground="{DynamicResource SelectionTextBrush}"
                          Text="Licensed software" />
-              <TextBlock Margin="0,5,0,0"
+              <TextBlock x:Name="AboutLicenseBodyText"
+                         Margin="0,5,0,0"
                          Foreground="{DynamicResource SelectionTextBrush}"
                          Text="A Microsoft Store purchase grants permission to use WinQuickSwitch; it does not transfer ownership of the app or its source code."
                          TextWrapping="Wrap" />
-              <TextBlock Margin="0,5,0,0"
+              <TextBlock x:Name="AboutSharingText"
+                         Margin="0,5,0,0"
                          Foreground="{DynamicResource SelectionTextBrush}"
                          Text="Install it on devices allowed by Microsoft Store. Do not copy, upload, redistribute, resell, sublicense, or share the app package or executable with another person."
                          TextWrapping="Wrap" />
@@ -1116,6 +1321,7 @@
           </WrapPanel>
         </StackPanel>
       </Border>
+      </Grid>
+    </ScrollViewer>
     </Grid>
-  </ScrollViewer>
 </Window>

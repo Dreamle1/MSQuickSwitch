@@ -5,7 +5,8 @@ namespace WinQuickSwitch.Platform.Windows.Display;
 internal static class DisplayTopologyClassifier
 {
     public static DisplayTopologySnapshot Classify(
-        IReadOnlyCollection<DisplayPathDescriptor> paths)
+        IReadOnlyCollection<DisplayPathDescriptor> paths,
+        DisplayMode? reportedMode = null)
     {
         DisplayPathDescriptor[] activePaths = paths
             .Where(path => path.IsActive)
@@ -27,9 +28,10 @@ internal static class DisplayTopologyClassifier
                 "Windows did not report an active display path.");
         }
 
-        DisplayMode? currentMode = activePaths.Length == 1
-            ? ClassifySinglePath(activePaths[0])
-            : ClassifyMultiplePaths(activePaths);
+        DisplayMode? currentMode = reportedMode ??
+            (activePaths.Length == 1
+                ? ClassifySinglePath(activePaths[0])
+                : ClassifyMultiplePaths(activePaths));
 
         string displayWord = activePaths.Length == 1 ? "display" : "displays";
         string modeName = currentMode?.GetDisplayName() ?? "Custom or mixed topology";

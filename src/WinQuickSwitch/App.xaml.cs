@@ -1,6 +1,8 @@
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Threading;
+using WinQuickSwitch.Features.Product;
+using WinQuickSwitch.Features.Widget;
 using WinQuickSwitch.Platform.Windows;
 
 namespace WinQuickSwitch;
@@ -12,9 +14,9 @@ public partial class App : Application
 
     private readonly CancellationTokenSource _activationCancellation = new();
     private readonly string _mutexName = GetScopedName(
-        @"Local\WinQuickSwitch.Resident.Singleton.v1");
+        @"Local\WinQuickSwitch.Resident.Singleton.v2");
     private readonly string _activationEventName = GetScopedName(
-        @"Local\WinQuickSwitch.Resident.Activate.v1");
+        $@"Local\WinQuickSwitch.Resident.Activate.{ProductConfiguration.Default.Edition}.v2");
     private Mutex? _singleInstanceMutex;
     private EventWaitHandle? _activationEvent;
     private Task? _activationListener;
@@ -26,6 +28,10 @@ public partial class App : Application
         bool isStartupLaunch = e.Args.Contains(
             WindowsStartupRegistrationService.StartupArgument,
             StringComparer.OrdinalIgnoreCase);
+        bool isAttendedValidation = e.Args.Contains(
+            "--attended-validation",
+            StringComparer.OrdinalIgnoreCase);
+        WidgetTheme.StartSystemThemeTracking();
 
         _singleInstanceMutex = new Mutex(
             initiallyOwned: true,
@@ -34,9 +40,14 @@ public partial class App : Application
 
         if (!_ownsMutex)
         {
-            if (!isStartupLaunch)
+            if (!isStartupLaunch && !SignalExistingInstance())
             {
-                SignalExistingInstance();
+                MessageBox.Show(
+                    $"{ProductConfiguration.Default.DisplayName} cannot start " +
+                    "because another WinQuickSwitch edition is already running.",
+                    "WinQuickSwitch",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
             }
 
             Shutdown();
@@ -47,23 +58,42 @@ public partial class App : Application
             false,
             EventResetMode.AutoReset,
             _activationEventName);
-        MainWindow window = new();
+        MainWindow window = CreateMainWindow(e.Args);
         MainWindow = window;
 
-        if (isStartupLaunch)
+        if (isAttendedValidation)
+        {
+            window.ShowForAttendedValidation();
+        }
+        else if (isStartupLaunch)
         {
             new WindowInteropHelper(window).EnsureHandle();
         }
         else
         {
-            window.ShowFromExternalRequest();
+            window.ShowConfiguredSurfaceFromStartup();
         }
 
         _activationListener = Task.Run(ListenForActivationRequests);
     }
 
+    private static MainWindow CreateMainWindow(IReadOnlyList<string> arguments)
+    {
+#if WINQUICKSWITCH_E2E
+        if (arguments.Contains(
+                "--sandbox-e2e",
+                StringComparer.OrdinalIgnoreCase))
+        {
+            return E2E.SandboxE2eRuntime.CreateMainWindow();
+        }
+#endif
+
+        return new MainWindow();
+    }
+
     protected override void OnExit(ExitEventArgs e)
     {
+        WidgetTheme.StopSystemThemeTracking();
         _activationCancellation.Cancel();
         _activationEvent?.Set();
 
@@ -110,7 +140,7 @@ public partial class App : Application
         }
     }
 
-    private void SignalExistingInstance()
+    private bool SignalExistingInstance()
     {
         for (int attempt = 0; attempt < 10; attempt++)
         {
@@ -119,13 +149,15 @@ public partial class App : Application
                 using EventWaitHandle existing =
                     EventWaitHandle.OpenExisting(_activationEventName);
                 existing.Set();
-                return;
+                return true;
             }
             catch (WaitHandleCannotBeOpenedException)
             {
                 Thread.Sleep(50);
             }
         }
+
+        return false;
     }
 
     private static string GetScopedName(string baseName)

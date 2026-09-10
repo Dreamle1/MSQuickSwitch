@@ -2,14 +2,30 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows10.0.22621.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
     <UseWPF>true</UseWPF>
     <AssemblyName>WinQuickSwitch</AssemblyName>
     <RootNamespace>WinQuickSwitch</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <WinQuickSwitchEdition Condition="'$(WinQuickSwitchEdition)' == ''">Paid</WinQuickSwitchEdition>
+    <DefineConstants Condition="'$(WinQuickSwitchEdition)' == 'Free'">$(DefineConstants);WINQUICKSWITCH_FREE</DefineConstants>
+    <DefineConstants Condition="'$(WinQuickSwitchEdition)' == 'Paid'">$(DefineConstants);WINQUICKSWITCH_PAID</DefineConstants>
+    <DefineConstants Condition="'$(WinQuickSwitchE2E)' == 'true'">$(DefineConstants);WINQUICKSWITCH_E2E</DefineConstants>
   </PropertyGroup>
+
+  <Target Name="ValidateWinQuickSwitchEdition" BeforeTargets="PrepareForBuild">
+    <Error
+      Condition="'$(WinQuickSwitchEdition)' != 'Free' and '$(WinQuickSwitchEdition)' != 'Paid'"
+      Text="WinQuickSwitchEdition must be Free or Paid." />
+  </Target>
 
   <ItemGroup>
     <EmbeddedResource Include="..\..\docs\EULA.md" LogicalName="WinQuickSwitch.Legal.EULA.md" />
     <EmbeddedResource Include="..\..\docs\PRIVACY_POLICY.md" LogicalName="WinQuickSwitch.Legal.PRIVACY_POLICY.md" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="E2E\**\*.cs" />
+    <Compile Include="E2E\**\*.cs" Condition="'$(WinQuickSwitchE2E)' == 'true'" />
   </ItemGroup>
 </Project>

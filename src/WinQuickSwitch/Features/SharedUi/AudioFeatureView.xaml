@@ -1,0 +1,351 @@
+<UserControl x:Class="WinQuickSwitch.Features.SharedUi.AudioFeatureView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:audio="clr-namespace:WinQuickSwitch.Features.Audio"
+             xmlns:shared="clr-namespace:WinQuickSwitch.Features.SharedUi"
+             MinWidth="0"
+             AutomationProperties.Name="Audio controls">
+  <DockPanel>
+    <shared:SharedRefreshErrorBanner DockPanel.Dock="Top" />
+    <Grid>
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+
+    <Grid>
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+      </Grid.RowDefinitions>
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*" />
+      </Grid.ColumnDefinitions>
+      <StackPanel>
+        <TextBlock x:Name="FeatureTitleText"
+                   FontSize="17"
+                   FontWeight="SemiBold"
+                   Text="Audio" />
+        <TextBlock Margin="0,4,0,0"
+                   Foreground="{DynamicResource SecondaryTextBrush}"
+                   Text="{Binding StatusMessage}"
+                   TextWrapping="Wrap" />
+      </StackPanel>
+      <WrapPanel Grid.Row="1"
+                 Margin="0,8,0,0"
+                 HorizontalAlignment="Left">
+        <Button Style="{StaticResource CompactButton}"
+                Command="{Binding OpenVolumeMixerCommand}"
+                Content="Volume mixer" />
+        <Button Style="{StaticResource CompactButton}"
+                Command="{Binding OpenSoundSettingsCommand}"
+                Content="Sound settings" />
+        <Button x:Name="RefreshButton"
+                MinWidth="78" MinHeight="40"
+                Command="{Binding RefreshCommand}"
+                Content="Refresh" />
+      </WrapPanel>
+    </Grid>
+
+    <Grid Grid.Row="1" Margin="0,12,0,0">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="16" />
+        <ColumnDefinition Width="*" />
+      </Grid.ColumnDefinitions>
+
+      <StackPanel Grid.Column="0">
+        <TextBlock Margin="0,0,0,6" FontWeight="SemiBold" Text="Output" />
+        <ListBox x:Name="PlaybackList"
+                 MinHeight="150"
+                 MaxHeight="260"
+                 ItemsSource="{Binding PlaybackEndpoints}"
+                 SelectedItem="{Binding SelectedPlaybackEndpoint}"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+          <ListBox.ItemContainerStyle>
+            <Style TargetType="ListBoxItem"
+                   BasedOn="{StaticResource {x:Type ListBoxItem}}">
+              <Setter Property="AutomationProperties.Name" Value="{Binding Name}" />
+              <Setter Property="AutomationProperties.HelpText" Value="{Binding ActiveRoleDescription}" />
+            </Style>
+          </ListBox.ItemContainerStyle>
+          <ListBox.ItemTemplate>
+            <DataTemplate>
+              <Grid ToolTip="{Binding ActiveRoleDescription}">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock VerticalAlignment="Center"
+                           Text="{Binding Name}"
+                           TextTrimming="CharacterEllipsis" />
+                <Border Grid.Column="1"
+                        Background="{DynamicResource DefaultBadgeBrush}">
+                  <Border.Style>
+                    <Style TargetType="Border" BasedOn="{StaticResource EndpointBadge}">
+                      <Setter Property="Visibility" Value="Collapsed" />
+                      <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsDefault}" Value="True">
+                          <Setter Property="Visibility" Value="Visible" />
+                        </DataTrigger>
+                      </Style.Triggers>
+                    </Style>
+                  </Border.Style>
+                  <TextBlock FontSize="10"
+                             FontWeight="SemiBold"
+                             Foreground="{DynamicResource SelectionTextBrush}"
+                             Text="DEFAULT" />
+                </Border>
+                <Border Grid.Column="2"
+                        Background="{DynamicResource CallsBadgeBrush}">
+                  <Border.Style>
+                    <Style TargetType="Border" BasedOn="{StaticResource EndpointBadge}">
+                      <Setter Property="Visibility" Value="Collapsed" />
+                      <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsCommunicationsDefault}" Value="True">
+                          <Setter Property="Visibility" Value="Visible" />
+                        </DataTrigger>
+                      </Style.Triggers>
+                    </Style>
+                  </Border.Style>
+                  <TextBlock FontSize="10"
+                             FontWeight="SemiBold"
+                             Foreground="{DynamicResource SelectionTextBrush}"
+                             Text="CALLS" />
+                </Border>
+              </Grid>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+        <WrapPanel Margin="0,8,0,0">
+          <Button Style="{StaticResource CompactButton}"
+                  Command="{Binding SetPlaybackDefaultCommand}"
+                  CommandParameter="{x:Static audio:AudioDefaultRoleSelection.General}"
+                  Content="Default" />
+          <Button Style="{StaticResource CompactButton}"
+                  Command="{Binding SetPlaybackDefaultCommand}"
+                  CommandParameter="{x:Static audio:AudioDefaultRoleSelection.Communications}"
+                  Content="Calls" />
+          <Button Style="{StaticResource CompactButton}"
+                  Command="{Binding SetPlaybackDefaultCommand}"
+                  CommandParameter="{x:Static audio:AudioDefaultRoleSelection.Both}"
+                  Content="Both" />
+        </WrapPanel>
+        <WrapPanel Margin="0,6,0,0">
+          <ComboBox Width="104"
+                    Margin="0,0,6,0"
+                    Style="{StaticResource {x:Type ComboBox}}"
+                    ItemContainerStyle="{StaticResource {x:Type ComboBoxItem}}"
+                    ItemsSource="{Binding RoleOptions}"
+                    SelectedItem="{Binding PlaybackFavoriteRole}"
+                    AutomationProperties.Name="Favorite output role" />
+          <Button Style="{StaticResource CompactButton}"
+                  Command="{Binding AddPlaybackFavoriteCommand}"
+                  Content="Add favorite" />
+        </WrapPanel>
+        <ItemsControl Margin="0,7,0,0" ItemsSource="{Binding FavoriteOutputs}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <DockPanel Margin="0,2">
+                <Button DockPanel.Dock="Right"
+                        MinWidth="64"
+                        Padding="8,3"
+                        Command="{Binding DataContext.RemoveFavoriteCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                        CommandParameter="{Binding}"
+                        Content="Remove"
+                        AutomationProperties.Name="{Binding DisplayName, StringFormat=Remove favorite {0}}" />
+                <TextBlock VerticalAlignment="Center"
+                           Text="{Binding DisplayName}"
+                           TextTrimming="CharacterEllipsis" />
+              </DockPanel>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+
+      <StackPanel Grid.Column="2">
+        <TextBlock Margin="0,0,0,6" FontWeight="SemiBold" Text="Input" />
+        <ListBox MinHeight="150"
+                 MaxHeight="260"
+                 ItemsSource="{Binding RecordingEndpoints}"
+                 SelectedItem="{Binding SelectedRecordingEndpoint}"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                 ItemTemplate="{Binding ElementName=PlaybackList, Path=ItemTemplate}">
+          <ListBox.ItemContainerStyle>
+            <Style TargetType="ListBoxItem"
+                   BasedOn="{StaticResource {x:Type ListBoxItem}}">
+              <Setter Property="AutomationProperties.Name" Value="{Binding Name}" />
+              <Setter Property="AutomationProperties.HelpText" Value="{Binding ActiveRoleDescription}" />
+            </Style>
+          </ListBox.ItemContainerStyle>
+        </ListBox>
+        <WrapPanel Margin="0,8,0,0">
+          <Button Style="{StaticResource CompactButton}"
+                  Command="{Binding SetRecordingDefaultCommand}"
+                  CommandParameter="{x:Static audio:AudioDefaultRoleSelection.General}"
+                  Content="Default" />
+          <Button Style="{StaticResource CompactButton}"
+                  Command="{Binding SetRecordingDefaultCommand}"
+                  CommandParameter="{x:Static audio:AudioDefaultRoleSelection.Communications}"
+                  Content="Calls" />
+          <Button Style="{StaticResource CompactButton}"
+                  Command="{Binding SetRecordingDefaultCommand}"
+                  CommandParameter="{x:Static audio:AudioDefaultRoleSelection.Both}"
+                  Content="Both" />
+        </WrapPanel>
+        <WrapPanel Margin="0,6,0,0">
+          <ComboBox Width="104"
+                    Margin="0,0,6,0"
+                    Style="{StaticResource {x:Type ComboBox}}"
+                    ItemContainerStyle="{StaticResource {x:Type ComboBoxItem}}"
+                    ItemsSource="{Binding RoleOptions}"
+                    SelectedItem="{Binding RecordingFavoriteRole}"
+                    AutomationProperties.Name="Favorite microphone role" />
+          <Button Style="{StaticResource CompactButton}"
+                  Command="{Binding AddRecordingFavoriteCommand}"
+                  Content="Add favorite" />
+        </WrapPanel>
+        <ItemsControl Margin="0,7,0,0" ItemsSource="{Binding FavoriteInputs}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <DockPanel Margin="0,2">
+                <Button DockPanel.Dock="Right"
+                        MinWidth="64"
+                        Padding="8,3"
+                        Command="{Binding DataContext.RemoveFavoriteCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                        CommandParameter="{Binding}"
+                        Content="Remove"
+                        AutomationProperties.Name="{Binding DisplayName, StringFormat=Remove favorite {0}}" />
+                <TextBlock VerticalAlignment="Center"
+                           Text="{Binding DisplayName}"
+                           TextTrimming="CharacterEllipsis" />
+              </DockPanel>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+    </Grid>
+
+    <StackPanel Grid.Row="2" Margin="0,14,0,0">
+      <Grid Margin="0,0,0,6">
+        <TextBlock FontWeight="SemiBold" Text="App volumes" />
+        <TextBlock HorizontalAlignment="Right"
+                   MaxWidth="320"
+                   Foreground="{DynamicResource SecondaryTextBrush}"
+                   Text="{Binding SessionSummary}"
+                   TextTrimming="CharacterEllipsis"
+                   ToolTip="{Binding SessionSummary}" />
+      </Grid>
+      <Border MinHeight="100"
+              MaxHeight="250"
+              Background="{DynamicResource ControlBrush}"
+              BorderBrush="{DynamicResource ControlBorderBrush}"
+              BorderThickness="1"
+              Padding="2">
+        <Grid>
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+          </Grid.RowDefinitions>
+          <Grid Margin="6,3,6,4">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="140" />
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="170" />
+              <ColumnDefinition Width="70" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Foreground="{DynamicResource SecondaryTextBrush}" Text="Application" />
+            <TextBlock Grid.Column="1" Margin="8,0" Foreground="{DynamicResource SecondaryTextBrush}" Text="Output" />
+            <TextBlock Grid.Column="2" Foreground="{DynamicResource SecondaryTextBrush}" Text="Volume" />
+            <TextBlock Grid.Column="3" Margin="8,0,0,0" Foreground="{DynamicResource SecondaryTextBrush}" Text="Mute" />
+          </Grid>
+          <Border Grid.Row="0"
+                  Height="1"
+                  Margin="6,24,6,0"
+                  Background="{DynamicResource BorderBrush}" />
+          <ScrollViewer Grid.Row="1"
+                        Margin="0,4,0,0"
+                        HorizontalScrollBarVisibility="Disabled"
+                        VerticalScrollBarVisibility="Auto">
+            <ItemsControl ItemsSource="{Binding SessionRows}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Grid Margin="6,4">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="140" />
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="170" />
+                      <ColumnDefinition Width="70" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock VerticalAlignment="Center"
+                               Text="{Binding ApplicationName}"
+                               TextTrimming="CharacterEllipsis"
+                               ToolTip="{Binding ApplicationName}" />
+                    <TextBlock Grid.Column="1"
+                               Margin="8,0"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource SecondaryTextBrush}"
+                               Text="{Binding EndpointName}"
+                               TextTrimming="CharacterEllipsis"
+                               ToolTip="{Binding EndpointName}" />
+                    <Grid Grid.Column="2">
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="42" />
+                      </Grid.ColumnDefinitions>
+                      <Slider Minimum="0"
+                              Maximum="100"
+                              Value="{Binding VolumePercent, UpdateSourceTrigger=PropertyChanged}"
+                              AutomationProperties.Name="{Binding ApplicationName, StringFormat=Volume for {0}}"
+                              PreviewMouseLeftButtonUp="SessionVolumeSlider_Commit"
+                              LostMouseCapture="SessionVolumeSlider_LostMouseCapture"
+                              KeyUp="SessionVolumeSlider_KeyUp" />
+                      <TextBlock Grid.Column="1"
+                                 Margin="6,0,0,0"
+                                 VerticalAlignment="Center"
+                                 Text="{Binding VolumeLabel}" />
+                    </Grid>
+                    <CheckBox Grid.Column="3"
+                              Margin="8,0,0,0"
+                              VerticalAlignment="Center"
+                              Content="Mute"
+                              Click="SessionMute_Click"
+                              IsChecked="{Binding IsMuted}"
+                              AutomationProperties.Name="{Binding ApplicationName, StringFormat=Mute {0}}" />
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+          <TextBlock Grid.Row="1"
+                     HorizontalAlignment="Center"
+                     VerticalAlignment="Center"
+                     Foreground="{DynamicResource SecondaryTextBrush}"
+                     Text="{Binding SessionSummary}">
+            <TextBlock.Style>
+              <Style TargetType="TextBlock">
+                <Setter Property="Visibility" Value="Collapsed" />
+                <Style.Triggers>
+                  <DataTrigger Binding="{Binding HasSessionRows}" Value="False">
+                    <Setter Property="Visibility" Value="Visible" />
+                  </DataTrigger>
+                </Style.Triggers>
+              </Style>
+            </TextBlock.Style>
+          </TextBlock>
+        </Grid>
+      </Border>
+    </StackPanel>
+
+    <Button Grid.Row="3"
+            Margin="0,12,0,0"
+            HorizontalAlignment="Left"
+            Style="{StaticResource CompactButton}"
+            Command="{Binding OpenFloatingAudioCommand}"
+            Content="Open floating Audio widget" />
+    </Grid>
+  </DockPanel>
+</UserControl>

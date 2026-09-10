@@ -21,6 +21,9 @@ internal sealed class WindowsTrayIcon : IDisposable
     private const int MouseLeftButtonUp = 0x0202;
     private const int MouseLeftButtonDoubleClick = 0x0203;
     private const int MouseRightButtonUp = 0x0205;
+    private const int ContextMenu = 0x007B;
+    private const int NotificationSelect = 0x0400;
+    private const int NotificationKeySelect = 0x0401;
     private const int NullMessage = 0x0000;
     private const uint ApplicationIcon = 32512;
 
@@ -31,7 +34,10 @@ internal sealed class WindowsTrayIcon : IDisposable
     private bool _isRegistered;
     private bool _isDisposed;
 
-    public WindowsTrayIcon(IntPtr windowHandle, uint iconId = 1)
+    public WindowsTrayIcon(
+        IntPtr windowHandle,
+        uint iconId = 1,
+        string? tooltip = null)
     {
         if (windowHandle == IntPtr.Zero)
         {
@@ -50,7 +56,9 @@ internal sealed class WindowsTrayIcon : IDisposable
             uFlags = NotifyIconMessage | NotifyIconIcon | NotifyIconTip,
             uCallbackMessage = CallbackMessage,
             hIcon = LoadIcon(IntPtr.Zero, (IntPtr)ApplicationIcon),
-            szTip = "WinQuickSwitch",
+            szTip = string.IsNullOrWhiteSpace(tooltip)
+                ? "WinQuickSwitch"
+                : tooltip.Trim(),
             szInfo = string.Empty,
             szInfoTitle = string.Empty,
         };
@@ -76,21 +84,32 @@ internal sealed class WindowsTrayIcon : IDisposable
         _favoriteLabels = labels.ToArray();
     }
 
-    public bool HandleWindowMessage(int message, IntPtr parameter)
+    public bool HandleWindowMessage(
+        int message,
+        IntPtr wordParameter,
+        IntPtr longParameter)
     {
         if (_isDisposed || message != CallbackMessage)
         {
             return false;
         }
 
-        switch (parameter.ToInt32())
+        // NOTIFYICON_VERSION_4 packs the notification code into the low word
+        // of lParam and the icon ID into the high word. Comparing the complete
+        // value prevents every click from matching once version 4 is enabled.
+        int notification = DecodeNotificationCode(longParameter);
+
+        switch (notification)
         {
             case MouseLeftButtonUp:
             case MouseLeftButtonDoubleClick:
+            case NotificationSelect:
+            case NotificationKeySelect:
                 OpenRequested?.Invoke(this, EventArgs.Empty);
                 break;
             case MouseRightButtonUp:
-                ShowContextMenu();
+            case ContextMenu:
+                ShowContextMenu(GetNotificationPoint(wordParameter));
                 break;
         }
 
@@ -115,7 +134,7 @@ internal sealed class WindowsTrayIcon : IDisposable
         GC.SuppressFinalize(this);
     }
 
-    private void ShowContextMenu()
+    private void ShowContextMenu(POINT notificationPoint)
     {
         IntPtr menu = CreatePopupMenu();
         if (menu == IntPtr.Zero)
@@ -129,7 +148,7 @@ internal sealed class WindowsTrayIcon : IDisposable
                 menu,
                 MenuString,
                 (UIntPtr)TrayMenuCommand.Open,
-                "Open WinQuickSwitch");
+                "Open main window");
 
             if (_favoriteLabels.Count > 0)
             {
@@ -162,7 +181,14 @@ internal sealed class WindowsTrayIcon : IDisposable
                 "Exit WinQuickSwitch");
 
             SetForegroundWindow(_windowHandle);
-            GetCursorPos(out POINT cursorPosition);
+            if (!GetCursorPos(out POINT cursorPosition))
+            {
+                cursorPosition = notificationPoint;
+                if (cursorPosition.X == 0 && cursorPosition.Y == 0)
+                {
+                    cursorPosition = new POINT { X = 8, Y = 8 };
+                }
+            }
             uint command = TrackPopupMenu(
                 menu,
                 TrackMenuReturnCommand | TrackMenuRightButton,
@@ -200,6 +226,19 @@ internal sealed class WindowsTrayIcon : IDisposable
             DestroyMenu(menu);
             PostMessage(_windowHandle, NullMessage, IntPtr.Zero, IntPtr.Zero);
         }
+    }
+
+    internal static int DecodeNotificationCode(IntPtr longParameter) =>
+        unchecked((ushort)longParameter.ToInt64());
+
+    private static POINT GetNotificationPoint(IntPtr wordParameter)
+    {
+        long packed = wordParameter.ToInt64();
+        return new POINT
+        {
+            X = unchecked((short)(packed & 0xFFFF)),
+            Y = unchecked((short)((packed >> 16) & 0xFFFF)),
+        };
     }
 
     private enum TrayMenuCommand : uint

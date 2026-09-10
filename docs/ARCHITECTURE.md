@@ -8,10 +8,49 @@ and can call both COM and Win32 APIs directly. The application is
 framework-dependent by default, remains resident in the signed-in user's
 session, and has no background service.
 
-The project targets `net10.0-windows10.0.22621.0` so the Wi-Fi and Bluetooth
-radio adapter can consume the supported Windows Runtime projection directly.
+The project compiles against `net10.0-windows10.0.22621.0` so the Wi-Fi and
+Bluetooth radio adapter can consume the supported Windows Runtime projection
+directly. `SupportedOSPlatformVersion` and the MSIX manifest set the runtime
+minimum to Windows build `19041`, allowing Windows 10 version 2004 and newer.
 Other platform features use direct Win32 and COM interop; no UI framework,
 tray, or settings package is added.
+
+## Edition and build selection
+
+Free and Paid are build-time editions from the same source tree. An immutable
+product configuration selects the edition and its feature catalog during app
+composition; UI panels, hotkeys, tray commands, persistence, and package
+metadata all consume that configuration. Paid is the compatibility default
+while the split is introduced.
+
+Profiles are the first paid-only module. The Free composition must not
+instantiate the profile store, register profile hotkeys, expose profile tray
+commands, or route a profile navigation request. The shared shell receives a
+no-op profile boundary in Free and the full profile coordinator in Paid. This
+keeps direct display/audio/device switching common while preventing a hidden
+UI control from leaving a paid action active.
+
+The build property is `WinQuickSwitchEdition=Free|Paid`. Store manifests,
+identities, descriptions, and artifact directories are selected from the same
+edition value. The existing Paid identity remains unchanged; Free receives a
+separate Partner Center identity.
+
+## Shared feature surfaces
+
+Display, Audio, Devices, Options, Profiles, and About are reusable WPF feature
+views created by one edition-aware `FeatureViewFactory`. The normal window,
+overlay launcher, workspace cards, and supported floating windows each receive
+a fresh visual instance because WPF controls cannot have more than one parent.
+All instances use the same `IQuickSwitchCoordinator`, immutable
+`QuickSwitchState` snapshots, typed commands, refresh gates, and result state.
+Focus and scrolling remain local to each instance.
+
+Overlay cards are not reconstructed when inventory, theme, or status changes;
+bindings update the existing view. Workspace schema version 6 records exact
+per-monitor geometry and a content-layout version. A new or legacy non-custom
+card is measured once after its initial Ready, Empty, or Error state, capped to
+90% of canvas width and 88% of height, then saved. Manual dimensions remain
+authoritative until the user invokes Fit content.
 
 ## Layers
 
@@ -59,15 +98,22 @@ retains its own frame fallback.
 
 This preserves native move, system-menu, and caption-button behavior without
 another UI package or custom hit-testing layer. The widget itself is
-non-resizable and always-on-top while visible.
+resizable through the Windows-managed frame and always-on-top while visible.
 
-The widget is 500 pixels wide and sizes vertically to the active panel's
-content, capped by the working area. Display, Audio, Devices, and Options are
-mutually exclusive panels under a compact tab strip. Outer/card spacing is
-compact, the title bar is the only app-name heading, and
-endpoint/session/device lists own their vertical scrolling. Horizontal
+The widget opens at 900 x 720 device-independent pixels, has a 600 x 420
+minimum, and is capped by the working area's width and height. Display, Audio,
+Devices, Options, and About are mutually exclusive panels in Free; Paid adds
+Profiles to the same compact tab strip. The complete shell scrolls vertically when content exceeds
+the resized viewport. Outer/card spacing is compact, the title bar is the only
+app-name heading, and endpoint/session/device lists own their vertical
+scrolling. Horizontal
 scrolling is disabled in the compact tables; friendly audio names trim visually
 while the full name remains in the bound model and automation text.
+
+The standard Windows caption exposes minimize and maximize/restore. The window
+has a taskbar entry while visible or minimized, and minimizing suppresses the
+widget's normal click-away auto-hide path. Users can resize from any native
+window edge; reduced heights fall back to the outer vertical scroller.
 
 ## Resident widget lifecycle
 
@@ -109,6 +155,10 @@ left-click or **Open WinQuickSwitch** reveals the widget, while **Exit
 WinQuickSwitch** is the explicit process-exit path. The icon is registered on
 the existing WPF window handle and removed during `OnClosed`, so no tray
 process, polling loop, or third-party tray package is required.
+The icon opts into `NOTIFYICON_VERSION_4`; callback routing therefore reads the
+notification code from the low word of `lParam` and uses the packed anchor
+coordinates when Windows does not allow a pointer query. Both `WM_RBUTTONUP`
+and `WM_CONTEXTMENU` open the native Open/Favorites/Exit menu.
 
 Optional sign-in startup writes one quoted command to
 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`. The command contains the
@@ -116,7 +166,9 @@ current executable path and the allowlisted `--startup` argument. That argument
 creates the native window handle and registers global hotkeys without showing
 the widget. A normal later launch still reveals the existing resident instance;
 a delayed Windows startup launch does not unexpectedly reveal an instance that
-is already running.
+is already running. Free and Paid intentionally share this one startup slot so
+signing in cannot launch two competing resident editions; an edition only
+removes the entry when it still points to its own executable.
 
 ### Taskbar
 
@@ -135,10 +187,31 @@ The Options panel captures only modified A-Z, 0-9, and F1-F12 shortcuts. Ctrl,
 Alt, or Win is required; Shift can be added. Duplicate in-app bindings are
 rejected before native registration. Each shortcut row has an explicit Unset
 action; Delete remains a keyboard shortcut for the same operation. Settings use
-`System.Text.Json` and an
-atomic temporary-file replacement under
-`%LOCALAPPDATA%\WinQuickSwitch\settings.json`; no third-party configuration
-package is needed.
+`System.Text.Json` and an atomic temporary-file replacement. Paid keeps the
+existing `%LOCALAPPDATA%\WinQuickSwitch\settings.json` path, while Free uses
+`%LOCALAPPDATA%\WinQuickSwitch Free\settings.json`; no third-party
+configuration package is needed.
+
+Native hotkey registration is transactional after the first working set is
+established. Reapplying settings unregisters every active built-in and dynamic
+profile ID; if any replacement fails, the new partial set is removed and the
+previous working set is restored. Disposal uses the same complete registration
+ledger, preventing removed Paid profile hotkeys from remaining registered until
+process exit. Profile catalogs keep the first owner of a duplicate shortcut and
+clear later duplicates during normalization. Cross-category conflicts report
+the current command owner and the affected profile before registration. Native
+profile IDs are deterministically derived from stable profile IDs, so reordering
+the profile list cannot retarget a hotkey. `Ctrl+0` through `Ctrl+6` remain
+reserved for edition-aware navigation inside the overlay.
+
+`QuickSwitchCommandCatalog` is the compatibility seam between persisted
+`WidgetHotkeyAction` values and the shared typed-command pipeline. Each
+descriptor owns a stable key, user-facing label, category, availability rule,
+and command factory. WM_HOTKEY dispatch resolves a descriptor and executes it
+through the existing coordinator instead of calling display/audio/window
+methods directly. The shared Options rows consume the same labels and actions;
+Paid profile Apply controls use dynamic descriptors keyed by the stable profile
+ID, while Free rejects those descriptors through `ProductConfiguration`.
 
 Favorite playback outputs are fixed to four optional slots to keep persistence,
 hotkey IDs, and the Options UI bounded. Each slot stores the Core Audio
@@ -162,34 +235,67 @@ DWM attributes remain nonfatal and use the Windows fallback.
 ## Display adapter
 
 Version 1 supports the four global projection topologies exposed by `Win + P`:
-internal, clone, extend, and external. Apply them directly through
-`SetDisplayConfig` with `SDC_APPLY` plus exactly one allowlisted
-`SDC_TOPOLOGY_*` flag. The native call runs away from the WPF dispatcher, so no
-helper process or shell window is created and the widget remains responsive.
+internal, clone, extend, and external. Internal, clone, and external are applied
+directly through `SetDisplayConfig` with `SDC_APPLY` plus one allowlisted
+`SDC_TOPOLOGY_*` flag. Extend uses the hidden Windows `DisplaySwitch.exe
+/extend` projection command, leaving placement, rotation, resolution, and
+orientation restoration to Windows rather than supplying or saving a custom
+path configuration.
+
+Windows can restore an incomplete Extend topology when entering it directly
+from Duplicate or second screen only. Those two transitions first request PC
+screen only, wait briefly for that topology, and then request Windows Extend
+only when no safe layout snapshot exists.
+
+Before leaving a complete Extend topology, the display service captures the
+active CCD paths and their full mode array in memory. This includes source
+positions, target rotations, resolutions, refresh data, and path priority.
+Returning to Extend reapplies that exact snapshot with
+`SDC_USE_SUPPLIED_DISPLAY_CONFIG` but without `SDC_SAVE_TO_DATABASE` or best-mode
+changes. The direct restore avoids the bridge and projection command while
+preserving the layout byte-for-byte. If capture is unavailable or exact restore
+fails, the PC-screen-only bridge remains the compatibility fallback.
 
 If reliable current-topology detection is needed, query the active display
 configuration through `QueryDisplayConfig`; keep that native mapping separate
 from the action request.
 
 The current implementation reads all display paths through
-`QueryDisplayConfig`, counts active and available targets, and classifies the
-four global projection modes. A hybrid topology that combines duplicate and
-extended paths is reported as custom/mixed instead of being forced into one of
-the four modes.
+`QueryDisplayConfig(QDC_ALL_PATHS)` to count active and available targets. It
+separately reads Windows' current CCD database topology through
+`QueryDisplayConfig(QDC_DATABASE_CURRENT)` and uses the returned topology ID as
+the authoritative PC screen only, Duplicate, Extend, or Second screen only
+selection. This keeps the app aligned with Win+P even when active paths alone
+look extended. If Windows does not return a standard topology ID, the app falls
+back to path-based classification; a hybrid topology is then reported as
+custom/mixed instead of being forced into one of the four modes.
+
+`SetDisplayConfig` or `DisplaySwitch.exe` returning success means that Windows
+accepted the request; it is not treated as proof that the requested topology
+remained active. The transition executor polls the authoritative topology,
+requires a stable final state, and performs one bounded reapply if another
+component immediately restores a different topology. An unresolved override
+is a failed command, so overlay smart-close does not dismiss the Display UI.
+The status identifies the actual topology and recommends leaving exclusive
+full-screen mode. The recovery path reuses the same captured Extend layout and
+does not create or save a replacement monitor arrangement.
 
 The display choices are persistent toggle controls rather than stateless
 buttons. The current topology is highlighted at startup; selecting that same
-mode again restores the checked state without calling `SetDisplayConfig`.
+mode again restores the checked state without another Windows request only when
+the topology is complete. Extend is incomplete when an available target is not
+active, so it remains retryable instead of being treated as already selected.
 For a real change, the requested mode highlights immediately and the group
 accepts no second request until the first completes.
 
-After `SetDisplayConfig` returns successfully, a transient topology monitor
-checks `QueryDisplayConfig` every 150 ms for at most 18 attempts (2.55 seconds).
-It stops as soon as Windows reports the requested mode. This prevents a stale
-immediate topology read from snapping the selection back during monitor
-retraining. It exists only during a user-requested transition and is not an
-idle polling loop. Physical display blanking and link retraining remain under
-Windows, GPU-driver, and monitor control.
+After Windows accepts a projection request, a transient topology monitor checks
+`QueryDisplayConfig` every 150 ms for at most 18 attempts (2.55 seconds). It
+requires three identical snapshots, and Extend does not settle until every
+available display target is active. This prevents both a stale immediate read
+and the partial `Extend, 2 active, 3 available` state from being accepted as a
+completed transition. It exists only during a user-requested transition and is
+not an idle polling loop. Physical display blanking and link retraining remain
+under Windows, GPU-driver, and monitor control.
 
 Individual-monitor enable/disable and layout editing are intentionally
 excluded. They require substantially more display-configuration handling and
@@ -335,15 +441,133 @@ Devices is selected again.
 Measure these targets in M5 rather than treating them as guaranteed by the
 framework choice.
 
+The Windows Sandbox E2E harness has an opt-in performance mode. It measures
+fresh normal-window and overlay startup, repeated feature navigation, inspector
+transitions, refresh completion, and every safe deterministic feature action.
+An edition-aware manifest is a parity gate: every interactive feature needs
+timed stages or an explicit exclusion, and a missing Paid/Free stage fails the
+run. A background guest sampler records private memory, working set, handles,
+threads, and CPU time every 100 milliseconds across the same action workload.
+Warm-up samples and diagnostic screenshots remain in the evidence package but
+are excluded from reported stage percentiles. Paid and Free runs use separate
+fresh processes and can be combined into one HTML/CSV comparison. Provisional
+latency and resource budgets are informational unless the caller explicitly
+enables enforcement, avoiding release failures caused by a temporarily busy
+host before a stable baseline is established. All Windows mutations use the
+simulated E2E services, so validation cannot change host hardware or settings.
+
 ## Deployment variants
 
 - **Lite** is a framework-dependent, single-file Windows x64 executable. It
   relies on the shared .NET 10 Desktop Runtime and minimizes app payload.
 - **Portable** is a compressed, self-contained, single-file Windows x64
   executable. It trades download size for zero runtime setup.
+- Lite and Portable are public Free artifacts. Paid standalone artifacts are
+  internal validation outputs until an enforceable non-Store license path is
+  designed.
+- The Lite and Portable publish profiles default to `WinQuickSwitchEdition=Free`
+  and write `win-x64-free-lite` / `win-x64-free-portable` outputs. Paid
+  standalone validation must opt in explicitly and uses `win-x64-paid-*` paths.
+- Store packages are built independently for Free and Paid with separate
+  manifests, identities, descriptions, and artifact directories.
 - Both profiles disable trimming and ReadyToRun. WPF and the current COM
   declarations are not being treated as trim-safe, while ReadyToRun generally
   increases publish size.
+
+## Feature-complete widget workspace overlay
+
+The resident process can opt into `OverlayWorkspaceWindow`, a borderless,
+topmost workspace covering only the monitor nearest the pointer. A dimmed
+backdrop and fixed right launcher provide Display, Audio, Devices, Options,
+Paid Profiles, and About. Audio owns favorite endpoint management; there is no
+duplicate Favorites launcher or card. Home remains an internal quick-workspace
+route for `Ctrl+0`, but is omitted from the launcher because it duplicated the
+workspace itself. The first layout composes the
+essential cards (Display, Audio, and Devices) in both editions.
+Profiles, About, and Options remain launcher-first features until a user adds
+them as quick widgets. The launcher opens complete feature panels without requiring the
+main window; removed quick cards are restored explicitly from the inspector.
+
+Cards move continuously with the pointer and retain exact fractional bounds.
+The host clamps them to the usable monitor area, preserves z-order, restores
+custom bounds per monitor, and exposes accessible icon controls for refresh,
+feature-specific size reset, minimize/restore where supported, and removal.
+Bottom-right resizing preserves the opposite edges and stops growing at the
+workspace boundary. Recommended presets are large enough to show the
+feature's common content; an exact legacy preset migrates while a user-resized
+card is preserved. It opens a 520–900 DIP inspector for the same complete
+feature panel used by the conventional window. `Ctrl+0` returns to the quick
+workspace, `Ctrl+1` through
+`Ctrl+6` use the existing edition-aware numbering, and Escape closes an
+inspector before dismissing the workspace. There is intentionally no overlay
+Pin control: cards are session-scoped and disappear when the workspace closes;
+the existing standalone floating Display, Audio, and Devices widgets remain a
+separate option.
+
+`OverlayWorkspaceSettings` stores a versioned layout per
+`MONITORINFOEX.szDevice`, including card visibility, bounds, collapsed state,
+z-order, and inspector width. Missing monitors use the current monitor's
+default arrangement and clamp safely. The legacy sidebar-width field remains
+readable for JSON migration, while new saves use `InspectorWidth`.
+`MONITORINFOEXW` is marshalled with an explicit Unicode layout so its native
+size and device name are valid. If pointer lookup is unavailable, placement
+falls back to the owner window's monitor and finally one monitor at virtual
+origin; it never substitutes the full virtual-screen rectangle.
+
+Layout schema version 6 records the shared-content measurement version while
+retaining `HasCustomSize` for JSON compatibility. Generated first-run cards fit
+once after the initial Ready, Empty, or Error state and are then arranged into
+non-overlapping monitor-safe cells. Restored and manually resized geometry is
+authoritative across refresh, theme changes, and reopen. Drag handles carry the
+stable widget ID directly instead of depending on a fragile visual-parent
+hierarchy.
+
+`MainWindow` remains the application-lifetime coordinator and owner of services,
+refresh gates, settings, profiles, and mutations. Every surface creates its own
+feature-view instance through `FeatureViewFactory`; WPF controls are never
+reparented. These instances consume the same cached immutable
+`QuickSwitchState`, typed commands, revision stream, and reference-counted
+surface demand. Reading coordinator state never queries Windows or inspects a
+hidden legacy control. Platform refreshes copy inventories into coordinator
+caches before publishing a new revision, so an older snapshot cannot mutate
+under an open view. The workspace never creates a second display, audio,
+device, or profile pipeline. Audio/display/device demand is shared between the
+normal window and workspace, so hot-plug and notification refreshes cannot race
+two independent watchers.
+`QuickSwitchCommandCatalog` is also the single identity boundary for persisted
+global shortcuts, dynamic Paid profile Apply commands, native tray actions,
+and workspace launcher/footer actions. The native tray decodes numeric menu
+IDs only long enough to resolve a catalog command and defers execution until
+the popup menu has closed. The workspace emits typed navigation commands and
+rejects unavailable edition routes before loading an inspector. Card move,
+resize, fit, collapse, and removal remain local typed presentation actions and
+never call platform services or the shared coordinator.
+The Devices card renders the shared connected-device inventory, and concurrent
+refresh requests wait for the active refresh before updating the card.
+Native Windows Settings links close the topmost workspace before launching.
+This remains a best-effort desktop overlay: ordinary windows and
+borderless-windowed games are supported, while exclusive-fullscreen
+applications may suppress topmost WPF windows.
+
+The retired `SidebarOverlayWindow` implementation has been removed. The
+`MainWindow.ToggleSidebarOverlay` compatibility entry point now creates only
+the workspace shell. The legacy sidebar-width setting remains deserializable
+solely so older JSON can migrate its value into the current inspector width.
+
+The resident window's Display panel is the compact home surface. It keeps the
+four display actions in the first view, adds an at-a-glance summary sourced from
+the existing display, audio, and device refresh paths, and links to the overlay
+or detailed Audio and Devices panels. It does not create a second platform
+service path, so display placement and rotation safeguards remain centralized.
+
+The first detachable surface is `FloatingDisplayWidgetWindow`. It receives
+display actions and layout notifications from `MainWindow`, but never creates a
+second display service or topology watcher. Its size, position, pin state, and
+open state use the existing atomic widget-settings store. On restore, the host
+clamps the window to the nearest current monitor work area; a missing monitor
+identity therefore cannot leave an unreachable window or trigger a display
+topology mutation. Audio and Devices floating surfaces can use the same host
+contract in a later increment.
 
 ## Test strategy
 
@@ -353,11 +577,61 @@ framework choice.
   detection.
 - Manual hardware matrix for projection changes, Bluetooth profiles, USB
   headsets, hot-plugging, high DPI, and accessibility.
+- Every release test is run for both editions. Free tests assert that profile
+  storage, profile hotkeys, profile navigation, and profile tray actions are
+  unavailable; Paid tests retain the complete profile suite.
+- Windows Sandbox runs the real WPF surfaces in a disposable desktop. A
+  compile-time E2E composition replaces Windows adapters with deterministic
+  display, audio, device, radio, taskbar, startup, Settings, and profile
+  services. UI Automation can therefore exercise mutations safely and verify
+  them through a JSONL service journal while exporting dark/light screenshots.
+- The same harness has a separate performance path that repeats safe navigation
+  and refresh scenarios, records median/P95/max latency, and samples memory,
+  handles, threads, and CPU. Screenshots are diagnostics only and never occur
+  inside a timed stage.
+- Production builds exclude `src/WinQuickSwitch/E2E`; the simulated runtime is
+  compiled only when `WinQuickSwitchE2E=true`.
 
 Display and default-endpoint mutations should never run in ordinary unit-test
 suites. Mark them as attended hardware tests.
 
 ## Known risks
+
+### v1.1.1.0 stable-key shortcut extension
+
+Existing `WidgetHotkeyAction` fields and native IDs are retained. New audio
+commands use catalog string keys in `WidgetSettings.CommandShortcuts` and a
+separate native ID range (0x4000-0x4FFF); the registrar resolves the key back to
+a typed command. Duplicate owner checks and transactional rollback cover
+legacy, profile and keyed registrations together. Unknown keys are discarded
+during settings normalization; no Profiles keys are admitted through this map.
+
+The shared Options view has one local search/expansion state per surface.
+Filtering collapses existing row containers instead of replacing ItemsSource,
+preserving WPF automation children. Shortcut values and the volume-step setting
+are published through coordinator state. No search operation executes commands.
+
+`AudioQuickActionExecutor` resolves fresh default endpoints through existing
+services, clamps volume and serializes mutations with a non-queueing gate and
+150 ms repeat guard. It does not alter default roles or display topology.
+Production construction receives Windows services; Sandbox receives only its
+simulated endpoint service. Saved chords start unassigned for all new actions.
+
+### Workspace construction and release evidence
+
+Workspace widget descriptors use `DeferredFeatureContent`: a hidden card does
+not create its shared view until first measurement. Fitting measures the actual
+child, while later measurements and visibility changes keep that same instance.
+Single-panel navigation constructs only its selected descriptor rather than
+all workspace feature views. No display-topology service changes are involved.
+
+`tools/Test-ReleaseArtifacts.ps1` checks the final executable versions and
+Paid/Free Store manifests, verifies upload/package hashes, and rejects the
+simulated E2E service marker in production packages without launching them.
+Automated evidence and attended hardware/Store acceptance are tracked
+separately in `docs/RELEASE_ACCEPTANCE_1_1_0.md`.
+
+### Platform risks
 
 | Risk | Response |
 | --- | --- |

@@ -1,3 +1,5 @@
+using WinQuickSwitch.Features.Overlay;
+
 namespace WinQuickSwitch.Features.Widget;
 
 internal enum WidgetHotkeyAction
@@ -18,6 +20,16 @@ internal enum WidgetHotkeyAction
     FavoriteInput2,
     FavoriteInput3,
     FavoriteInput4,
+    // Existing values are append-only so persisted/native IDs remain stable.
+    ToggleOverlay,
+    Options,
+    ToggleWiFi,
+    ToggleBluetooth,
+    ToggleTaskbarAutoHide,
+    RefreshDisplay,
+    RefreshAudio,
+    RefreshDevices,
+    RefreshAll,
 }
 
 internal enum FavoriteEndpointRole
@@ -25,6 +37,64 @@ internal enum FavoriteEndpointRole
     General,
     Communications,
     Both,
+}
+
+public sealed record FloatingWidgetLayout(
+    bool IsOpen = false,
+    double? Left = null,
+    double? Top = null,
+    double Width = 360,
+    double Height = 260,
+    bool IsPinned = false,
+    string? MonitorId = null)
+{
+    public const double DefaultWidth = 360;
+    public const double DefaultHeight = 260;
+    public const double MinimumWidth = 280;
+    public const double MaximumWidth = 1000;
+    public const double MinimumHeight = 180;
+    public const double MaximumHeight = 1000;
+
+    public static FloatingWidgetLayout Default { get; } = new();
+
+    public FloatingWidgetLayout Normalize()
+    {
+        double? normalizedLeft = NormalizeCoordinate(Left);
+        double? normalizedTop = NormalizeCoordinate(Top);
+
+        return this with
+        {
+            Left = normalizedLeft,
+            Top = normalizedTop,
+            Width = NormalizeDimension(
+                Width,
+                DefaultWidth,
+                MinimumWidth,
+                MaximumWidth),
+            Height = NormalizeDimension(
+                Height,
+                DefaultHeight,
+                MinimumHeight,
+                MaximumHeight),
+            MonitorId = string.IsNullOrWhiteSpace(MonitorId)
+                ? null
+                : MonitorId.Trim(),
+        };
+    }
+
+    private static double? NormalizeCoordinate(double? coordinate) =>
+        coordinate is double value && double.IsFinite(value)
+            ? value
+            : null;
+
+    private static double NormalizeDimension(
+        double value,
+        double fallback,
+        double minimum,
+        double maximum) =>
+        double.IsFinite(value)
+            ? Math.Clamp(value, minimum, maximum)
+            : fallback;
 }
 
 [Flags]
@@ -43,7 +113,12 @@ internal sealed record WidgetShortcut(
 {
     public bool IsValid =>
         HasPrimaryModifier(Modifiers) &&
-        IsSupportedVirtualKey(VirtualKey);
+        IsSupportedVirtualKey(VirtualKey) &&
+        !IsReservedOverlayNavigation;
+
+    public bool IsReservedOverlayNavigation =>
+        Modifiers == WidgetHotkeyModifiers.Control &&
+        VirtualKey is >= 0x30 and <= 0x36;
 
     public string DisplayText
     {
@@ -120,11 +195,37 @@ internal sealed record WidgetSettings(
     FavoriteInputSetting? FavoriteInput1 = null,
     FavoriteInputSetting? FavoriteInput2 = null,
     FavoriteInputSetting? FavoriteInput3 = null,
-    FavoriteInputSetting? FavoriteInput4 = null)
+    FavoriteInputSetting? FavoriteInput4 = null,
+    bool OverlayEnabled = false,
+    double OverlayDimmingOpacity = 0.35,
+    double OverlaySidebarWidth = 420,
+    WidgetShortcut? ToggleOverlay = null,
+    FloatingWidgetLayout? FloatingDisplayWidget = null,
+    FloatingWidgetLayout? FloatingAudioWidget = null,
+    FloatingWidgetLayout? FloatingDevicesWidget = null,
+    bool WindowPinned = false,
+    OverlayWorkspaceSettings? OverlayWorkspace = null,
+    WidgetShortcut? Options = null,
+    WidgetShortcut? ToggleWiFi = null,
+    WidgetShortcut? ToggleBluetooth = null,
+    WidgetShortcut? ToggleTaskbarAutoHide = null,
+    WidgetShortcut? RefreshDisplay = null,
+    WidgetShortcut? RefreshAudio = null,
+    WidgetShortcut? RefreshDevices = null,
+    WidgetShortcut? RefreshAll = null,
+    IReadOnlyDictionary<string, WidgetShortcut>? CommandShortcuts = null,
+    int AudioVolumeStepPercent = 5)
 {
     public const int MaximumFavoriteOutputs = 4;
     public const int MaximumFavoriteInputs = 4;
     public const int MaximumFavoriteAliasLength = 60;
+
+    public const double DefaultOverlayDimmingOpacity = 0.35;
+    public const double MinimumOverlayDimmingOpacity = 0.0;
+    public const double MaximumOverlayDimmingOpacity = 1.0;
+    public const double DefaultOverlaySidebarWidth = 420;
+    public const double MinimumOverlaySidebarWidth = 280;
+    public const double MaximumOverlaySidebarWidth = 720;
 
     public static WidgetSettings Default { get; } = new(
         true,
@@ -154,6 +255,15 @@ internal sealed record WidgetSettings(
             WidgetHotkeyAction.FavoriteInput2 => FavoriteInput2?.Shortcut,
             WidgetHotkeyAction.FavoriteInput3 => FavoriteInput3?.Shortcut,
             WidgetHotkeyAction.FavoriteInput4 => FavoriteInput4?.Shortcut,
+            WidgetHotkeyAction.ToggleOverlay => ToggleOverlay,
+            WidgetHotkeyAction.Options => Options,
+            WidgetHotkeyAction.ToggleWiFi => ToggleWiFi,
+            WidgetHotkeyAction.ToggleBluetooth => ToggleBluetooth,
+            WidgetHotkeyAction.ToggleTaskbarAutoHide => ToggleTaskbarAutoHide,
+            WidgetHotkeyAction.RefreshDisplay => RefreshDisplay,
+            WidgetHotkeyAction.RefreshAudio => RefreshAudio,
+            WidgetHotkeyAction.RefreshDevices => RefreshDevices,
+            WidgetHotkeyAction.RefreshAll => RefreshAll,
             _ => null,
         };
 
@@ -181,8 +291,33 @@ internal sealed record WidgetSettings(
             WidgetHotkeyAction.FavoriteInput2 => WithInputFavoriteShortcut(1, shortcut),
             WidgetHotkeyAction.FavoriteInput3 => WithInputFavoriteShortcut(2, shortcut),
             WidgetHotkeyAction.FavoriteInput4 => WithInputFavoriteShortcut(3, shortcut),
+            WidgetHotkeyAction.ToggleOverlay => this with { ToggleOverlay = shortcut },
+            WidgetHotkeyAction.Options => this with { Options = shortcut },
+            WidgetHotkeyAction.ToggleWiFi => this with { ToggleWiFi = shortcut },
+            WidgetHotkeyAction.ToggleBluetooth => this with { ToggleBluetooth = shortcut },
+            WidgetHotkeyAction.ToggleTaskbarAutoHide => this with
+            {
+                ToggleTaskbarAutoHide = shortcut,
+            },
+            WidgetHotkeyAction.RefreshDisplay => this with { RefreshDisplay = shortcut },
+            WidgetHotkeyAction.RefreshAudio => this with { RefreshAudio = shortcut },
+            WidgetHotkeyAction.RefreshDevices => this with { RefreshDevices = shortcut },
+            WidgetHotkeyAction.RefreshAll => this with { RefreshAll = shortcut },
             _ => this,
         };
+
+    public WidgetShortcut? GetCommandShortcut(string key) =>
+        CommandShortcuts is not null && CommandShortcuts.TryGetValue(key, out WidgetShortcut? shortcut)
+            ? shortcut : null;
+
+    public WidgetSettings WithCommandShortcut(string key, WidgetShortcut? shortcut)
+    {
+        Dictionary<string, WidgetShortcut> bindings = CommandShortcuts is null
+            ? new(StringComparer.Ordinal) : new(CommandShortcuts, StringComparer.Ordinal);
+        if (shortcut is null) bindings.Remove(key);
+        else bindings[key] = shortcut;
+        return this with { CommandShortcuts = bindings };
+    }
 
     public bool IsShortcutUsedByAnotherAction(
         WidgetHotkeyAction action,
@@ -190,9 +325,10 @@ internal sealed record WidgetSettings(
         Enum.GetValues<WidgetHotkeyAction>()
             .Any(candidate =>
                 candidate != action &&
-                GetShortcut(candidate) == shortcut);
+                GetShortcut(candidate) == shortcut) ||
+        (CommandShortcuts?.Values.Contains(shortcut) ?? false);
 
-    public WidgetSettings Normalize()
+    public WidgetSettings Normalize(bool profilesEnabled = true)
     {
         WidgetSettings normalized = this with
         {
@@ -204,6 +340,19 @@ internal sealed record WidgetSettings(
             Duplicate = NormalizeShortcut(Duplicate),
             Extend = NormalizeShortcut(Extend),
             SecondScreenOnly = NormalizeShortcut(SecondScreenOnly),
+            Options = NormalizeShortcut(Options),
+            ToggleWiFi = NormalizeShortcut(ToggleWiFi),
+            ToggleBluetooth = NormalizeShortcut(ToggleBluetooth),
+            ToggleTaskbarAutoHide = NormalizeShortcut(ToggleTaskbarAutoHide),
+            RefreshDisplay = NormalizeShortcut(RefreshDisplay),
+            RefreshAudio = NormalizeShortcut(RefreshAudio),
+            RefreshDevices = NormalizeShortcut(RefreshDevices),
+            RefreshAll = NormalizeShortcut(RefreshAll),
+            AudioVolumeStepPercent = Math.Clamp(AudioVolumeStepPercent, 1, 20),
+            CommandShortcuts = CommandShortcuts is null ? null : CommandShortcuts
+                .Where(pair => QuickSwitchCommandCatalog.GetKeyedCommands().Any(item => item.Key == pair.Key)
+                    && NormalizeShortcut(pair.Value) is not null)
+                .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal),
             FavoriteOutput1 = NormalizeFavorite(FavoriteOutput1),
             FavoriteOutput2 = NormalizeFavorite(FavoriteOutput2),
             FavoriteOutput3 = NormalizeFavorite(FavoriteOutput3),
@@ -212,6 +361,15 @@ internal sealed record WidgetSettings(
             FavoriteInput2 = NormalizeInputFavorite(FavoriteInput2),
             FavoriteInput3 = NormalizeInputFavorite(FavoriteInput3),
             FavoriteInput4 = NormalizeInputFavorite(FavoriteInput4),
+            OverlayDimmingOpacity = NormalizeOverlayDimmingOpacity(
+                OverlayDimmingOpacity),
+            OverlaySidebarWidth = NormalizeOverlaySidebarWidth(
+                OverlaySidebarWidth),
+            ToggleOverlay = NormalizeShortcut(ToggleOverlay),
+            FloatingDisplayWidget = FloatingDisplayWidget?.Normalize(),
+            FloatingAudioWidget = FloatingAudioWidget?.Normalize(),
+            FloatingDevicesWidget = FloatingDevicesWidget?.Normalize(),
+            OverlayWorkspace = OverlayWorkspace?.Normalize(profilesEnabled),
         };
 
         HashSet<string> endpointIds = new(StringComparer.Ordinal);
@@ -367,6 +525,16 @@ internal sealed record WidgetSettings(
             Duplicate = null,
             Extend = null,
             SecondScreenOnly = null,
+            ToggleOverlay = null,
+            Options = null,
+            ToggleWiFi = null,
+            ToggleBluetooth = null,
+            ToggleTaskbarAutoHide = null,
+            RefreshDisplay = null,
+            RefreshAudio = null,
+            RefreshDevices = null,
+            RefreshAll = null,
+            CommandShortcuts = null,
         };
 
         for (int slot = 0; slot < MaximumFavoriteOutputs; slot++)
@@ -468,6 +636,32 @@ internal sealed record WidgetSettings(
 
     private static WidgetShortcut? NormalizeShortcut(WidgetShortcut? shortcut) =>
         shortcut is { IsValid: true } ? shortcut : null;
+
+    private static double NormalizeOverlayDimmingOpacity(double opacity)
+    {
+        if (!double.IsFinite(opacity))
+        {
+            return DefaultOverlayDimmingOpacity;
+        }
+
+        return Math.Clamp(
+            opacity,
+            MinimumOverlayDimmingOpacity,
+            MaximumOverlayDimmingOpacity);
+    }
+
+    private static double NormalizeOverlaySidebarWidth(double width)
+    {
+        if (!double.IsFinite(width))
+        {
+            return DefaultOverlaySidebarWidth;
+        }
+
+        return Math.Clamp(
+            width,
+            MinimumOverlaySidebarWidth,
+            MaximumOverlaySidebarWidth);
+    }
 
     private static FavoriteOutputSetting? NormalizeFavorite(
         FavoriteOutputSetting? favorite) =>

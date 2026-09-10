@@ -1,0 +1,302 @@
+<Window x:Class="WinQuickSwitch.Features.Overlay.OverlayWorkspaceWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="WinQuickSwitch overlay"
+        Width="1440"
+        Height="900"
+        MinWidth="760"
+        MinHeight="520"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        Topmost="True"
+        AllowsTransparency="True"
+        Background="Transparent"
+        WindowStartupLocation="Manual"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        Loaded="Window_Loaded"
+        SizeChanged="Window_SizeChanged"
+        PreviewKeyDown="Window_PreviewKeyDown">
+  <Window.Resources>
+    <ControlTemplate x:Key="OverlayWidgetResizeGripTemplate"
+                     TargetType="{x:Type Thumb}">
+      <Grid Background="Transparent">
+        <Path Width="20"
+              Height="20"
+              Margin="0,0,3,3"
+              HorizontalAlignment="Right"
+              VerticalAlignment="Bottom"
+              Data="M 3,17 L17,3 M 9,17 L17,9 M 15,17 L17,15"
+              Stroke="{DynamicResource SecondaryTextBrush}"
+              StrokeThickness="1.6"
+              StrokeStartLineCap="Round"
+              StrokeEndLineCap="Round" />
+      </Grid>
+    </ControlTemplate>
+
+    <ControlTemplate x:Key="OverlayInspectorResizeGripTemplate"
+                     TargetType="{x:Type Thumb}">
+      <Grid Background="Transparent">
+        <Border Width="4"
+                Height="42"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Background="{DynamicResource BorderBrush}"
+                CornerRadius="2" />
+      </Grid>
+    </ControlTemplate>
+  </Window.Resources>
+
+  <Grid x:Name="OverlayRoot"
+        Background="Transparent"
+        MouseLeftButtonDown="Backdrop_MouseLeftButtonDown"
+        KeyboardNavigation.TabNavigation="Cycle">
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="*" />
+      <ColumnDefinition x:Name="LauncherColumn" Width="300" />
+    </Grid.ColumnDefinitions>
+
+    <Border x:Name="BackdropLayer"
+            Grid.ColumnSpan="2"
+            Background="{DynamicResource OverlayBackdropBrush}"
+            IsHitTestVisible="False" />
+
+    <Grid x:Name="WorkspaceSurface"
+          Grid.Column="0"
+          Margin="20"
+          Background="Transparent"
+          MouseLeftButtonDown="WorkspaceSurface_MouseLeftButtonDown">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="*" />
+        <RowDefinition Height="Auto" />
+      </Grid.RowDefinitions>
+
+      <Grid x:Name="WidgetSurface"
+            Grid.Row="0"
+            Background="Transparent"
+            ClipToBounds="True"
+            SizeChanged="WidgetSurface_SizeChanged">
+        <Canvas x:Name="WidgetCanvas"
+                Background="Transparent"
+                ClipToBounds="True" />
+
+        <Border x:Name="InspectorHost"
+                Width="720"
+                MinWidth="520"
+                MaxWidth="900"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Stretch"
+                Visibility="Collapsed"
+                Background="{DynamicResource PageBrush}"
+                BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="1"
+                CornerRadius="10"
+                MouseLeftButtonDown="InspectorHost_MouseLeftButtonDown">
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="40" />
+              <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Thumb x:Name="InspectorResizeGrip"
+                   Grid.Column="0"
+                   Width="40"
+                   HorizontalAlignment="Center"
+                   VerticalAlignment="Stretch"
+                   Cursor="SizeWE"
+                   Template="{StaticResource OverlayInspectorResizeGripTemplate}"
+                   ToolTip="Resize inspector"
+                   DragDelta="InspectorResizeGrip_DragDelta"
+                   DragCompleted="InspectorResizeGrip_DragCompleted"
+                   AutomationProperties.Name="Resize inspector" />
+            <Grid Grid.Column="1" Margin="0,16,16,16">
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+              </Grid.RowDefinitions>
+              <DockPanel Grid.Row="0">
+                <Button x:Name="InspectorCloseButton"
+                        DockPanel.Dock="Right"
+                        Width="40"
+                        Height="40"
+                        Padding="0"
+                        Click="InspectorClose_Click"
+                        Content="×"
+                        FontSize="20"
+                        ToolTip="Close inspector"
+                        AutomationProperties.Name="Close inspector" />
+                <Button x:Name="InspectorQuickWidgetButton"
+                        DockPanel.Dock="Right"
+                        MinWidth="136"
+                        Height="40"
+                        Margin="0,0,8,0"
+                        Padding="10,4"
+                        Click="InspectorQuickWidget_Click"
+                        Content="Add quick widget"
+                        ToolTip="Add this feature as a quick-access widget"
+                        AutomationProperties.Name="Add quick-access widget"
+                        Visibility="Collapsed" />
+                <TextBlock x:Name="InspectorTitleText"
+                           VerticalAlignment="Center"
+                           FontSize="20"
+                           FontWeight="SemiBold"
+                           Text="Details" />
+              </DockPanel>
+              <TextBlock x:Name="InspectorDescriptionText"
+                         Grid.Row="1"
+                         Margin="0,5,0,12"
+                         Foreground="{DynamicResource SecondaryTextBrush}"
+                         TextWrapping="Wrap"
+                         Text="Complete controls" />
+              <ScrollViewer Grid.Row="2"
+                            VerticalScrollBarVisibility="Auto"
+                            HorizontalScrollBarVisibility="Disabled">
+                <ContentControl x:Name="InspectorContentHost"
+                                Focusable="False"
+                                AutomationProperties.Name="Feature inspector content" />
+              </ScrollViewer>
+              <DockPanel Grid.Row="3" Margin="0,12,0,0">
+                <Button DockPanel.Dock="Right"
+                        MinHeight="40"
+                        Click="InspectorClose_Click"
+                        Content="Back to workspace"
+                        ToolTip="Close the expanded inspector"
+                        AutomationProperties.Name="Back to workspace" />
+                <TextBlock x:Name="InspectorHintText"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource SecondaryTextBrush}"
+                           Text="Esc closes this inspector." />
+              </DockPanel>
+            </Grid>
+          </Grid>
+        </Border>
+      </Grid>
+
+      <Border x:Name="FeedbackBorder"
+              Grid.Row="1"
+              Margin="0,14,0,0"
+              Padding="12,9"
+              Background="{DynamicResource CardBrush}"
+              BorderBrush="{DynamicResource BorderBrush}"
+              BorderThickness="1"
+              CornerRadius="7"
+              Visibility="Collapsed">
+        <DockPanel>
+          <Button DockPanel.Dock="Right"
+                  Width="40"
+                  Height="40"
+                  Padding="0"
+                  Click="DismissFeedback_Click"
+                  Content="×"
+                  ToolTip="Dismiss message"
+                  AutomationProperties.Name="Dismiss message" />
+          <TextBlock x:Name="FeedbackText"
+                     VerticalAlignment="Center"
+                     Foreground="{DynamicResource PrimaryTextBrush}"
+                     AutomationProperties.Name="Overlay status message"
+                     AutomationProperties.LiveSetting="Polite"
+                     TextWrapping="Wrap" />
+        </DockPanel>
+      </Border>
+    </Grid>
+
+    <Border x:Name="LauncherPanel"
+            Grid.Column="1"
+            Padding="18"
+            Background="{DynamicResource PageBrush}"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="1,0,0,0"
+            MouseLeftButtonDown="LauncherPanel_MouseLeftButtonDown">
+      <Grid>
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto" />
+          <RowDefinition Height="*" />
+          <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <ScrollViewer Grid.Row="1"
+                      VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled">
+          <StackPanel x:Name="LauncherNavigation">
+            <ToggleButton x:Name="DisplayLauncherButton"
+                          Style="{StaticResource WidgetTabToggle}"
+                          Tag="Display"
+                          Click="LauncherButton_Click"
+                          MinHeight="48"
+                          HorizontalContentAlignment="Left"
+                          Content="▣   Display"
+                          ToolTip="Display controls"
+                          AutomationProperties.Name="Open Display controls" />
+            <ToggleButton x:Name="AudioLauncherButton"
+                          Style="{StaticResource WidgetTabToggle}"
+                          Tag="Audio"
+                          Click="LauncherButton_Click"
+                          MinHeight="48"
+                          HorizontalContentAlignment="Left"
+                          Content="♫   Audio"
+                          ToolTip="Audio controls"
+                          AutomationProperties.Name="Open Audio controls" />
+            <ToggleButton x:Name="DevicesLauncherButton"
+                          Style="{StaticResource WidgetTabToggle}"
+                          Tag="Devices"
+                          Click="LauncherButton_Click"
+                          MinHeight="48"
+                          HorizontalContentAlignment="Left"
+                          Content="⌁   Devices"
+                          ToolTip="Device controls"
+                          AutomationProperties.Name="Open Devices controls" />
+            <ToggleButton x:Name="OptionsLauncherButton"
+                          Style="{StaticResource WidgetTabToggle}"
+                          Tag="Options"
+                          Click="LauncherButton_Click"
+                          MinHeight="48"
+                          HorizontalContentAlignment="Left"
+                          Content="⚙   Options"
+                          ToolTip="Options and shortcuts"
+                          AutomationProperties.Name="Open Options" />
+            <ToggleButton x:Name="ProfilesLauncherButton"
+                          Style="{StaticResource WidgetTabToggle}"
+                          Tag="Profiles"
+                          Click="LauncherButton_Click"
+                          MinHeight="48"
+                          HorizontalContentAlignment="Left"
+                          Content="▤   Profiles"
+                          ToolTip="Saved profiles"
+                          AutomationProperties.Name="Open Profiles" />
+            <ToggleButton x:Name="AboutLauncherButton"
+                          Style="{StaticResource WidgetTabToggle}"
+                          Tag="About"
+                          Click="LauncherButton_Click"
+                          MinHeight="48"
+                          HorizontalContentAlignment="Left"
+                          Content="ⓘ   About"
+                          ToolTip="About WinQuickSwitch"
+                          AutomationProperties.Name="Open About" />
+          </StackPanel>
+        </ScrollViewer>
+
+        <StackPanel Grid.Row="2" Margin="0,14,0,0">
+          <Button x:Name="OpenMainLauncherButton" MinHeight="42"
+                  Click="OpenMainWindow_Click"
+                  Content="Open main window"
+                  ToolTip="Open the complete WinQuickSwitch window"
+                  AutomationProperties.Name="Open main WinQuickSwitch window" />
+          <Button x:Name="ExitLauncherButton" Margin="0,8,0,0"
+                  MinHeight="42"
+                  Click="Exit_Click"
+                  Content="Exit WinQuickSwitch"
+                  ToolTip="Close WinQuickSwitch"
+                  AutomationProperties.Name="Exit WinQuickSwitch" />
+          <TextBlock x:Name="LauncherShortcutHint" Margin="0,12,0,0"
+                     HorizontalAlignment="Center"
+                     Foreground="{DynamicResource SecondaryTextBrush}"
+                     Text="Ctrl+0 Widgets  ·  Esc Close"
+                     TextAlignment="Center"
+                     TextWrapping="Wrap" />
+        </StackPanel>
+      </Grid>
+    </Border>
+  </Grid>
+</Window>

@@ -5,13 +5,17 @@ WinQuickSwitch. It is operational guidance, not legal advice.
 
 ## Recommended release model
 
-Publish WinQuickSwitch as a paid, one-time-purchase MSIX application through
-Microsoft Store.
+Publish two MSIX products through Microsoft Store: retain the existing
+WinQuickSwitch listing as the Paid one-time-purchase edition and add a separate
+WinQuickSwitch Free listing for the core utility.
 
 This divides responsibility cleanly:
 
-- Microsoft Store handles the customer's purchase entitlement, account-linked
-  acquisition, package hosting, Store signing, installation, and updates.
+- Microsoft Store handles the Paid customer's purchase entitlement,
+  account-linked acquisition, package hosting, Store signing, installation,
+  and updates.
+- Free has no purchase gate and links to the Paid listing when a user selects a
+  profile-only capability.
 - The WinQuickSwitch EULA defines what the customer may do with the app and
   prohibits unauthorized sharing, redistribution, resale, sublicensing, and
   license bypass.
@@ -25,7 +29,8 @@ app or source code to the customer.
 
 - Publisher: Andrew Chang
 - Support contact: `andrew.chang0@outlook.com`
-- Model: one-time paid purchase
+- Paid model: one-time purchase
+- Free model: free acquisition with no profile functionality
 - Target price: the Microsoft Store price tier closest to CAD $1.00
 - Trial: none for the first release
 - EULA presentation: available in the Store listing and the app's About page;
@@ -48,7 +53,8 @@ app or source code to the customer.
 ## Store submission flow
 
 1. Open a Windows developer account in Partner Center.
-2. Reserve the WinQuickSwitch product name.
+2. Preserve the existing WinQuickSwitch product identity and reserve a separate
+   WinQuickSwitch Free product name.
 3. Create an **MSIX or PWA app** submission and package the WPF application as
    MSIX. The current `artifacts/win-x64-lite/WinQuickSwitch.exe` is an
    unpackaged direct-download build and is not the planned Store package.
@@ -68,11 +74,15 @@ Store hosting, signing, commerce, controlled rollout, and update handling.
 
 ## How purchase enforcement works
 
-For a simple paid app, the Store normally prevents users without an entitlement
-from acquiring the Store package. The customer signs in to Microsoft Store,
-buys the app, and receives an account-linked entitlement. Store installation
-limits and device association are controlled by Microsoft terms, so the EULA
-does not impose a conflicting one-device rule.
+The Paid Store product relies on Microsoft Store acquisition entitlement. The
+customer signs in to Microsoft Store, buys the app, and receives an
+account-linked entitlement. Free has no purchase gate because its package is a
+separate product and does not include Profiles.
+
+The existing Paid package identity remains `Dreamle.WinQuickSwitch`. The Free
+identity is intentionally left as a Partner Center value until its product name
+is reserved; the build must reject a placeholder identity rather than create a
+package that cannot be uploaded.
 
 The EULA is a separate legal layer. It gives the buyer limited use rights and
 provides contractual remedies against redistribution or license bypass. A text
@@ -122,7 +132,8 @@ Completed:
   `Dreamle`.
 - Reproducible x64 MSIX and `.msixupload` build script using the installed
   Windows SDK packaging tools.
-- Structurally verified version `1.0.1.0` Store upload candidate.
+- Structurally verified version `1.0.20.0` Store upload candidate supporting
+  Windows build 19041 and newer on x64.
 
 Still required for Store release:
 
@@ -133,6 +144,17 @@ Still required for Store release:
 - Signed installation or private-flight testing and Windows App Certification
   Kit validation.
 - Partner Center package validation and certification.
+
+### Edition split status
+
+- Paid identity is preserved as `Dreamle.WinQuickSwitch`.
+- Free product name and identity still require Partner Center reservation.
+- Edition-aware manifest selection and package automation now accept the Free
+  or Paid edition; Free still requires its reserved Partner Center identity.
+- Public standalone Lite/Portable profiles now default to Free; Paid remains
+  Store-only for public release until a separate licensing path is designed.
+- The shared sign-in startup slot is edition-safe: disabling one edition does not
+  delete the other edition's executable command.
 
 ## Official references
 

@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
@@ -10,13 +11,17 @@ using WinQuickSwitch.Features.Audio;
 using WinQuickSwitch.Features.Devices;
 using WinQuickSwitch.Features.Display;
 using WinQuickSwitch.Features.Legal;
+using WinQuickSwitch.Features.Overlay;
 using WinQuickSwitch.Features.Profiles;
+using WinQuickSwitch.Features.Product;
+using WinQuickSwitch.Features.SharedUi;
 using WinQuickSwitch.Features.Taskbar;
 using WinQuickSwitch.Features.Widget;
 using WinQuickSwitch.Platform.Windows;
 using WinQuickSwitch.Platform.Windows.Audio;
 using WinQuickSwitch.Platform.Windows.Devices;
 using WinQuickSwitch.Platform.Windows.Display;
+using WinQuickSwitch.Platform.Windows.Overlay;
 
 namespace WinQuickSwitch;
 
@@ -28,19 +33,29 @@ public partial class MainWindow : Window
     private readonly IAudioChangeWatcher _audioChangeWatcher;
     private readonly IAudioSessionControlService _audioSessionControlService;
     private readonly IAudioEndpointControlService _audioEndpointControlService;
+    private readonly AudioQuickActionExecutor _audioQuickActionExecutor;
     private readonly IDefaultAudioEndpointService _defaultAudioEndpointService;
     private readonly IDeviceInventoryService _deviceInventoryService;
     private readonly IDeviceSettingsService _deviceSettingsService;
     private readonly IWirelessRadioService _wirelessRadioService;
     private readonly ITaskbarService _taskbarService;
     private readonly IWidgetSettingsStore _widgetSettingsStore;
-    private readonly IProfileStore _profileStore;
+    private readonly IProfileFeature _profileFeature;
     private readonly IStartupRegistrationService _startupRegistrationService;
+    private readonly ProductConfiguration _productConfiguration;
     private readonly WindowsGlobalHotkey _globalHotkey = new();
     private readonly WindowsWidgetPlacementService _placementService = new();
+    private OverlayWorkspaceWindow? _overlayWorkspace;
+    private string? _overlayWorkspaceMonitorId;
+    private long _overlayNavigationRevision;
+    private FloatingDisplayWidgetWindow? _floatingDisplayWidget;
+    private FloatingQuickWidgetWindow? _floatingAudioWidget;
+    private FloatingQuickWidgetWindow? _floatingDevicesWidget;
+    private WirelessRadioSnapshot? _lastWirelessRadioSnapshot;
     private WindowsTrayIcon? _trayIcon;
     private readonly DebouncedActionScheduler _audioRefreshScheduler;
     private readonly DebouncedActionScheduler _deviceRefreshScheduler;
+    private readonly DispatcherTimer _displayTopologyRefreshTimer;
     private readonly SemaphoreSlim _audioRefreshGate = new(1, 1);
     private readonly SemaphoreSlim _deviceRefreshGate = new(1, 1);
     private readonly SemaphoreSlim _wirelessRadioGate = new(1, 1);
@@ -64,7 +79,11 @@ public partial class MainWindow : Window
     private bool _isApplyingSettingsUi;
     private bool _isApplyingPanelSelection;
     private DateTime _autoHideAllowedAfterUtc;
+    private readonly bool _isScopedValidationInstance =
+        !string.IsNullOrWhiteSpace(
+            Environment.GetEnvironmentVariable("WINQUICKSWITCH_INSTANCE_ID"));
     private const int WmDeviceChange = 0x0219;
+    private const int WmDisplayChange = 0x007E;
 
     public MainWindow() : this(
         new WindowsDisplayModeService(),
@@ -79,7 +98,7 @@ public partial class MainWindow : Window
         new WindowsWirelessRadioService(),
         new WindowsTaskbarService(),
         new JsonWidgetSettingsStore(),
-        new JsonProfileStore(),
+        ProfileFeature.CreateStore(ProductConfiguration.Default),
         new WindowsStartupRegistrationService())
     {
     }
@@ -98,7 +117,8 @@ public partial class MainWindow : Window
         ITaskbarService taskbarService,
         IWidgetSettingsStore widgetSettingsStore,
         IProfileStore profileStore,
-        IStartupRegistrationService startupRegistrationService)
+        IStartupRegistrationService startupRegistrationService,
+        ProductConfiguration? productConfiguration = null)
     {
         _displayModeService = displayModeService;
         _displayTopologyService = displayTopologyService;
@@ -106,18 +126,26 @@ public partial class MainWindow : Window
         _audioChangeWatcher = audioChangeWatcher;
         _audioSessionControlService = audioSessionControlService;
         _audioEndpointControlService = audioEndpointControlService;
+        _audioQuickActionExecutor = new(audioInventoryService, audioEndpointControlService);
         _defaultAudioEndpointService = defaultAudioEndpointService;
         _deviceInventoryService = deviceInventoryService;
         _deviceSettingsService = deviceSettingsService;
         _wirelessRadioService = wirelessRadioService;
         _taskbarService = taskbarService;
         _widgetSettingsStore = widgetSettingsStore;
-        _profileStore = profileStore;
         _startupRegistrationService = startupRegistrationService;
+        _productConfiguration = productConfiguration ?? ProductConfiguration.Default;
+        _profileFeature = ProfileFeature.Create(
+            _productConfiguration,
+            profileStore);
         _widgetSettings = _widgetSettingsStore.Load();
-        _profileCatalog = _profileStore.Load();
+        _profileCatalog = _profileFeature.Load();
         WidgetTheme.Apply(_widgetSettings.UseDarkTheme);
         InitializeComponent();
+        WidgetTheme.AttachResourceScope(this);
+        Title = _productConfiguration.VersionedDisplayName;
+        ApplyEditionUi();
+        MountSharedMainWindowViews();
         UpdateOptionsControls();
 
         _audioRefreshScheduler = new DebouncedActionScheduler(
@@ -126,7 +154,44 @@ public partial class MainWindow : Window
         _deviceRefreshScheduler = new DebouncedActionScheduler(
             TimeSpan.FromMilliseconds(450),
             RefreshDevicesFromNotificationAsync);
+        _displayTopologyRefreshTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(250),
+        };
+        _displayTopologyRefreshTimer.Tick += DisplayTopologyRefreshTimer_Tick;
         _audioChangeWatcher.Changed += AudioChangeWatcher_Changed;
+    }
+
+    private void ApplyEditionUi()
+    {
+        bool profilesEnabled = _profileFeature.IsEnabled;
+
+        ProfilesPanel.Visibility = profilesEnabled && _activePanel == WidgetPanel.Profiles
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        ProfilesPanelTab.Visibility = profilesEnabled
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+
+        if (!profilesEnabled)
+        {
+            PanelTabs.ColumnDefinitions[4].Width = new GridLength(0);
+        }
+
+        AboutTitleText.Text =
+            $"About {_productConfiguration.VersionedDisplayName}";
+        AboutDescriptionText.Text = profilesEnabled
+            ? $"Version {ProductConfiguration.ReleaseVersion}. A local Windows utility for quick display, audio, device, taskbar, favorite, and profile controls."
+            : $"Version {ProductConfiguration.ReleaseVersion}. A local Windows utility for quick display, audio, device, taskbar, and favorite controls.";
+        AboutLicenseHeadingText.Text = profilesEnabled
+            ? "Licensed software"
+            : "Free edition";
+        AboutLicenseBodyText.Text = profilesEnabled
+            ? "A Microsoft Store purchase grants permission to use WinQuickSwitch; it does not transfer ownership of the app or its source code."
+            : "WinQuickSwitch Free provides the core controls for display, audio, devices, taskbar, favorites, and keybinds. Profiles and combined setups are available in the Paid edition.";
+        AboutSharingText.Text = profilesEnabled
+            ? "Keep local settings, saved profiles, device names, and shortcuts private."
+            : "Keep local settings, device names, and shortcuts private.";
     }
 
     protected override void OnSourceInitialized(EventArgs e)
@@ -140,7 +205,9 @@ public partial class MainWindow : Window
 
         try
         {
-            _trayIcon = new WindowsTrayIcon(_windowHandle);
+            _trayIcon = new WindowsTrayIcon(
+                _windowHandle,
+                tooltip: _productConfiguration.VersionedDisplayName);
             _trayIcon.OpenRequested += TrayIcon_OpenRequested;
             _trayIcon.QuitRequested += TrayIcon_QuitRequested;
             _trayIcon.FavoriteRequested += TrayIcon_FavoriteRequested;
@@ -163,9 +230,17 @@ public partial class MainWindow : Window
         _isExiting = true;
         _audioRefreshScheduler.Dispose();
         _deviceRefreshScheduler.Dispose();
+        _sharedAudioRefreshOrder.Dispose();
+        _sharedDevicesRefreshOrder.Dispose();
+        _displayTopologyRefreshTimer.Stop();
+        _displayTopologyRefreshTimer.Tick -= DisplayTopologyRefreshTimer_Tick;
         _audioChangeWatcher.Changed -= AudioChangeWatcher_Changed;
         _audioChangeWatcher.Dispose();
         _globalHotkey.Dispose();
+        CloseOverlayWorkspace();
+        CloseFloatingDisplayWidget();
+        CloseFloatingAudioWidget();
+        CloseFloatingDevicesWidget();
         if (_trayIcon is not null)
         {
             _trayIcon.OpenRequested -= TrayIcon_OpenRequested;
@@ -202,21 +277,49 @@ public partial class MainWindow : Window
 
     private void AudioChangeWatcher_Changed(object? sender, EventArgs e)
     {
-        if (IsVisible && _activePanel == WidgetPanel.Audio)
+        if ((IsVisible && _activePanel == WidgetPanel.Audio) ||
+            _overlayWorkspace is { IsVisible: true })
         {
             _audioRefreshScheduler.Schedule();
         }
     }
 
+    private void ScheduleDisplayTopologyRefresh()
+    {
+        if (_isExiting ||
+            (!IsVisible && _overlayWorkspace is not { IsVisible: true }) ||
+            (IsVisible && _overlayWorkspace is null && _activePanel != WidgetPanel.Display))
+        {
+            return;
+        }
+
+        _displayTopologyRefreshTimer.Stop();
+        _displayTopologyRefreshTimer.Start();
+    }
+
+    private void DisplayTopologyRefreshTimer_Tick(
+        object? sender,
+        EventArgs e)
+    {
+        _displayTopologyRefreshTimer.Stop();
+
+        if (!_isExiting &&
+            (_overlayWorkspace is { IsVisible: true } ||
+             (IsVisible && _activePanel == WidgetPanel.Display)))
+        {
+            RefreshDisplayTopology();
+        }
+    }
+
     private Task RefreshAudioFromNotificationAsync(CancellationToken cancellationToken) =>
         Dispatcher.InvokeAsync(
-            RefreshAudioInventoryAsync,
+            () => RefreshAudioInventoryAsync(cancellationToken),
             DispatcherPriority.Background,
             cancellationToken).Task.Unwrap();
 
     private Task RefreshDevicesFromNotificationAsync(CancellationToken cancellationToken) =>
         Dispatcher.InvokeAsync(
-            RefreshDeviceInventoryAsync,
+            () => RefreshDeviceInventoryAsync(cancellationToken),
             DispatcherPriority.Background,
             cancellationToken).Task.Unwrap();
 
@@ -243,18 +346,34 @@ public partial class MainWindow : Window
             HandleProfileHotkey(profileId);
             handled = true;
         }
-        else if (_trayIcon?.HandleWindowMessage(message, longParameter) == true)
+        else if (message == WindowsGlobalHotkey.WmHotkey &&
+            _globalHotkey.TryResolveCommandKey(wordParameter.ToInt32(), out string commandKey))
+        {
+            HandleCommandHotkey(commandKey);
+            handled = true;
+        }
+        else if (_trayIcon?.HandleWindowMessage(
+                     message,
+                     wordParameter,
+                     longParameter) == true)
         {
             handled = true;
         }
-        else if (message == WmDeviceChange)
+        else if (message is WmDeviceChange or WmDisplayChange)
         {
-            _deviceInventoryDirty = true;
-
-            if (IsVisible && _activePanel == WidgetPanel.Devices)
+            if (message == WmDeviceChange)
             {
-                _deviceRefreshScheduler.Schedule();
+                _deviceInventoryDirty = true;
+                UpdateQuickSummary();
+
+                if ((IsVisible && _activePanel == WidgetPanel.Devices) ||
+                    _overlayWorkspace is { IsVisible: true })
+                {
+                    _deviceRefreshScheduler.Schedule();
+                }
             }
+
+            ScheduleDisplayTopologyRefresh();
         }
 
         return IntPtr.Zero;
@@ -262,65 +381,160 @@ public partial class MainWindow : Window
 
     private async void HandleGlobalHotkey(WidgetHotkeyAction action)
     {
-        switch (action)
+        try
         {
-            case WidgetHotkeyAction.ToggleWidget:
-                if (IsVisible)
-                {
-                    HideWidget();
-                }
-                else
-                {
-                    await ShowWidgetAsync();
-                }
+            if (!QuickSwitchCommandCatalog.TryGetLegacyHotkey(
+                    action,
+                    _productConfiguration,
+                    out QuickSwitchCommandDescriptor descriptor))
+            {
+                OptionsStatusText.Text =
+                    "That shortcut is not available in this edition.";
+                return;
+            }
 
-                break;
-            case WidgetHotkeyAction.Display:
-                await ShowWidgetAsync(WidgetPanel.Display);
-                break;
-            case WidgetHotkeyAction.Audio:
-                await ShowWidgetAsync(WidgetPanel.Audio);
-                break;
-            case WidgetHotkeyAction.Devices:
-                await ShowWidgetAsync(WidgetPanel.Devices);
-                break;
-            default:
-                if (TryGetDisplayMode(action, out DisplayMode displayMode))
-                {
-                    await ApplyDisplayModeFromHotkeyAsync(displayMode);
-                }
-                else if (WidgetSettings.TryGetFavoriteSlot(action, out int slot))
-                {
-                    await ApplyFavoriteOutputFromHotkeyAsync(slot);
-                }
-                else if (WidgetSettings.TryGetInputFavoriteSlot(action, out int inputSlot))
-                {
-                    await ApplyFavoriteInputFromHotkeyAsync(inputSlot);
-                }
+            await ExecuteSharedCommandAsync(
+                descriptor.CreateCommand(),
+                _lifetimeCancellation.Token);
+        }
+        catch (OperationCanceledException) when (
+            _lifetimeCancellation.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+        {
+            OptionsStatusText.Text =
+                $"Shortcut action could not complete: {exception.Message}";
+            if (_overlayWorkspace is { IsVisible: true } workspace)
+            {
+                workspace.SetFeedback(
+                    OptionsStatusText.Text,
+                    OverlayWorkspaceFeedbackSeverity.Error);
+            }
+        }
+    }
 
-                break;
+    private async void HandleCommandHotkey(string commandKey)
+    {
+        try
+        {
+            QuickSwitchCommandDescriptor? descriptor = QuickSwitchCommandCatalog.GetKeyedCommands()
+                .FirstOrDefault(item => item.Key == commandKey && item.IsAvailable(_productConfiguration));
+            if (descriptor is not null)
+                await ExecuteSharedCommandAsync(descriptor.CreateCommand(), _lifetimeCancellation.Token);
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception)
+        {
+            _sharedAudioStatus = "Audio shortcut could not be completed.";
+            PublishSharedState(QuickSwitchRefreshScope.Audio);
         }
     }
 
     private async void HandleProfileHotkey(string profileId)
     {
-        ProfileDefinition? profile = FindProfile(profileId);
-
-        if (profile is not null)
+        if (!_profileFeature.IsEnabled)
         {
-            await ApplyProfileAsync(profile);
-        }
-    }
-
-    internal void ShowFromExternalRequest()
-    {
-        if (!Dispatcher.CheckAccess())
-        {
-            Dispatcher.BeginInvoke(ShowFromExternalRequest);
             return;
         }
 
-        _ = ShowWidgetAsync();
+        ProfileDefinition? profile = FindProfile(profileId);
+
+        if (profile is null)
+        {
+            return;
+        }
+
+        try
+        {
+            QuickSwitchCommandDescriptor descriptor =
+                QuickSwitchCommandCatalog.CreateProfile(profile);
+            if (!descriptor.IsAvailable(_productConfiguration))
+            {
+                return;
+            }
+
+            await ExecuteSharedCommandAsync(
+                descriptor.CreateCommand(),
+                _lifetimeCancellation.Token);
+        }
+        catch (OperationCanceledException) when (
+            _lifetimeCancellation.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+        {
+            ProfilesStatusText.Text =
+                $"Profile shortcut could not complete: {exception.Message}";
+        }
+    }
+
+    internal void ShowConfiguredSurfaceFromStartup()
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            _ = Dispatcher.BeginInvoke(ShowConfiguredSurfaceFromStartup);
+            return;
+        }
+
+        if (!_widgetSettings.OverlayEnabled)
+        {
+            ShowFromExternalRequest();
+            return;
+        }
+
+        if (_windowHandle == IntPtr.Zero)
+        {
+            // An overlay-first launch never shows the resident main window,
+            // so explicitly create its HWND. This establishes the tray icon
+            // and global shortcuts before the workspace is the only surface.
+            _windowHandle = new WindowInteropHelper(this).EnsureHandle();
+        }
+
+        if (_overlayWorkspace is { IsVisible: true } workspace)
+        {
+            workspace.Activate();
+            workspace.FocusLauncher();
+            return;
+        }
+
+        ToggleSidebarOverlay();
+    }
+
+    internal async void ShowFromExternalRequest()
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            _ = Dispatcher.BeginInvoke(ShowFromExternalRequest);
+            return;
+        }
+
+        CloseOverlayWorkspace();
+        try
+        {
+            await ShowWidgetAsync();
+        }
+        catch (OperationCanceledException) when (_lifetimeCancellation.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+        {
+            OptionsStatusText.Text =
+                $"WinQuickSwitch could not open: {exception.Message}";
+            MessageBox.Show(
+                OptionsStatusText.Text,
+                _productConfiguration.DisplayName,
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
+    internal void ShowForAttendedValidation()
+    {
+        _autoHideAllowedAfterUtc = DateTime.MaxValue;
+        Show();
+        Activate();
+        RefreshDisplayTopology();
     }
 
     private async Task ShowWidgetAsync(WidgetPanel? requestedPanel = null)
@@ -330,8 +544,22 @@ public partial class MainWindow : Window
             return;
         }
 
-        _autoHideAllowedAfterUtc = DateTime.UtcNow.AddMilliseconds(500);
+        if (requestedPanel is not null)
+        {
+            CloseOverlayWorkspace();
+        }
+
+        _autoHideAllowedAfterUtc = _isScopedValidationInstance
+            ? DateTime.MaxValue
+            : DateTime.UtcNow.AddMilliseconds(500);
         ResetVisibleCancellation();
+
+        if (WindowState == WindowState.Minimized)
+        {
+            WindowState = WindowState.Normal;
+        }
+
+        Topmost = _widgetSettings.WindowPinned;
         Show();
         Activate();
         await ActivatePanelAsync(requestedPanel ?? _activePanel);
@@ -341,6 +569,19 @@ public partial class MainWindow : Window
         {
             PositionWidgetNearPointer();
             _hasPositionedWidget = true;
+        }
+
+        // Panel activation can yield while Windows is still unwinding a tray
+        // menu or a second-instance launch. Reassert foreground activation
+        // after the asynchronous refresh so click-away handling cannot hide
+        // the window before the user has a chance to interact with it.
+        if (IsVisible && !_isExiting)
+        {
+            _autoHideAllowedAfterUtc = _isScopedValidationInstance
+                ? DateTime.MaxValue
+                : DateTime.UtcNow.AddSeconds(3);
+            Activate();
+            Focus();
         }
     }
 
@@ -357,42 +598,1228 @@ public partial class MainWindow : Window
         Hide();
     }
 
+    private void ToggleSidebarOverlay()
+    {
+        if (_overlayWorkspace is { IsVisible: true })
+        {
+            _overlayWorkspace.Dismiss();
+            return;
+        }
+
+        if (IsVisible)
+        {
+            HideWidget();
+        }
+
+        // The compact window cancels its short-lived refresh token when it is
+        // hidden.  The overlay is another active surface, so give it a fresh
+        // token and keep the audio watcher alive while the workspace is open.
+        ResetVisibleCancellation();
+        StartAudioWatcher();
+
+        OverlayMonitorInfo monitor;
+        string? monitorLookupNotice = null;
+
+        try
+        {
+            monitor = WindowsOverlayMonitor.GetPointerMonitorInfo();
+        }
+        catch (Win32Exception pointerException)
+        {
+            // GetCursorPos can be denied by a protected/elevated foreground
+            // surface.  Keep the overlay usable by resolving the monitor from
+            // our own window before falling back to one safe monitor.
+            try
+            {
+                if (_windowHandle == IntPtr.Zero)
+                {
+                    throw new InvalidOperationException(
+                        "The main window handle is not ready.");
+                }
+
+                monitor = WindowsOverlayMonitor.GetWindowMonitorInfo(_windowHandle);
+                monitorLookupNotice =
+                    "Pointer location was unavailable; opened on the WinQuickSwitch monitor.";
+            }
+            catch (Exception windowException)
+            {
+                try
+                {
+                    monitor = WindowsOverlayMonitor.GetFallbackMonitorInfo();
+                    monitorLookupNotice =
+                        "Windows did not provide a monitor location; opened on the primary monitor.";
+                }
+                catch (Win32Exception fallbackMonitorException)
+                {
+                    OptionsStatusText.Text =
+                        $"Overlay could not determine a monitor: {pointerException.Message} " +
+                        $"({windowException.Message}; {fallbackMonitorException.Message})";
+                    _ = ShowWidgetAsync();
+                    return;
+                }
+            }
+        }
+
+        _overlayWorkspaceMonitorId = string.IsNullOrWhiteSpace(monitor.DeviceName)
+            ? $"{monitor.Bounds.Left}:{monitor.Bounds.Top}:{monitor.Bounds.Right}:{monitor.Bounds.Bottom}"
+            : monitor.DeviceName;
+
+        try
+        {
+            OverlayWorkspaceWindow workspace = new(
+                closeRequested: CloseOverlayWorkspace,
+                commandRequested: HandleWorkspaceCommandRequested,
+                widgetRequested: HandleWorkspaceWidgetRequested,
+                inspectorClosed: RestoreWorkspaceInspectorPanel,
+                layoutChanged: HandleWorkspaceLayoutChanged,
+                inspectorWidthChanged: HandleWorkspaceInspectorWidthChanged,
+                monitorBounds: monitor.Bounds,
+                dimmingOpacity: _widgetSettings.OverlayDimmingOpacity,
+                launcherWidth: 300);
+
+            _overlayWorkspace = workspace;
+            workspace.Closed += OverlayWorkspace_Closed;
+            workspace.SetProfilesAvailable(_profileFeature.IsEnabled);
+            workspace.SetWidgets(BuildWorkspaceWidgets());
+            PublishSharedState(QuickSwitchRefreshScope.All);
+            RestoreWorkspaceLayout(workspace);
+            workspace.Show();
+            workspace.Activate();
+            workspace.FocusLauncher();
+            _ = InitializeOverlaySharedStateAsync(workspace);
+
+            if (!string.IsNullOrWhiteSpace(monitorLookupNotice))
+            {
+                workspace.SetFeedback(
+                    monitorLookupNotice,
+                    OverlayWorkspaceFeedbackSeverity.Warning);
+            }
+        }
+        catch (Exception exception)
+        {
+            OptionsStatusText.Text =
+                $"Overlay could not open: {exception.Message}";
+            CloseOverlayWorkspace();
+            _ = ShowWidgetAsync();
+        }
+    }
+
+    private async Task InitializeOverlaySharedStateAsync(
+        OverlayWorkspaceWindow workspace)
+    {
+        try
+        {
+            RefreshDisplayTopology();
+            await Task.WhenAll(
+                RefreshAudioInventoryAsync(),
+                RefreshWirelessRadioStateAsync(),
+                RefreshDeviceInventoryAsync());
+            if (ReferenceEquals(_overlayWorkspace, workspace) && workspace.IsVisible)
+            {
+                PublishSharedState(QuickSwitchRefreshScope.All);
+                workspace.FitPendingContent();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception exception)
+        {
+            if (ReferenceEquals(_overlayWorkspace, workspace) &&
+                workspace.IsVisible)
+            {
+                workspace.SetFeedback(
+                    $"The workspace could not finish loading: {exception.Message}",
+                    OverlayWorkspaceFeedbackSeverity.Error);
+            }
+        }
+    }
+
+    private void CloseOverlayWorkspace()
+    {
+        Interlocked.Increment(ref _overlayNavigationRevision);
+        OverlayWorkspaceWindow? workspace = _overlayWorkspace;
+
+        if (workspace is null)
+        {
+            return;
+        }
+
+        if (workspace.IsInspectorOpen)
+        {
+            workspace.HideInspector();
+        }
+        else
+        {
+            RestoreWorkspaceInspectorPanel();
+        }
+
+        // Capture the live card bounds before WPF starts tearing down the
+        // window.  OnClosed also reports the layout, but saving this snapshot
+        // first prevents a late SizeChanged/refresh callback from replacing a
+        // user's final drag or resize with the startup arrangement.
+        HandleWorkspaceLayoutChanged(workspace.CaptureLayout());
+
+        workspace.Close();
+
+        workspace.Closed -= OverlayWorkspace_Closed;
+        _overlayWorkspace = null;
+        _overlayWorkspaceMonitorId = null;
+        StopAudioWatcher();
+    }
+
+    private void OverlayWorkspace_Closed(object? sender, EventArgs e)
+    {
+        Interlocked.Increment(ref _overlayNavigationRevision);
+        if (sender is OverlayWorkspaceWindow workspace &&
+            ReferenceEquals(workspace, _overlayWorkspace))
+        {
+            HandleWorkspaceLayoutChanged(workspace.CaptureLayout());
+            workspace.Closed -= OverlayWorkspace_Closed;
+            _overlayWorkspace = null;
+            _overlayWorkspaceMonitorId = null;
+            StopAudioWatcher();
+        }
+    }
+
+    private void RequestQuitFromOverlay() =>
+        Dispatcher.BeginInvoke(QuitWidget, DispatcherPriority.Normal);
+
+    private async void HandleWorkspaceCommandRequested(
+        QuickSwitchCommand command)
+    {
+        if (_lifetimeCancellation.IsCancellationRequested)
+        {
+            return;
+        }
+
+        if (command is ExitApplicationCommand)
+        {
+            RequestQuitFromOverlay();
+            return;
+        }
+
+        if (command is NavigateToOverlayFeatureCommand navigate)
+        {
+            if (!FeatureDescriptorCatalog.TryGetFeature(
+                    navigate.Feature,
+                    _productConfiguration,
+                    out _) ||
+                !FeatureDescriptorCatalog.TryGetWorkspacePanel(
+                    navigate.Feature,
+                    out OverlayWorkspacePanel panel))
+            {
+                _overlayWorkspace?.SetFeedback(
+                    "That feature is not available in this edition.",
+                    OverlayWorkspaceFeedbackSeverity.Warning);
+                return;
+            }
+
+            long revision = Interlocked.Increment(
+                ref _overlayNavigationRevision);
+            await HandleWorkspacePanelRequestedAsync(panel, revision);
+            return;
+        }
+
+        await ExecuteSharedCommandAsync(command, _lifetimeCancellation.Token);
+    }
+
+    private async Task HandleWorkspacePanelRequestedAsync(
+        OverlayWorkspacePanel panel,
+        long navigationRevision)
+    {
+        if (_overlayWorkspace is not { IsVisible: true } workspace)
+        {
+            return;
+        }
+
+        if (workspace.IsInspectorOpen)
+        {
+            workspace.HideInspector();
+        }
+
+        workspace.SetFeedback(null);
+
+        if (panel == OverlayWorkspacePanel.Home)
+        {
+            return;
+        }
+
+        try
+        {
+            switch (panel)
+            {
+                case OverlayWorkspacePanel.Display:
+                    RefreshDisplayTopology();
+                    break;
+                case OverlayWorkspacePanel.Audio:
+                    StartAudioWatcher();
+                    await RefreshAudioInventoryAsync();
+                    break;
+                case OverlayWorkspacePanel.Devices:
+                    await Task.WhenAll(
+                        RefreshWirelessRadioStateAsync(),
+                        RefreshDeviceInventoryAsync());
+                    break;
+                case OverlayWorkspacePanel.Options:
+                    UpdateOptionsControls();
+                    RefreshTaskbarState();
+                    break;
+                case OverlayWorkspacePanel.Profiles:
+                    if (_profileFeature.IsEnabled)
+                    {
+                        UpdateProfilesControls();
+                    }
+
+                    break;
+                case OverlayWorkspacePanel.Home:
+                case OverlayWorkspacePanel.About:
+                case OverlayWorkspacePanel.Favorites:
+                    break;
+            }
+
+            if (navigationRevision != Volatile.Read(
+                    ref _overlayNavigationRevision) ||
+                !ReferenceEquals(_overlayWorkspace, workspace) ||
+                !workspace.IsVisible ||
+                workspace.CurrentPanel != panel)
+            {
+                return;
+            }
+
+            PublishSharedState(QuickSwitchRefreshScope.All);
+            OverlayWorkspaceWidget? widget = CreateWorkspaceWidgetForPanel(panel);
+            if (widget is not null)
+            {
+                workspace.ShowInspector(
+                    widget.Panel,
+                    widget.Title,
+                    GetWorkspaceInspectorDescription(widget.Panel),
+                    BuildWorkspaceCompleteInspectorContent(widget),
+                    "The right navigation contains complete controls. Esc returns to quick widgets.");
+            }
+        }
+        catch (OperationCanceledException) when (
+            _lifetimeCancellation.IsCancellationRequested)
+        {
+            // Application shutdown is already in progress.
+        }
+        catch (Exception exception)
+        {
+            workspace.SetFeedback(
+                $"{GetWorkspacePanelTitle(panel)} could not refresh: {exception.Message}",
+                OverlayWorkspaceFeedbackSeverity.Error);
+        }
+    }
+
+    private async void HandleWorkspaceWidgetRequested(string widgetId)
+    {
+        if (_overlayWorkspace is not { IsVisible: true } workspace)
+        {
+            return;
+        }
+
+        OverlayWorkspaceWidget? widget = CreateWorkspaceWidgetForId(widgetId);
+
+        if (widget is null)
+        {
+            return;
+        }
+
+        OverlayWorkspaceWidgetLayout? layout = workspace
+            .CaptureLayout()
+            .FirstOrDefault(candidate =>
+                string.Equals(candidate.Id, widgetId, StringComparison.OrdinalIgnoreCase));
+
+        // The shell uses this callback for both Expand and Hide.  A hidden
+        // card is restored by the launcher, but it should not immediately
+        // reopen its inspector.
+        if (layout is { IsVisible: false })
+        {
+            workspace.SetFeedback(
+                $"{widget.Title} removed from quick widgets. Open it from the right navigation and choose Add quick widget to restore it.",
+                OverlayWorkspaceFeedbackSeverity.Information);
+            return;
+        }
+
+        try
+        {
+            if (widget.Panel == OverlayWorkspacePanel.Audio)
+            {
+                StartAudioWatcher();
+                await RefreshAudioInventoryAsync();
+            }
+            else if (widget.Panel == OverlayWorkspacePanel.Devices)
+            {
+                await Task.WhenAll(
+                    RefreshWirelessRadioStateAsync(),
+                    RefreshDeviceInventoryAsync());
+            }
+        }
+        catch (OperationCanceledException) when (
+            _lifetimeCancellation.IsCancellationRequested)
+        {
+            return;
+        }
+
+        workspace.ShowInspector(
+            widget.Panel,
+            widget.Title,
+            GetWorkspaceInspectorDescription(widget.Panel),
+            BuildWorkspaceCompleteInspectorContent(widget),
+            "The right navigation contains complete controls. Esc returns to quick widgets.");
+    }
+
+    private IReadOnlyList<OverlayWorkspaceWidget> BuildWorkspaceWidgets()
+    {
+        List<OverlayWorkspaceWidget> widgets =
+        [
+            CreateWorkspaceWidget(
+                OverlayFeatureId.Display,
+                OverlayWorkspacePanel.Display,
+                0),
+            CreateWorkspaceWidget(
+                OverlayFeatureId.Audio,
+                OverlayWorkspacePanel.Audio,
+                1),
+            CreateWorkspaceWidget(
+                OverlayFeatureId.Devices,
+                OverlayWorkspacePanel.Devices,
+                2),
+            CreateWorkspaceWidget(
+                OverlayFeatureId.Options,
+                OverlayWorkspacePanel.Options,
+                4),
+            CreateWorkspaceWidget(
+                OverlayFeatureId.About,
+                OverlayWorkspacePanel.About,
+                5),
+        ];
+
+        if (_profileFeature.IsEnabled)
+        {
+            widgets.Insert(
+                3,
+                CreateWorkspaceWidget(
+                    OverlayFeatureId.Profiles,
+                    OverlayWorkspacePanel.Profiles,
+                    3));
+        }
+
+        return widgets;
+    }
+
+    private OverlayWorkspaceWidget? CreateWorkspaceWidgetForId(string widgetId)
+    {
+        if (!Enum.TryParse(
+                widgetId,
+                ignoreCase: true,
+                out OverlayWorkspacePanel panel) ||
+            !string.Equals(
+                panel.ToString(),
+                widgetId,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return CreateWorkspaceWidgetForPanel(panel);
+    }
+
+    private OverlayWorkspaceWidget? CreateWorkspaceWidgetForPanel(
+        OverlayWorkspacePanel panel)
+    {
+        if (!TryGetWorkspaceWidgetDescriptor(
+                panel,
+                out OverlayFeatureDescriptor? descriptor) ||
+            descriptor is null ||
+            !TryGetWorkspaceWidgetZIndex(panel, out int zIndex))
+        {
+            return null;
+        }
+
+        return CreateWorkspaceWidget(descriptor, panel, zIndex);
+    }
+
+    private bool TryGetWorkspaceWidgetDescriptor(
+        OverlayWorkspacePanel panel,
+        out OverlayFeatureDescriptor? descriptor)
+    {
+        descriptor = null;
+        if (!FeatureDescriptorCatalog.TryFromWorkspacePanel(
+                panel,
+                out OverlayFeatureId feature) ||
+            feature == OverlayFeatureId.Home ||
+            (feature == OverlayFeatureId.Profiles &&
+                !_profileFeature.IsEnabled) ||
+            !FeatureDescriptorCatalog.TryGetFeature(
+                feature,
+                _productConfiguration,
+                out descriptor) ||
+            descriptor is null ||
+            !descriptor.HasOverlayWidget)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool TryGetWorkspaceWidgetZIndex(
+        OverlayWorkspacePanel panel,
+        out int zIndex)
+    {
+        switch (panel)
+        {
+            case OverlayWorkspacePanel.Display:
+                zIndex = 0;
+                return true;
+            case OverlayWorkspacePanel.Audio:
+                zIndex = 1;
+                return true;
+            case OverlayWorkspacePanel.Devices:
+                zIndex = 2;
+                return true;
+            case OverlayWorkspacePanel.Profiles:
+                zIndex = 3;
+                return true;
+            case OverlayWorkspacePanel.Options:
+                zIndex = 4;
+                return true;
+            case OverlayWorkspacePanel.About:
+                zIndex = 5;
+                return true;
+            default:
+                zIndex = 0;
+                return false;
+        }
+    }
+
+    private OverlayWorkspaceWidget CreateWorkspaceWidget(
+        OverlayFeatureId feature,
+        OverlayWorkspacePanel panel,
+        int zIndex)
+    {
+        if (!FeatureDescriptorCatalog.TryGetFeature(
+                feature,
+                _productConfiguration,
+                out OverlayFeatureDescriptor? descriptor) ||
+            descriptor is null)
+        {
+            throw new InvalidOperationException(
+                $"The {feature} workspace feature is unavailable.");
+        }
+
+        return CreateWorkspaceWidget(descriptor, panel, zIndex);
+    }
+
+    private OverlayWorkspaceWidget CreateWorkspaceWidget(
+        OverlayFeatureDescriptor descriptor,
+        OverlayWorkspacePanel panel,
+        int zIndex)
+    {
+        OverlayFeatureId feature = descriptor.Id;
+
+        return new(
+            panel.ToString(),
+            panel,
+            descriptor.Title,
+            string.Empty,
+            Actions: [],
+            Content: new DeferredFeatureContent(
+                () => CreateSharedFeatureView(
+                    feature,
+                    SharedFeatureSurface.OverlayWidget)),
+            Layout: DefaultWorkspaceCardLayout(panel, zIndex),
+            CanResize: descriptor.CanResize,
+            CanCollapse: panel == OverlayWorkspacePanel.Devices,
+            MinimumWidth: descriptor.MinimumWidth,
+            MinimumHeight: descriptor.MinimumHeight);
+    }
+
+    private UIElement CreateSharedFeatureView(
+        OverlayFeatureId feature,
+        SharedFeatureSurface surface) =>
+        SharedFeatureViewFactory.Create(feature, surface).View;
+
+    private OverlayWorkspaceWidgetLayout DefaultWorkspaceCardLayout(
+        OverlayWorkspacePanel panel,
+        int zIndex)
+    {
+        double width = OverlayWidgetPlacement.DefaultWidth;
+        double height = OverlayWidgetPlacement.DefaultHeight;
+        if (Enum.TryParse(
+                panel.ToString(),
+                ignoreCase: true,
+                out OverlayFeatureId feature) &&
+            FeatureDescriptorCatalog.TryGetFeature(
+                feature,
+                _productConfiguration,
+                out OverlayFeatureDescriptor? descriptor) &&
+            descriptor is not null)
+        {
+            width = descriptor.DefaultWidth;
+            height = descriptor.DefaultHeight;
+        }
+
+        return new(
+            panel.ToString(),
+            24,
+            24,
+            width,
+            height,
+            IsCollapsed: false,
+            ZIndex: zIndex,
+            IsVisible: panel is OverlayWorkspacePanel.Display or
+                OverlayWorkspacePanel.Audio or
+                OverlayWorkspacePanel.Devices);
+    }
+
+    private void RestoreWorkspaceLayout(OverlayWorkspaceWindow workspace)
+    {
+        OverlayWorkspaceSettings settings =
+            (_widgetSettings.OverlayWorkspace ?? OverlayWorkspaceSettings.Default)
+            .Normalize(_profileFeature.IsEnabled);
+        workspace.SetInspectorWidth(settings.InspectorWidth);
+
+        if (_overlayWorkspaceMonitorId is not string monitorId ||
+            settings.MonitorLayouts is null)
+        {
+            return;
+        }
+
+        OverlayMonitorLayout? saved = settings.FindSavedLayout(monitorId);
+
+        if (saved is null)
+        {
+            // Layouts are monitor-scoped.  Do not restore the legacy
+            // virtual-screen bucket on an unknown monitor: it can contain
+            // stale dimensions and positions from a different work area.
+            // The workspace will arrange its current feature presets and save
+            // them under this monitor after WPF has measured it.
+            return;
+        }
+
+        workspace.RestoreLayout(
+            (saved.Widgets ?? [])
+            .Select(CreateRestoredWorkspaceLayout));
+    }
+
+    private static OverlayWorkspaceWidgetLayout CreateRestoredWorkspaceLayout(
+        OverlayWidgetPlacement placement)
+    {
+        return new(
+            placement.Widget.ToString(),
+            placement.Left,
+            placement.Top,
+            placement.Width,
+            placement.Height,
+            placement.IsCollapsed,
+            placement.ZIndex,
+            placement.IsVisible,
+            placement.HasCustomSize,
+            placement.ContentLayoutVersion);
+    }
+
+    private void HandleWorkspaceLayoutChanged(
+        IReadOnlyList<OverlayWorkspaceWidgetLayout> layouts)
+    {
+        if (_overlayWorkspaceMonitorId is not string monitorId ||
+            string.IsNullOrWhiteSpace(monitorId))
+        {
+            return;
+        }
+
+        List<OverlayWidgetPlacement> placements = [];
+
+        foreach (OverlayWorkspaceWidgetLayout layout in layouts)
+        {
+            if (!Enum.TryParse(
+                    layout.Id,
+                    ignoreCase: true,
+                    out OverlayWidgetType widget))
+            {
+                continue;
+            }
+
+            placements.Add(
+                new OverlayWidgetPlacement(
+                    widget,
+                    layout.Left,
+                    layout.Top,
+                    layout.Width,
+                    layout.Height,
+                    layout.IsVisible,
+                    layout.IsCollapsed,
+                    layout.ZIndex,
+                    layout.HasCustomSize,
+                    layout.ContentLayoutVersion));
+        }
+
+        OverlayMonitorLayout monitorLayout =
+            new OverlayMonitorLayout(monitorId, placements)
+                .Normalize(_profileFeature.IsEnabled);
+        OverlayWorkspaceSettings settings =
+            (_widgetSettings.OverlayWorkspace ?? OverlayWorkspaceSettings.Default)
+            .Normalize(_profileFeature.IsEnabled)
+            .WithLayout(monitorLayout);
+        _widgetSettings = _widgetSettings with { OverlayWorkspace = settings };
+        SaveSettings("Overlay layout saved.");
+    }
+
+    private void HandleWorkspaceInspectorWidthChanged(double width)
+    {
+        OverlayWorkspaceSettings settings =
+            (_widgetSettings.OverlayWorkspace ?? OverlayWorkspaceSettings.Default)
+            .Normalize(_profileFeature.IsEnabled) with
+            {
+                InspectorWidth = width,
+            };
+        _widgetSettings = _widgetSettings with { OverlayWorkspace = settings };
+        SaveSettings("Overlay inspector size saved.");
+    }
+
+    private static string GetWorkspacePanelTitle(OverlayWorkspacePanel panel) =>
+        panel switch
+        {
+            OverlayWorkspacePanel.Home => "Home",
+            OverlayWorkspacePanel.Display => "Display",
+            OverlayWorkspacePanel.Audio => "Audio",
+            OverlayWorkspacePanel.Devices => "Devices",
+            OverlayWorkspacePanel.Options => "Options",
+            OverlayWorkspacePanel.Profiles => "Profiles",
+            OverlayWorkspacePanel.About => "About",
+            _ => panel.ToString(),
+        };
+
+    private static string GetWorkspaceInspectorDescription(
+        OverlayWorkspacePanel panel) =>
+        panel switch
+        {
+            OverlayWorkspacePanel.Home =>
+                "Choose a feature, restore hidden cards, or reset this monitor's layout.",
+            OverlayWorkspacePanel.Display =>
+                "Switch projection modes and open display diagnostics without leaving the overlay.",
+            OverlayWorkspacePanel.Audio =>
+                "Apply favorites, refresh endpoints, and open Windows audio controls.",
+            OverlayWorkspacePanel.Devices =>
+                "Refresh radios and connected devices, or open the relevant Windows settings page.",
+            OverlayWorkspacePanel.Options =>
+                "Change appearance, startup, pinning, taskbar, overlay, and shortcut behavior.",
+            OverlayWorkspacePanel.Profiles =>
+                "Apply saved desktop profiles. Warnings remain visible so partial results are not hidden.",
+            OverlayWorkspacePanel.About =>
+                "Review edition, licensing, privacy, and responsible-use information.",
+            _ => "Complete feature controls.",
+        };
+
+    private UIElement BuildWorkspaceCompleteInspectorContent(
+        OverlayWorkspaceWidget widget)
+    {
+        RestoreWorkspaceInspectorPanel();
+
+        if (Enum.TryParse(
+                widget.Panel.ToString(),
+                ignoreCase: true,
+                out OverlayFeatureId feature) &&
+            SharedFeatureViewFactory.CanCreate(feature))
+        {
+            return CreateSharedFeatureView(
+                feature,
+                SharedFeatureSurface.OverlaySidebar);
+        }
+
+        throw new InvalidOperationException(
+            $"The {widget.Panel} workspace feature has no shared view.");
+    }
+
+    private void RestoreWorkspaceInspectorPanel()
+    {
+        // Shared feature views are fresh per host. No WPF element is reparented.
+    }
+
+    private void ResetWorkspaceLayout()
+    {
+        if (_overlayWorkspace is not { IsVisible: true } workspace ||
+            _overlayWorkspaceMonitorId is not string monitorId)
+        {
+            return;
+        }
+
+        workspace.RestoreLayout([]);
+        OverlayWorkspaceSettings settings =
+            (_widgetSettings.OverlayWorkspace ?? OverlayWorkspaceSettings.Default)
+            .Normalize(_profileFeature.IsEnabled)
+            .WithLayout(new OverlayMonitorLayout(monitorId, []));
+        _widgetSettings = _widgetSettings with { OverlayWorkspace = settings };
+        SaveSettings("Overlay layout reset.");
+        workspace.SetFeedback(
+            "This monitor's widget layout was reset.",
+            OverlayWorkspaceFeedbackSeverity.Success);
+    }
+
+    private void OpenFloatingDisplayWidget_Click(
+        object sender,
+        RoutedEventArgs e) =>
+        ToggleFloatingDisplayWidget();
+
+    private void ToggleFloatingDisplayWidget()
+    {
+        if (_floatingDisplayWidget is { IsVisible: true } existing)
+        {
+            existing.Activate();
+            return;
+        }
+
+        FloatingWidgetLayout layout =
+            (_widgetSettings.FloatingDisplayWidget ?? FloatingWidgetLayout.Default)
+            .Normalize();
+        if (layout.Left is null && layout.Top is null &&
+            layout.Width == FloatingWidgetLayout.DefaultWidth &&
+            layout.Height == FloatingWidgetLayout.DefaultHeight)
+        {
+            layout = layout with { Width = 720, Height = 460 };
+        }
+        FloatingDisplayWidgetWindow widget = new(
+            layout,
+            closeRequested: CloseFloatingDisplayWidget,
+            reattachRequested: ReattachFloatingDisplayWidget,
+            resetLayoutRequested: ResetFloatingDisplayWidgetLayout,
+            displayActionRequested: mode => _ = ApplyDisplayModeAsync(mode),
+            layoutChanged: FloatingDisplayWidget_LayoutChanged);
+
+        _floatingDisplayWidget = widget;
+        widget.Closed += FloatingDisplayWidget_Closed;
+        widget.SetFeatureContent(CreateSharedFeatureView(
+            OverlayFeatureId.Display,
+            SharedFeatureSurface.FloatingWindow));
+
+        try
+        {
+            widget.Show();
+            KeepFloatingWidgetInsideWorkArea(widget);
+            widget.Activate();
+        }
+        catch (Win32Exception exception)
+        {
+            OptionsStatusText.Text =
+                $"Floating display widget could not open: {exception.Message}";
+            CloseFloatingDisplayWidget();
+        }
+    }
+
+    private void FloatingDisplayWidget_LayoutChanged(
+        FloatingWidgetLayout layout)
+    {
+        _widgetSettings = _widgetSettings with
+        {
+            FloatingDisplayWidget = layout.Normalize(),
+        };
+    }
+
+    private void FloatingDisplayWidget_Closed(object? sender, EventArgs e)
+    {
+        if (sender is not FloatingDisplayWidgetWindow widget ||
+            !ReferenceEquals(widget, _floatingDisplayWidget))
+        {
+            return;
+        }
+
+        FloatingDisplayWidget_LayoutChanged(
+            widget.CaptureLayout() with { IsOpen = false });
+        widget.Closed -= FloatingDisplayWidget_Closed;
+        _floatingDisplayWidget = null;
+        SaveSettings("Floating display widget closed.");
+    }
+
+    private void ReattachFloatingDisplayWidget()
+    {
+        CloseFloatingDisplayWidget();
+        _ = ShowWidgetAsync(WidgetPanel.Display);
+    }
+
+    private void ResetFloatingDisplayWidgetLayout()
+    {
+        CloseFloatingDisplayWidget();
+        _widgetSettings = _widgetSettings with
+        {
+            FloatingDisplayWidget = FloatingWidgetLayout.Default with
+            {
+                Width = 720,
+                Height = 460,
+            },
+        };
+        SaveSettings("Floating display widget layout reset.");
+        ToggleFloatingDisplayWidget();
+    }
+
+    private void CloseFloatingDisplayWidget()
+    {
+        FloatingDisplayWidgetWindow? widget = _floatingDisplayWidget;
+
+        if (widget is null)
+        {
+            return;
+        }
+
+        FloatingDisplayWidget_LayoutChanged(
+            widget.CaptureLayout() with { IsOpen = false });
+        _floatingDisplayWidget = null;
+        widget.Closed -= FloatingDisplayWidget_Closed;
+
+        widget.Close();
+
+        SaveSettings("Floating display widget closed.");
+    }
+
+    private void KeepFloatingWidgetInsideWorkArea(
+        FloatingDisplayWidgetWindow widget)
+    {
+        try
+        {
+            widget.UpdateLayout();
+            PresentationSource? source = PresentationSource.FromVisual(widget);
+            Matrix toDevice =
+                source?.CompositionTarget?.TransformToDevice ?? Matrix.Identity;
+            Matrix fromDevice =
+                source?.CompositionTarget?.TransformFromDevice ?? Matrix.Identity;
+            Point pixelOrigin = toDevice.Transform(
+                new Point(widget.Left, widget.Top));
+            Vector pixelSize = toDevice.Transform(
+                new Vector(
+                    widget.ActualWidth > 0 ? widget.ActualWidth : widget.Width,
+                    widget.ActualHeight > 0 ? widget.ActualHeight : widget.Height));
+            ScreenRectangle workArea = _placementService.GetWindowWorkArea(
+                new WindowInteropHelper(widget).Handle);
+            ScreenPoint clamped = WidgetPlacementCalculator.ClampToWorkArea(
+                new ScreenPoint(
+                    (int)Math.Round(pixelOrigin.X),
+                    (int)Math.Round(pixelOrigin.Y)),
+                workArea,
+                Math.Max(1, (int)Math.Ceiling(pixelSize.X)),
+                Math.Max(1, (int)Math.Ceiling(pixelSize.Y)));
+            Point dipPosition = fromDevice.Transform(
+                new Point(clamped.X, clamped.Y));
+
+            widget.Left = dipPosition.X;
+            widget.Top = dipPosition.Y;
+        }
+        catch (Win32Exception)
+        {
+            widget.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+        }
+    }
+
+    private void OpenFloatingAudioWidget_Click(
+        object sender,
+        RoutedEventArgs e) =>
+        ToggleFloatingAudioWidget();
+
+    private void ToggleFloatingAudioWidget()
+    {
+        if (_floatingAudioWidget is { IsVisible: true } existing)
+        {
+            existing.Activate();
+            return;
+        }
+
+        FloatingWidgetLayout layout =
+            (_widgetSettings.FloatingAudioWidget ?? FloatingWidgetLayout.Default)
+            .Normalize();
+        if (layout.Left is null && layout.Top is null &&
+            layout.Width == FloatingWidgetLayout.DefaultWidth &&
+            layout.Height == FloatingWidgetLayout.DefaultHeight)
+        {
+            layout = layout with { Width = 760, Height = 760 };
+        }
+        FloatingQuickWidgetWindow widget = new(
+            "Audio favorites",
+            layout,
+            closeRequested: CloseFloatingAudioWidget,
+            resetLayoutRequested: ResetFloatingAudioWidgetLayout,
+            layoutChanged: FloatingAudioWidget_LayoutChanged);
+
+        _floatingAudioWidget = widget;
+        widget.Closed += FloatingAudioWidget_Closed;
+        widget.SetFeatureContent(CreateSharedFeatureView(
+            OverlayFeatureId.Audio,
+            SharedFeatureSurface.FloatingWindow));
+
+        try
+        {
+            widget.Show();
+            KeepFloatingQuickWidgetInsideWorkArea(widget);
+            widget.Activate();
+        }
+        catch (Win32Exception exception)
+        {
+            OptionsStatusText.Text =
+                $"Floating audio widget could not open: {exception.Message}";
+            CloseFloatingAudioWidget();
+        }
+    }
+
+    private void UpdateFloatingAudioWidget()
+    {
+        PublishSharedState(
+            QuickSwitchRefreshScope.Audio |
+            QuickSwitchRefreshScope.Favorites);
+    }
+
+    private void FloatingAudioWidget_LayoutChanged(FloatingWidgetLayout layout)
+    {
+        _widgetSettings = _widgetSettings with
+        {
+            FloatingAudioWidget = layout.Normalize(),
+        };
+    }
+
+    private void FloatingAudioWidget_Closed(object? sender, EventArgs e)
+    {
+        if (sender is not FloatingQuickWidgetWindow widget ||
+            !ReferenceEquals(widget, _floatingAudioWidget))
+        {
+            return;
+        }
+
+        FloatingAudioWidget_LayoutChanged(
+            widget.CaptureLayout() with { IsOpen = false });
+        widget.Closed -= FloatingAudioWidget_Closed;
+        _floatingAudioWidget = null;
+        SaveSettings("Floating audio widget closed.");
+    }
+
+    private void ResetFloatingAudioWidgetLayout()
+    {
+        CloseFloatingAudioWidget();
+        _widgetSettings = _widgetSettings with
+        {
+            FloatingAudioWidget = FloatingWidgetLayout.Default with
+            {
+                Width = 760,
+                Height = 760,
+            },
+        };
+        SaveSettings("Floating audio widget layout reset.");
+        ToggleFloatingAudioWidget();
+    }
+
+    private void CloseFloatingAudioWidget()
+    {
+        FloatingQuickWidgetWindow? widget = _floatingAudioWidget;
+
+        if (widget is null)
+        {
+            return;
+        }
+
+        FloatingAudioWidget_LayoutChanged(
+            widget.CaptureLayout() with { IsOpen = false });
+        _floatingAudioWidget = null;
+        widget.Closed -= FloatingAudioWidget_Closed;
+
+        widget.Close();
+
+        SaveSettings("Floating audio widget closed.");
+    }
+
+    private void OpenFloatingDevicesWidget_Click(
+        object sender,
+        RoutedEventArgs e) =>
+        ToggleFloatingDevicesWidget();
+
+    private void ToggleFloatingDevicesWidget()
+    {
+        if (_floatingDevicesWidget is { IsVisible: true } existing)
+        {
+            existing.Activate();
+            return;
+        }
+
+        FloatingWidgetLayout layout =
+            (_widgetSettings.FloatingDevicesWidget ?? FloatingWidgetLayout.Default)
+            .Normalize();
+        if (layout.Left is null && layout.Top is null &&
+            layout.Width == FloatingWidgetLayout.DefaultWidth &&
+            layout.Height == FloatingWidgetLayout.DefaultHeight)
+        {
+            layout = layout with { Width = 840, Height = 720 };
+        }
+        FloatingQuickWidgetWindow widget = new(
+            "Wireless devices",
+            layout,
+            closeRequested: CloseFloatingDevicesWidget,
+            resetLayoutRequested: ResetFloatingDevicesWidgetLayout,
+            layoutChanged: FloatingDevicesWidget_LayoutChanged);
+
+        _floatingDevicesWidget = widget;
+        widget.Closed += FloatingDevicesWidget_Closed;
+        widget.SetFeatureContent(CreateSharedFeatureView(
+            OverlayFeatureId.Devices,
+            SharedFeatureSurface.FloatingWindow));
+
+        try
+        {
+            widget.Show();
+            KeepFloatingQuickWidgetInsideWorkArea(widget);
+            widget.Activate();
+            _ = RefreshWirelessRadioStateAsync();
+        }
+        catch (Win32Exception exception)
+        {
+            OptionsStatusText.Text =
+                $"Floating devices widget could not open: {exception.Message}";
+            CloseFloatingDevicesWidget();
+        }
+    }
+
+    private void UpdateFloatingDevicesWidget()
+    {
+        PublishSharedState(QuickSwitchRefreshScope.Devices);
+    }
+
+    private void FloatingDevicesWidget_LayoutChanged(FloatingWidgetLayout layout)
+    {
+        _widgetSettings = _widgetSettings with
+        {
+            FloatingDevicesWidget = layout.Normalize(),
+        };
+    }
+
+    private void FloatingDevicesWidget_Closed(object? sender, EventArgs e)
+    {
+        if (sender is not FloatingQuickWidgetWindow widget ||
+            !ReferenceEquals(widget, _floatingDevicesWidget))
+        {
+            return;
+        }
+
+        FloatingDevicesWidget_LayoutChanged(
+            widget.CaptureLayout() with { IsOpen = false });
+        widget.Closed -= FloatingDevicesWidget_Closed;
+        _floatingDevicesWidget = null;
+        SaveSettings("Floating devices widget closed.");
+    }
+
+    private void ResetFloatingDevicesWidgetLayout()
+    {
+        CloseFloatingDevicesWidget();
+        _widgetSettings = _widgetSettings with
+        {
+            FloatingDevicesWidget = FloatingWidgetLayout.Default with
+            {
+                Width = 840,
+                Height = 720,
+            },
+        };
+        SaveSettings("Floating devices widget layout reset.");
+        ToggleFloatingDevicesWidget();
+    }
+
+    private void CloseFloatingDevicesWidget()
+    {
+        FloatingQuickWidgetWindow? widget = _floatingDevicesWidget;
+
+        if (widget is null)
+        {
+            return;
+        }
+
+        FloatingDevicesWidget_LayoutChanged(
+            widget.CaptureLayout() with { IsOpen = false });
+        _floatingDevicesWidget = null;
+        widget.Closed -= FloatingDevicesWidget_Closed;
+
+        widget.Close();
+
+        SaveSettings("Floating devices widget closed.");
+    }
+
+    private void KeepFloatingQuickWidgetInsideWorkArea(
+        FloatingQuickWidgetWindow widget)
+    {
+        try
+        {
+            widget.UpdateLayout();
+            PresentationSource? source = PresentationSource.FromVisual(widget);
+            Matrix toDevice =
+                source?.CompositionTarget?.TransformToDevice ?? Matrix.Identity;
+            Matrix fromDevice =
+                source?.CompositionTarget?.TransformFromDevice ?? Matrix.Identity;
+            Point pixelOrigin = toDevice.Transform(
+                new Point(widget.Left, widget.Top));
+            Vector pixelSize = toDevice.Transform(
+                new Vector(
+                    widget.ActualWidth > 0 ? widget.ActualWidth : widget.Width,
+                    widget.ActualHeight > 0 ? widget.ActualHeight : widget.Height));
+            ScreenRectangle workArea = _placementService.GetWindowWorkArea(
+                new WindowInteropHelper(widget).Handle);
+            ScreenPoint clamped = WidgetPlacementCalculator.ClampToWorkArea(
+                new ScreenPoint(
+                    (int)Math.Round(pixelOrigin.X),
+                    (int)Math.Round(pixelOrigin.Y)),
+                workArea,
+                Math.Max(1, (int)Math.Ceiling(pixelSize.X)),
+                Math.Max(1, (int)Math.Ceiling(pixelSize.Y)));
+            Point dipPosition = fromDevice.Transform(
+                new Point(clamped.X, clamped.Y));
+
+            widget.Left = dipPosition.X;
+            widget.Top = dipPosition.Y;
+        }
+        catch (Win32Exception)
+        {
+            widget.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+        }
+    }
+
+    private static string FormatWirelessRadioState(
+        WirelessRadioState? state) =>
+        state switch
+        {
+            WirelessRadioState.On => "on",
+            WirelessRadioState.Off => "off",
+            WirelessRadioState.Disabled => "locked",
+            WirelessRadioState.Unavailable => "unavailable",
+            _ => "reading...",
+        };
+
     private async Task ApplyDisplayModeFromHotkeyAsync(DisplayMode mode)
     {
         await ApplyDisplayModeAsync(mode);
     }
 
-    private async Task ApplyFavoriteOutputFromHotkeyAsync(int slot)
+    private async Task<AudioControlResult?> ApplyFavoriteOutputFromHotkeyAsync(int slot)
     {
         FavoriteOutputSetting? favorite = _widgetSettings.GetFavorite(slot);
 
         if (favorite is null)
         {
-            return;
+            return null;
         }
 
-        await ApplyFavoriteEndpointFromHotkeyAsync(
+        return await ApplyFavoriteEndpointFromHotkeyAsync(
             favorite.EndpointId,
             favorite.Name,
             favorite.Role);
     }
 
-    private async Task ApplyFavoriteInputFromHotkeyAsync(int slot)
+    private async Task<AudioControlResult?> ApplyFavoriteInputFromHotkeyAsync(int slot)
     {
         FavoriteInputSetting? favorite = _widgetSettings.GetInputFavorite(slot);
 
         if (favorite is null)
         {
-            return;
+            return null;
         }
 
-        await ApplyFavoriteEndpointFromHotkeyAsync(
+        return await ApplyFavoriteEndpointFromHotkeyAsync(
             favorite.EndpointId,
             favorite.Name,
             favorite.Role);
     }
 
-    private async Task ApplyFavoriteEndpointFromHotkeyAsync(
+    private async Task<AudioControlResult?> ApplyFavoriteEndpointFromHotkeyAsync(
         string endpointId,
         string endpointName,
         FavoriteEndpointRole favoriteRole)
@@ -412,20 +1839,26 @@ public partial class MainWindow : Window
         catch (OperationCanceledException) when (
             _lifetimeCancellation.IsCancellationRequested)
         {
-            return;
+            return null;
         }
 
         if (!result.Succeeded)
         {
-            await ShowWidgetAsync(WidgetPanel.Audio);
+            if (_overlayWorkspace is null)
+            {
+                await ShowWidgetAsync(WidgetPanel.Audio);
+            }
         }
 
         AudioStatusText.Text = result.Message;
+        _sharedAudioStatus = result.Message;
 
         if (IsVisible && _activePanel == WidgetPanel.Audio)
         {
             _audioRefreshScheduler.Schedule();
         }
+
+        return result;
     }
 
     private static AudioDefaultRoleSelection ToAudioRoleSelection(
@@ -438,36 +1871,15 @@ public partial class MainWindow : Window
             _ => AudioDefaultRoleSelection.General,
         };
 
-    private static bool TryGetDisplayMode(
-        WidgetHotkeyAction action,
-        out DisplayMode mode)
-    {
-        mode = action switch
-        {
-            WidgetHotkeyAction.PcScreenOnly => DisplayMode.PcScreenOnly,
-            WidgetHotkeyAction.Duplicate => DisplayMode.Duplicate,
-            WidgetHotkeyAction.Extend => DisplayMode.Extend,
-            WidgetHotkeyAction.SecondScreenOnly => DisplayMode.SecondScreenOnly,
-            _ => default,
-        };
-
-        return action is
-            WidgetHotkeyAction.PcScreenOnly or
-            WidgetHotkeyAction.Duplicate or
-            WidgetHotkeyAction.Extend or
-            WidgetHotkeyAction.SecondScreenOnly;
-    }
-
-    private async void PanelTab_Checked(object sender, RoutedEventArgs e)
+    private async void PanelTab_Click(object sender, RoutedEventArgs e)
     {
         if (!IsInitialized ||
             _isApplyingPanelSelection ||
-            sender is not ToggleButton
-            {
-                IsChecked: true,
-                Tag: string panelName,
-            } ||
-            !Enum.TryParse(panelName, out WidgetPanel panel))
+            sender is not ToggleButton { Tag: string panelName } ||
+            !Enum.TryParse(
+                panelName,
+                ignoreCase: true,
+                out WidgetPanel panel))
         {
             return;
         }
@@ -477,6 +1889,11 @@ public partial class MainWindow : Window
 
     private async Task ActivatePanelAsync(WidgetPanel panel)
     {
+        if (panel == WidgetPanel.Profiles && !_profileFeature.IsEnabled)
+        {
+            return;
+        }
+
         _activePanel = panel;
         DisplayPanel.Visibility =
             panel == WidgetPanel.Display ? Visibility.Visible : Visibility.Collapsed;
@@ -680,42 +2097,98 @@ public partial class MainWindow : Window
 
     private void TrayIcon_OpenRequested(object? sender, EventArgs e)
     {
-        _ = ShowWidgetAsync();
+        // TrackPopupMenu still owns foreground activation while its callback
+        // is running. Defer the reveal until the native tray menu has fully
+        // returned, matching the existing deferred Exit path.
+        QueueTrayCommand(
+            QuickSwitchCommandCatalog.OpenMainWindow.CreateCommand());
     }
 
     private void TrayIcon_QuitRequested(object? sender, EventArgs e)
     {
-        QuitWidget();
+        // The tray callback runs while TrackPopupMenu is still unwinding. Defer
+        // window destruction until the native menu has returned so the Exit
+        // command cannot be swallowed by teardown of its owner window.
+        QueueTrayCommand(
+            QuickSwitchCommandCatalog.ExitApplication.CreateCommand());
     }
 
-    private async void TrayIcon_FavoriteRequested(
+    private void TrayIcon_FavoriteRequested(
         object? sender,
         TrayFavoriteRequestedEventArgs e)
     {
         List<TrayFavoriteTarget> targets = GetTrayFavoriteTargets();
-
         if (e.Index < 0 || e.Index >= targets.Count)
         {
             return;
         }
 
         TrayFavoriteTarget target = targets[e.Index];
-        await ApplyFavoriteEndpointFromHotkeyAsync(
-            target.EndpointId,
-            target.Name,
-            target.Role);
+        if (!QuickSwitchCommandCatalog.TryGetLegacyHotkey(
+                target.Action,
+                _productConfiguration,
+                out QuickSwitchCommandDescriptor descriptor))
+        {
+            return;
+        }
+
+        QueueTrayCommand(descriptor.CreateCommand());
+    }
+
+    private void QueueTrayCommand(QuickSwitchCommand command) =>
+        Dispatcher.BeginInvoke(
+            () => ExecuteTrayCommandAfterMenu(command),
+            DispatcherPriority.Normal);
+
+    private async void ExecuteTrayCommandAfterMenu(QuickSwitchCommand command)
+    {
+        if (_isExiting || _lifetimeCancellation.IsCancellationRequested)
+        {
+            return;
+        }
+
+        if (command is ExitApplicationCommand)
+        {
+            QuitWidget();
+            return;
+        }
+
+        try
+        {
+            await ExecuteSharedCommandAsync(command, _lifetimeCancellation.Token);
+            if (command is OpenMainWindowCommand && IsVisible)
+            {
+                Activate();
+            }
+        }
+        catch (OperationCanceledException) when (
+            _lifetimeCancellation.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+        {
+            OptionsStatusText.Text =
+                $"Tray command could not complete: {exception.Message}";
+        }
     }
 
     private void MainWindow_Deactivated(object? sender, EventArgs e)
     {
         if (IsVisible &&
             !_isExiting &&
+            !_isScopedValidationInstance &&
+            !_widgetSettings.WindowPinned &&
+            WindowState != WindowState.Minimized &&
             DateTime.UtcNow >= _autoHideAllowedAfterUtc)
         {
             Dispatcher.BeginInvoke(
                 () =>
                 {
-                    if (IsVisible && !IsActive && !_isExiting)
+                    if (IsVisible &&
+                        !IsActive &&
+                        !_isExiting &&
+                        !_widgetSettings.WindowPinned &&
+                        WindowState != WindowState.Minimized)
                     {
                         HideWidget();
                     }
@@ -769,6 +2242,16 @@ public partial class MainWindow : Window
 
         _isExiting = true;
         Close();
+
+        // The resident window is normally hidden, and auxiliary floating
+        // windows may have existed during the close. Request application
+        // shutdown explicitly as a final guard so tray Exit always terminates
+        // the resident process after the normal OnClosed cleanup runs.
+        if (!Dispatcher.HasShutdownStarted &&
+            !Dispatcher.HasShutdownFinished)
+        {
+            Application.Current?.Shutdown();
+        }
     }
 
     private HotkeyRegistrationResult ApplyHotkeyBindings(
@@ -776,17 +2259,22 @@ public partial class MainWindow : Window
         ProfileCatalog? profileCatalog = null)
     {
         ProfileCatalog catalog = profileCatalog ?? _profileCatalog;
-        List<ProfileHotkeyBinding> profileBindings = catalog.Profiles
-            .Where(profile => profile.Shortcut is { IsValid: true })
-            .Select(profile => new ProfileHotkeyBinding(
-                profile.Id,
-                profile.Shortcut!))
+        List<ProfileHotkeyBinding> profileBindings = _profileFeature
+            .GetShortcutBindings(catalog)
+            .Select(binding => new ProfileHotkeyBinding(
+                binding.ProfileId,
+                binding.Shortcut,
+                binding.DisplayName))
             .ToList();
         HotkeyRegistrationResult result =
             _globalHotkey.ApplyBindings(
                 _windowHandle,
                 settings,
-                profileBindings);
+                profileBindings,
+                QuickSwitchCommandCatalog.GetKeyedCommands()
+                    .Where(item => item.IsAvailable(_productConfiguration) && settings.GetCommandShortcut(item.Key) is not null)
+                    .Select(item => new CommandHotkeyBinding(item.Key, item.Label, settings.GetCommandShortcut(item.Key)!))
+                    .ToArray());
 
         if (result.Succeeded)
         {
@@ -879,9 +2367,15 @@ public partial class MainWindow : Window
                 ? Visibility.Visible
                 : Visibility.Collapsed;
             DarkThemeCheckBox.IsChecked = _widgetSettings.UseDarkTheme;
+            OverlayEnabledCheckBox.IsChecked = _widgetSettings.OverlayEnabled;
+            WindowPinnedCheckBox.IsChecked = _widgetSettings.WindowPinned;
+            PinWindowButton.IsChecked = _widgetSettings.WindowPinned;
+            Topmost = _widgetSettings.WindowPinned;
             StartWithWindowsCheckBox.IsChecked =
                 _startupRegistrationService.IsEnabled;
             UpdateFavoriteOutputsSummary();
+            UpdateQuickSummary();
+            UpdateFloatingAudioWidget();
             _trayIcon?.SetFavoriteItems(BuildTrayFavoriteLabels());
         }
         finally
@@ -947,7 +2441,7 @@ public partial class MainWindow : Window
         ApplyShortcutChange(action, shortcut);
     }
 
-    private void ApplyShortcutChange(
+    private HotkeyRegistrationResult ApplyShortcutChange(
         WidgetHotkeyAction action,
         WidgetShortcut? shortcut)
     {
@@ -955,12 +2449,13 @@ public partial class MainWindow : Window
             _widgetSettings.WithShortcut(action, shortcut);
         HotkeyRegistrationResult result = ApplyHotkeyBindings(candidate);
 
-        if (result.Failures.TryGetValue(action, out string? failure))
+        if (!result.Succeeded)
         {
             ApplyHotkeyBindings(_widgetSettings);
             UpdateOptionsControls();
-            OptionsStatusText.Text = failure;
-            return;
+            OptionsStatusText.Text =
+                result.FirstFailure ?? "The shortcut could not be registered.";
+            return result;
         }
 
         _widgetSettings = candidate;
@@ -969,6 +2464,7 @@ public partial class MainWindow : Window
             shortcut is null
                 ? "Shortcut cleared."
                 : $"{shortcut.DisplayText} is active.");
+        return result;
     }
 
     private void DarkThemeCheckBox_Changed(object sender, RoutedEventArgs e)
@@ -978,13 +2474,89 @@ public partial class MainWindow : Window
             return;
         }
 
-        bool useDarkTheme = DarkThemeCheckBox.IsChecked == true;
+        SetDarkThemeFromOverlay(DarkThemeCheckBox.IsChecked == true);
+    }
+
+    private void SetDarkThemeFromOverlay(bool useDarkTheme)
+    {
         _widgetSettings = _widgetSettings with
         {
             UseDarkTheme = useDarkTheme,
         };
         WidgetTheme.Apply(useDarkTheme, _windowHandle);
+        UpdateOptionsControls();
         SaveSettings(useDarkTheme ? "Dark theme enabled." : "Light theme enabled.");
+    }
+
+    private void OverlayEnabledCheckBox_Changed(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (_isApplyingSettingsUi)
+        {
+            return;
+        }
+
+        SetOverlayEnabledFromOverlay(OverlayEnabledCheckBox.IsChecked == true);
+    }
+
+    private void SetOverlayEnabledFromOverlay(bool enabled)
+    {
+        _widgetSettings = _widgetSettings with
+        {
+            OverlayEnabled = enabled,
+        };
+        UpdateQuickSummary();
+
+        if (!enabled)
+        {
+            CloseOverlayWorkspace();
+        }
+
+        SaveSettings(
+            enabled
+                ? "Sidebar overlay enabled. Win + Shift + Q will open it."
+                : "Sidebar overlay disabled. Win + Shift + Q will open the compact window.");
+    }
+
+    private void WindowPinnedCheckBox_Changed(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (_isApplyingSettingsUi)
+        {
+            return;
+        }
+
+        bool pinned = sender is ToggleButton toggle
+            ? toggle.IsChecked == true
+            : WindowPinnedCheckBox.IsChecked == true;
+        SetWindowPinnedFromOverlay(pinned);
+    }
+
+    private void SetWindowPinnedFromOverlay(bool pinned)
+    {
+        _widgetSettings = _widgetSettings with
+        {
+            WindowPinned = pinned,
+        };
+        _isApplyingSettingsUi = true;
+
+        try
+        {
+            WindowPinnedCheckBox.IsChecked = pinned;
+            PinWindowButton.IsChecked = pinned;
+        }
+        finally
+        {
+            _isApplyingSettingsUi = false;
+        }
+
+        Topmost = pinned;
+        SaveSettings(
+            pinned
+                ? "Main window pinned open."
+                : "Main window will hide when focus changes.");
     }
 
     private void StartWithWindowsCheckBox_Changed(
@@ -996,7 +2568,11 @@ public partial class MainWindow : Window
             return;
         }
 
-        bool enabled = StartWithWindowsCheckBox.IsChecked == true;
+        SetStartupFromOverlay(StartWithWindowsCheckBox.IsChecked == true);
+    }
+
+    private void SetStartupFromOverlay(bool enabled)
+    {
         StartupRegistrationResult result =
             _startupRegistrationService.SetEnabled(enabled);
 
@@ -1047,6 +2623,9 @@ public partial class MainWindow : Window
             RefreshTaskbarState();
         }
     }
+
+    private void SetTaskbarFromOverlay(bool enabled) =>
+        SetTaskbarAutoHide(enabled);
 
     private void RefreshTaskbarState()
     {
@@ -1145,13 +2724,17 @@ public partial class MainWindow : Window
                 .WithFavorite(outputSlot, displaced)
                 .WithFavorite(targetSlot, favorite);
             HotkeyRegistrationResult result = ApplyHotkeyBindings(candidate);
+            if (!result.Succeeded)
+            {
+                ApplyHotkeyBindings(_widgetSettings);
+                UpdateOptionsControls();
+                OptionsStatusText.Text = result.FirstFailure ??
+                    "Favorite order could not be updated.";
+                return;
+            }
             _widgetSettings = candidate;
             UpdateOptionsControls();
-            SaveSettings(
-                result.Succeeded
-                    ? "Favorite order updated."
-                    : result.FirstFailure ??
-                        "Favorite order updated; a shortcut is unavailable.");
+            SaveSettings("Favorite order updated.");
             return;
         }
 
@@ -1171,13 +2754,17 @@ public partial class MainWindow : Window
                 .WithInputFavorite(inputSlot, displaced)
                 .WithInputFavorite(targetSlot, favorite);
             HotkeyRegistrationResult result = ApplyHotkeyBindings(candidate);
+            if (!result.Succeeded)
+            {
+                ApplyHotkeyBindings(_widgetSettings);
+                UpdateOptionsControls();
+                OptionsStatusText.Text = result.FirstFailure ??
+                    "Favorite order could not be updated.";
+                return;
+            }
             _widgetSettings = candidate;
             UpdateOptionsControls();
-            SaveSettings(
-                result.Succeeded
-                    ? "Favorite order updated."
-                    : result.FirstFailure ??
-                        "Favorite order updated; a shortcut is unavailable.");
+            SaveSettings("Favorite order updated.");
         }
     }
 
@@ -1264,16 +2851,22 @@ public partial class MainWindow : Window
 
         if (Keyboard.Modifiers == ModifierKeys.Control)
         {
-            WidgetPanel? panel = e.Key switch
+            int? controlNumber = e.Key switch
             {
-                Key.D1 or Key.NumPad1 => WidgetPanel.Display,
-                Key.D2 or Key.NumPad2 => WidgetPanel.Audio,
-                Key.D3 or Key.NumPad3 => WidgetPanel.Devices,
-                Key.D4 or Key.NumPad4 => WidgetPanel.Options,
-                Key.D5 or Key.NumPad5 => WidgetPanel.Profiles,
-                Key.D6 or Key.NumPad6 => WidgetPanel.About,
+                Key.D1 or Key.NumPad1 => 1,
+                Key.D2 or Key.NumPad2 => 2,
+                Key.D3 or Key.NumPad3 => 3,
+                Key.D4 or Key.NumPad4 => 4,
+                Key.D5 or Key.NumPad5 => 5,
+                Key.D6 or Key.NumPad6 => 6,
                 _ => null,
             };
+
+            WidgetPanel? panel = controlNumber is int number
+                ? WidgetPanelNavigation.FromControlNumber(
+                    _productConfiguration,
+                    number)
+                : null;
 
             if (panel is WidgetPanel selectedPanel)
             {
@@ -1349,51 +2942,102 @@ public partial class MainWindow : Window
         await ApplyDisplayModeAsync(mode);
     }
 
+    private void OpenOverlay_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_widgetSettings.OverlayEnabled)
+        {
+            OptionsStatusText.Text =
+                "Enable the Quick workspace overlay in Options before opening it.";
+            return;
+        }
+
+        ToggleSidebarOverlay();
+    }
+
+    private async void OpenAudioPanel_Click(object sender, RoutedEventArgs e) =>
+        await ActivatePanelAsync(WidgetPanel.Audio);
+
+    private async void OpenDevicesPanel_Click(object sender, RoutedEventArgs e) =>
+        await ActivatePanelAsync(WidgetPanel.Devices);
+
+    private void UpdateQuickSummary()
+    {
+        QuickDisplaySummaryText.Text = _currentDisplayMode?.GetDisplayName() ??
+            "Windows is detecting the current mode.";
+
+        QuickAudioSummaryText.Text = GetFavoriteAudioSummary();
+
+        QuickDeviceSummaryText.Text = _deviceInventoryDirty
+            ? "Open Devices to refresh."
+            : "Device inventory ready.";
+
+        OpenOverlayButton.IsEnabled = _widgetSettings.OverlayEnabled;
+        OpenOverlayButton.ToolTip = _widgetSettings.OverlayEnabled
+            ? $"Open the dimmed Quick workspace overlay (v{ProductConfiguration.ReleaseVersion})"
+            : "Enable the Quick workspace overlay in Options first";
+
+        string toggleShortcut = FormatShortcut(_widgetSettings.ToggleWidget);
+        QuickShortcutHintText.Text = toggleShortcut == "Not set"
+            ? "Set a show/hide shortcut in Options."
+            : $"Shortcut: {toggleShortcut} opens WinQuickSwitch.";
+    }
+
+    private string GetFavoriteAudioSummary()
+    {
+        int outputFavorites = Enumerable.Range(
+                0,
+                WidgetSettings.MaximumFavoriteOutputs)
+            .Count(slot => _widgetSettings.GetFavorite(slot) is not null);
+        int inputFavorites = Enumerable.Range(
+                0,
+                WidgetSettings.MaximumFavoriteInputs)
+            .Count(slot => _widgetSettings.GetInputFavorite(slot) is not null);
+
+        return outputFavorites == 0 && inputFavorites == 0
+            ? "No favorites saved yet."
+            : $"{outputFavorites} output · {inputFavorites} input favorites";
+    }
+
     private async Task<bool> ApplyDisplayModeAsync(DisplayMode mode)
     {
-        if (_currentDisplayMode == mode)
+        DisplayTopologySnapshot currentSnapshot =
+            _displayTopologyService.GetSnapshot();
+
+        if (_currentDisplayMode == mode &&
+            DisplayTransitionMonitor.IsModeSatisfied(currentSnapshot, mode))
         {
             SetDisplayModeSelection(mode);
             return true;
         }
 
-        DisplayMode? previousMode = _currentDisplayMode;
+        DisplayMode? previousMode = currentSnapshot.CurrentMode;
         bool succeeded = false;
         SetDisplayModeSelection(mode);
+        _sharedDisplayBusy = true;
         DisplayModeButtons.IsEnabled = false;
-        DisplayStatusText.Text = $"Switching to {mode.GetDisplayName()}...";
+        _sharedDisplayStatus = $"Switching to {mode.GetDisplayName()}...";
+        DisplayStatusText.Text = _sharedDisplayStatus;
+        PublishSharedState(QuickSwitchRefreshScope.Display);
 
         try
         {
-            DisplayModeResult result = await _displayModeService.ApplyAsync(
-                mode,
-                _lifetimeCancellation.Token);
+            DisplayModeTransitionOutcome outcome =
+                await DisplayModeTransitionExecutor.ExecuteAsync(
+                    _displayModeService,
+                    _displayTopologyService,
+                    previousMode,
+                    mode,
+                    TimeSpan.FromMilliseconds(150),
+                    bridgeMaximumAttempts: 12,
+                    finalMaximumAttempts: 18,
+                    requiredStableSnapshots: 3,
+                    recoveryApplyCount: 1,
+                    _lifetimeCancellation.Token);
 
-            if (result.Succeeded)
-            {
-                succeeded = true;
-                DisplayTopologySnapshot snapshot =
-                    await DisplayTransitionMonitor.WaitForModeAsync(
-                        _displayTopologyService,
-                        mode,
-                        TimeSpan.FromMilliseconds(150),
-                        maximumAttempts: 18,
-                        _lifetimeCancellation.Token);
-
-                ApplyDisplayTopologySnapshot(snapshot);
-
-                if (snapshot.CurrentMode != mode)
-                {
-                    DisplayStatusText.Text =
-                        $"{result.Message} Windows is still updating.";
-                    SetDisplayModeSelection(mode);
-                }
-            }
-            else
-            {
-                DisplayStatusText.Text = result.Message;
-                SetDisplayModeSelection(previousMode);
-            }
+            succeeded = outcome.Succeeded;
+            ApplyDisplayTopologySnapshot(outcome.Snapshot);
+            _sharedDisplayStatus = outcome.Message + _hotkeyStatusSuffix;
+            DisplayStatusText.Text = _sharedDisplayStatus;
         }
         catch (OperationCanceledException) when (_lifetimeCancellation.IsCancellationRequested)
         {
@@ -1403,7 +3047,9 @@ public partial class MainWindow : Window
         {
             if (!_lifetimeCancellation.IsCancellationRequested)
             {
+                _sharedDisplayBusy = false;
                 DisplayModeButtons.IsEnabled = true;
+                PublishSharedState(QuickSwitchRefreshScope.Display);
             }
         }
 
@@ -1418,9 +3064,17 @@ public partial class MainWindow : Window
 
     private void ApplyDisplayTopologySnapshot(DisplayTopologySnapshot snapshot)
     {
-        _currentDisplayMode = snapshot.CurrentMode;
-        DisplayStatusText.Text = snapshot.Status + _hotkeyStatusSuffix;
-        SetDisplayModeSelection(snapshot.CurrentMode);
+        _sharedDisplayTopology = snapshot;
+        DisplayMode? settledMode = snapshot.CurrentMode is DisplayMode currentMode &&
+            DisplayTransitionMonitor.IsModeSatisfied(snapshot, currentMode)
+                ? currentMode
+                : null;
+
+        _currentDisplayMode = settledMode;
+        _sharedDisplayStatus = snapshot.Status + _hotkeyStatusSuffix;
+        DisplayStatusText.Text = _sharedDisplayStatus;
+        UpdateQuickSummary();
+        SetDisplayModeSelection(settledMode);
 
         bool multiDisplayChoiceAvailable =
             !snapshot.IsReliable || snapshot.SupportsMultipleDisplays;
@@ -1859,7 +3513,8 @@ public partial class MainWindow : Window
             if (_widgetSettings.GetFavorite(slot) is FavoriteOutputSetting favorite)
             {
                 targets.Add(new(
-                    favorite.EndpointId,
+                    slot,
+                    WidgetSettings.GetFavoriteAction(slot),
                     favorite.Name,
                     favorite.Role,
                     false,
@@ -1874,7 +3529,8 @@ public partial class MainWindow : Window
             if (_widgetSettings.GetInputFavorite(slot) is FavoriteInputSetting favorite)
             {
                 targets.Add(new(
-                    favorite.EndpointId,
+                    slot,
+                    WidgetSettings.GetInputFavoriteAction(slot),
                     favorite.Name,
                     favorite.Role,
                     true,
@@ -2131,6 +3787,12 @@ public partial class MainWindow : Window
         ProfileEmptyText.Visibility = options.Count == 0
             ? Visibility.Visible
             : Visibility.Collapsed;
+        if (_sharedProfilesStatus == ProfilesQuickSwitchState.Empty.StatusMessage)
+        {
+            _sharedProfilesStatus = options.Count == 0
+                ? ProfilesQuickSwitchState.Empty.StatusMessage
+                : $"{options.Count} saved profiles.";
+        }
 
         if (_editingProfileId is not null &&
             FindProfile(_editingProfileId) is null)
@@ -2355,7 +4017,8 @@ public partial class MainWindow : Window
         }
 
         _isApplyingProfile = true;
-        ProfilesStatusText.Text = $"Applying {profile.Name}...";
+        SetSharedProfilesStatus($"Applying {profile.Name}...");
+        PublishSharedState(QuickSwitchRefreshScope.Profiles);
         ProfileItems.IsEnabled = false;
         UndoProfileButton.IsEnabled = false;
         List<string> warnings = [];
@@ -2386,8 +4049,8 @@ public partial class MainWindow : Window
             if (profile.DisplayMode is DisplayMode displayMode &&
                 !await ApplyDisplayModeAsync(displayMode))
             {
-                ProfilesStatusText.Text =
-                    $"{profile.Name} could not change the display mode.";
+                SetSharedProfilesStatus(
+                    $"{profile.Name} could not change the display mode.");
                 return;
             }
 
@@ -2500,13 +4163,13 @@ public partial class MainWindow : Window
 
             if (warnings.Count == 0)
             {
-                ProfilesStatusText.Text = $"{profile.Name} applied.";
+                SetSharedProfilesStatus($"{profile.Name} applied.");
             }
             else
             {
-                ProfilesStatusText.Text =
+                SetSharedProfilesStatus(
                     $"{profile.Name} applied with warnings: " +
-                    string.Join(" ", warnings);
+                    string.Join(" ", warnings));
             }
 
             RefreshDisplayTopology();
@@ -2519,14 +4182,15 @@ public partial class MainWindow : Window
         }
         catch (Exception exception)
         {
-            ProfilesStatusText.Text =
-                $"{profile.Name} could not be applied: {exception.Message}";
+            SetSharedProfilesStatus(
+                $"{profile.Name} could not be applied: {exception.Message}");
         }
         finally
         {
             _isApplyingProfile = false;
             ProfileItems.IsEnabled = true;
             UndoProfileButton.IsEnabled = true;
+            PublishSharedState(QuickSwitchRefreshScope.Profiles);
         }
     }
 
@@ -2638,11 +4302,12 @@ public partial class MainWindow : Window
             candidate,
             out string? errorMessage))
         {
-            ProfilesStatusText.Text = errorMessage;
+            SetSharedProfilesStatus(
+                errorMessage ?? "The profile catalog could not be saved.");
             return;
         }
 
-        ProfilesStatusText.Text = successMessage;
+        SetSharedProfilesStatus(successMessage);
     }
 
     private bool TryApplyAndSaveProfileCatalog(
@@ -2660,7 +4325,7 @@ public partial class MainWindow : Window
             return false;
         }
 
-        if (!_profileStore.TrySave(candidate, out errorMessage))
+        if (!_profileFeature.TrySave(candidate, out errorMessage))
         {
             ApplyHotkeyBindings(_widgetSettings, _profileCatalog);
             return false;
@@ -2894,16 +4559,31 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task RefreshAudioInventoryAsync()
+    private async Task RefreshAudioInventoryAsync(
+        CancellationToken requestCancellationToken = default,
+        bool waitForActive = false)
     {
         bool entered = false;
-        CancellationToken cancellationToken = _visibleCancellation.Token;
+        using CancellationTokenSource linkedCancellation =
+            CancellationTokenSource.CreateLinkedTokenSource(
+                requestCancellationToken,
+                _visibleCancellation.Token,
+                _lifetimeCancellation.Token);
+        CancellationToken cancellationToken = linkedCancellation.Token;
 
         try
         {
-            entered = await _audioRefreshGate.WaitAsync(
-                TimeSpan.Zero,
-                cancellationToken);
+            if (waitForActive)
+            {
+                await _audioRefreshGate.WaitAsync(cancellationToken);
+                entered = true;
+            }
+            else
+            {
+                entered = await _audioRefreshGate.WaitAsync(
+                    TimeSpan.Zero,
+                    cancellationToken);
+            }
 
             if (!entered)
             {
@@ -2911,11 +4591,28 @@ public partial class MainWindow : Window
             }
 
             RefreshAudioButton.IsEnabled = false;
+            _sharedAudioBusy = true;
+            _sharedAudioLoadState = QuickSwitchLoadState.Loading;
+            _sharedAudioStatus = "Reading Windows audio state...";
             AudioStatusText.Text = "Reading Windows audio state...";
+            PublishSharedState(
+                QuickSwitchRefreshScope.Audio |
+                QuickSwitchRefreshScope.Favorites);
 
             AudioInventory inventory = await _audioInventoryService.GetInventoryAsync(
                 cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
 
+            _sharedAudioInventory = new AudioInventory(
+                inventory.PlaybackEndpoints.ToArray(),
+                inventory.RecordingEndpoints.ToArray(),
+                inventory.Sessions.ToArray(),
+                inventory.CapturedAt);
+            _sharedAudioLoadState = inventory.PlaybackEndpoints.Count +
+                inventory.RecordingEndpoints.Count +
+                inventory.Sessions.Count == 0
+                    ? QuickSwitchLoadState.Empty
+                    : QuickSwitchLoadState.Ready;
             PlaybackEndpointsList.ItemsSource = inventory.PlaybackEndpoints;
             RecordingEndpointsList.ItemsSource = inventory.RecordingEndpoints;
             AudioSessionsList.ItemsSource = inventory.Sessions;
@@ -2923,12 +4620,23 @@ public partial class MainWindow : Window
             SelectAudioEndpoint(PlaybackEndpointsList, inventory.PlaybackEndpoints);
             SelectAudioEndpoint(RecordingEndpointsList, inventory.RecordingEndpoints);
 
-            AudioStatusText.Text =
+            _sharedAudioStatus =
                 $"{inventory.PlaybackEndpoints.Count} out · " +
                 $"{inventory.RecordingEndpoints.Count} in · " +
                 $"{inventory.Sessions.Count} apps · " +
                 $"{inventory.CapturedAt.ToLocalTime():t}" +
                 _audioWatcherStatusSuffix;
+            AudioStatusText.Text = _sharedAudioStatus;
+            QuickAudioSummaryText.Text =
+                $"{inventory.PlaybackEndpoints.Count} outputs · " +
+                $"{inventory.RecordingEndpoints.Count} inputs · " +
+                $"{GetFavoriteAudioSummary()}";
+
+            _sharedAudioBusy = false;
+            RefreshAudioButton.IsEnabled = true;
+            PublishSharedState(
+                QuickSwitchRefreshScope.Audio |
+                QuickSwitchRefreshScope.Favorites);
         }
         catch (OperationCanceledException) when (
             cancellationToken.IsCancellationRequested ||
@@ -2938,17 +4646,34 @@ public partial class MainWindow : Window
         }
         catch (Exception exception)
         {
-            AudioStatusText.Text = $"Audio inventory is unavailable: {exception.Message}";
+            _sharedAudioStatus =
+                $"Audio inventory is unavailable: {exception.Message}";
+            AudioStatusText.Text = _sharedAudioStatus;
+            _sharedAudioLoadState = QuickSwitchLoadState.Error;
+            _sharedAudioBusy = false;
+            QuickAudioSummaryText.Text = "Audio inventory unavailable.";
+            PublishSharedState(
+                QuickSwitchRefreshScope.Audio |
+                QuickSwitchRefreshScope.Favorites);
         }
         finally
         {
             if (entered)
             {
+                bool publishIdleState = _sharedAudioBusy &&
+                    !_lifetimeCancellation.IsCancellationRequested;
+                _sharedAudioBusy = false;
                 _audioRefreshGate.Release();
 
-                if (IsVisible && !cancellationToken.IsCancellationRequested)
+                if (!_lifetimeCancellation.IsCancellationRequested)
                 {
                     RefreshAudioButton.IsEnabled = true;
+                    if (publishIdleState)
+                    {
+                        PublishSharedState(
+                            QuickSwitchRefreshScope.Audio |
+                            QuickSwitchRefreshScope.Favorites);
+                    }
                 }
             }
         }
@@ -2966,16 +4691,31 @@ public partial class MainWindow : Window
             ?? endpoints.FirstOrDefault();
     }
 
-    private async Task RefreshWirelessRadioStateAsync()
+    private async Task RefreshWirelessRadioStateAsync(
+        CancellationToken requestCancellationToken = default,
+        bool waitForActive = false)
     {
         bool entered = false;
-        CancellationToken cancellationToken = _lifetimeCancellation.Token;
+        bool stateApplied = false;
+        using CancellationTokenSource linkedCancellation =
+            CancellationTokenSource.CreateLinkedTokenSource(
+                requestCancellationToken,
+                _lifetimeCancellation.Token);
+        CancellationToken cancellationToken = linkedCancellation.Token;
 
         try
         {
-            entered = await _wirelessRadioGate.WaitAsync(
-                TimeSpan.Zero,
-                cancellationToken);
+            if (waitForActive)
+            {
+                await _wirelessRadioGate.WaitAsync(cancellationToken);
+                entered = true;
+            }
+            else
+            {
+                entered = await _wirelessRadioGate.WaitAsync(
+                    TimeSpan.Zero,
+                    cancellationToken);
+            }
 
             if (!entered)
             {
@@ -2987,6 +4727,8 @@ public partial class MainWindow : Window
 
             WirelessRadioSnapshot snapshot =
                 await _wirelessRadioService.GetSnapshotAsync(cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            _lastWirelessRadioSnapshot = snapshot;
 
             ApplyWirelessRadioState(
                 WiFiRadioToggle,
@@ -2996,6 +4738,8 @@ public partial class MainWindow : Window
                 BluetoothRadioToggle,
                 "Bluetooth",
                 snapshot.Bluetooth);
+            stateApplied = true;
+            UpdateFloatingDevicesWidget();
             WirelessStatusText.Visibility = Visibility.Collapsed;
         }
         catch (OperationCanceledException) when (
@@ -3009,6 +4753,9 @@ public partial class MainWindow : Window
             BluetoothRadioToggle.IsChecked = false;
             WiFiRadioToggle.Content = "Wi-Fi unavailable";
             BluetoothRadioToggle.Content = "Bluetooth unavailable";
+            _lastWirelessRadioSnapshot = null;
+            stateApplied = true;
+            UpdateFloatingDevicesWidget();
             WirelessStatusText.Text =
                 $"Wireless state is unavailable: {exception.Message}";
             WirelessStatusText.Visibility = Visibility.Visible;
@@ -3017,6 +4764,20 @@ public partial class MainWindow : Window
         {
             if (entered)
             {
+                if (!stateApplied &&
+                    !_lifetimeCancellation.IsCancellationRequested &&
+                    _lastWirelessRadioSnapshot is { } previousSnapshot)
+                {
+                    ApplyWirelessRadioState(
+                        WiFiRadioToggle,
+                        "Wi-Fi",
+                        previousSnapshot.WiFi);
+                    ApplyWirelessRadioState(
+                        BluetoothRadioToggle,
+                        "Bluetooth",
+                        previousSnapshot.Bluetooth);
+                }
+
                 _wirelessRadioGate.Release();
             }
         }
@@ -3038,39 +4799,58 @@ public partial class MainWindow : Window
         };
     }
 
-    private async Task RefreshDeviceInventoryAsync()
+    private async Task RefreshDeviceInventoryAsync(
+        CancellationToken requestCancellationToken = default)
     {
         bool entered = false;
-        CancellationToken cancellationToken = _visibleCancellation.Token;
+        using CancellationTokenSource linkedCancellation =
+            CancellationTokenSource.CreateLinkedTokenSource(
+                requestCancellationToken,
+                _visibleCancellation.Token,
+                _lifetimeCancellation.Token);
+        CancellationToken cancellationToken = linkedCancellation.Token;
 
         try
         {
-            entered = await _deviceRefreshGate.WaitAsync(
-                TimeSpan.Zero,
-                cancellationToken);
-
-            if (!entered)
-            {
-                return;
-            }
+            await _deviceRefreshGate.WaitAsync(cancellationToken);
+            entered = true;
 
             RefreshDevicesButton.IsEnabled = false;
+            _sharedDevicesBusy = true;
+            _sharedDevicesLoadState = QuickSwitchLoadState.Loading;
+            _sharedDevicesStatus = "Reading connected devices...";
             DeviceStatusText.Text = "Reading connected devices...";
+            PublishSharedState(QuickSwitchRefreshScope.Devices);
 
             DeviceInventory inventory = await _deviceInventoryService.GetInventoryAsync(
                 cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
 
             ConnectedDevicesList.ItemsSource = inventory.Devices;
+            _sharedDeviceInventory = new DeviceInventory(
+                inventory.Devices.ToArray(),
+                inventory.CapturedAt);
             _deviceInventoryDirty = false;
 
             int bluetoothCount = inventory.Devices.Count(
                 device => device.Transport == DeviceTransport.Bluetooth);
             int wiredCount = inventory.Devices.Count - bluetoothCount;
 
-            DeviceStatusText.Text =
+            _sharedDevicesStatus =
                 $"{bluetoothCount} Bluetooth · " +
                 $"{wiredCount} wired · " +
                 $"{inventory.CapturedAt.ToLocalTime():t}";
+            _sharedDevicesLoadState = inventory.Devices.Count == 0
+                ? QuickSwitchLoadState.Empty
+                : QuickSwitchLoadState.Ready;
+            DeviceStatusText.Text = _sharedDevicesStatus;
+            QuickDeviceSummaryText.Text =
+                $"{inventory.Devices.Count} connected · " +
+                $"{bluetoothCount} Bluetooth";
+
+            _sharedDevicesBusy = false;
+            RefreshDevicesButton.IsEnabled = true;
+            PublishSharedState(QuickSwitchRefreshScope.Devices);
         }
         catch (OperationCanceledException) when (
             cancellationToken.IsCancellationRequested ||
@@ -3080,18 +4860,30 @@ public partial class MainWindow : Window
         }
         catch (Exception exception)
         {
-            DeviceStatusText.Text =
+            _sharedDevicesStatus =
                 $"Connected-device inventory is unavailable: {exception.Message}";
+            DeviceStatusText.Text = _sharedDevicesStatus;
+            _sharedDevicesLoadState = QuickSwitchLoadState.Error;
+            _sharedDevicesBusy = false;
+            QuickDeviceSummaryText.Text = "Device inventory unavailable.";
+            PublishSharedState(QuickSwitchRefreshScope.Devices);
         }
         finally
         {
             if (entered)
             {
+                bool publishIdleState = _sharedDevicesBusy &&
+                    !_lifetimeCancellation.IsCancellationRequested;
+                _sharedDevicesBusy = false;
                 _deviceRefreshGate.Release();
 
-                if (IsVisible && !cancellationToken.IsCancellationRequested)
+                if (!_lifetimeCancellation.IsCancellationRequested)
                 {
                     RefreshDevicesButton.IsEnabled = true;
+                    if (publishIdleState)
+                    {
+                        PublishSharedState(QuickSwitchRefreshScope.Devices);
+                    }
                 }
             }
         }
@@ -3116,7 +4908,8 @@ internal sealed record FavoriteInputShortcutOption(
     string EditorName);
 
 internal sealed record TrayFavoriteTarget(
-    string EndpointId,
+    int Slot,
+    WidgetHotkeyAction Action,
     string Name,
     FavoriteEndpointRole Role,
     bool IsInput,

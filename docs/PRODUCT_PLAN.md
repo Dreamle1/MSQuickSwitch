@@ -2,7 +2,15 @@
 
 ## Product statement
 
-WinQuickSwitch gives a Windows 11 user one compact, summonable place to switch
+Current candidate: **v1.1.0.0**, covering shared-overlay UI stabilization and
+release validation. Physical hardware checks and Store submission remain
+pending; see [acceptance checklist](RELEASE_ACCEPTANCE_1_1_0.md). Expanded
+keybinds and device workspace work remain the subsequent v1.1.1.0/v1.1.2.0
+milestones, not a reason to delay this stabilization candidate indefinitely.
+Development has now started on [v1.1.1.0](MILESTONE_1_1_1.md); its source version
+is separate from the frozen v1.1.0.0 test artifacts.
+
+WinQuickSwitch gives a Windows 10 or Windows 11 user one compact, summonable place to switch
 display and audio configurations and inspect connected devices. It should feel
 like a fast control widget, not another full Settings application.
 
@@ -13,6 +21,43 @@ menu opened by `Win + P`. The four projection modes are the first display
 feature. Per-monitor positioning, resolution, refresh rate, HDR, and virtual
 desktops are outside the first release.
 
+## Free and Paid edition contract
+
+The product will be shipped from one source tree as two editions. The existing
+Store product remains the Paid edition so current customers, settings, profiles,
+and its listing are preserved. A separate `WinQuickSwitch Free` Store product
+will provide the core utility without named profiles.
+
+### Free edition
+
+- Display projection switching: PC screen only, Duplicate, Extend, and Second
+  screen only.
+- Safe exact-layout Extend restoration and authoritative Win+P mode detection.
+- Audio endpoint, session-volume, device, Wi-Fi/Bluetooth, and taskbar controls.
+- Display, panel, and favorite endpoint keybinds.
+- Four playback and four microphone favorites.
+- Tray, startup, theme, Windows Settings links, EULA, and privacy policy.
+- No Profiles panel, profile persistence, profile hotkeys, profile tray actions,
+  or profile application/undo.
+
+### Paid edition
+
+Paid includes every Free feature plus named profiles, profile persistence,
+combined display/audio/taskbar actions, profile hotkeys, pinned profile tray
+actions, profile duplication/editing, and profile undo. Future automatic or
+scheduled profile behavior is also Paid-only.
+
+### Edition invariants
+
+- Direct switching and ordinary keybinds are never paywalled.
+- Free must not load, save, register, or dispatch profile functionality.
+- Paid retains the existing `%LOCALAPPDATA%\WinQuickSwitch` data path.
+- Free uses an edition-specific data path and may export core settings for a
+  one-time Paid import.
+- Only one edition may own the resident process and global hotkeys at a time.
+- Public standalone Lite/Portable artifacts are Free-only until a separate
+  licensing mechanism exists for Paid artifacts.
+
 ## Goals
 
 1. Reach the most-used controls in one or two clicks.
@@ -22,6 +67,19 @@ desktops are outside the first release.
 5. Prefer documented Windows APIs and clearly isolate compatibility-sensitive
    code.
 6. Stay effectively idle while hidden and return with one global shortcut.
+
+## Shared overlay UI milestone (v1.0.26.0)
+
+- The main window, right-side launcher, workspace widgets, and supported
+  floating windows create the same complete reusable feature controls.
+- Display, Audio, Devices, Options, Profiles, and About share one coordinator,
+  state model, typed command path, watcher demand, and visual theme.
+- Display, Options, and About fit fixed content; Audio, Devices, and Paid
+  Profiles support persistent manual resizing and a Fit content action.
+- Default workspace composition is Display, Audio, and Devices. Options,
+  Profiles, and About are restored only when the user opens them.
+- Refresh, hot-plug, and theme changes update existing controls without
+  changing card geometry or interrupting a drag/resize gesture.
 
 ## Non-goals for version 1
 
@@ -87,7 +145,10 @@ without needing an oral handoff.
 
 - [x] Add an `IDisplayModeService`.
 - [x] Apply allowlisted projection topologies directly through
-  `SetDisplayConfig` without a helper process or shell window.
+  `SetDisplayConfig` for internal, clone, and external, plus the Windows
+  projection command for Extend. Capture complete Extend paths and modes before
+  leaving that topology, then restore the exact in-memory layout directly. Use
+  the PC-screen-only bridge only when an exact snapshot is unavailable.
 - [x] Detect active/available paths and the current global topology.
 - [x] Disable duplicate/extend choices that Windows reports as unavailable.
 - [x] Add focused automated tests around command selection and result handling.
@@ -152,8 +213,8 @@ as connected.
 - MSIX and portable framework-dependent packaging experiments.
 - Signed release artifacts and a documented uninstall path.
 
-Exit: a tested release candidate runs without elevation on supported Windows 11
-systems.
+Exit: a tested release candidate runs without elevation on supported Windows 10
+and Windows 11 systems.
 
 ## Acceptance criteria
 
@@ -191,13 +252,15 @@ Test at minimum:
 
 ## Open product decisions
 
-1. Final product name and icon.
+1. Resolved: retain `WinQuickSwitch` for the existing Paid product and reserve
+   `WinQuickSwitch Free` as the new Free product.
 2. Whether changing all three Windows audio roles together should be the
    default behavior.
 3. Resolved: publish both a small framework-dependent Lite build and a larger
-   self-contained Portable build.
+   self-contained Portable build for Free; Paid standalone artifacts remain
+   internal until licensing is defined.
 
-## M6 - favorites and profiles
+## M6 - favorites and profiles (Paid)
 
 The next implementation phase combines the existing quick audio favorites
 with named, partial desk profiles. A favorite is one fast endpoint action; a
@@ -210,6 +273,13 @@ profile is a named bundle whose omitted fields leave the current state alone.
   invalid volume values, and excess pinned profiles.
 - [ ] Replace fixed hotkey action IDs with dynamic built-in, favorite, and
   profile targets.
+- [x] Unregister dynamic profile hotkeys during reapply and shutdown.
+- [x] Restore the previous working registration set when a live shortcut
+  replacement conflicts or fails.
+- [x] Normalize duplicate profile shortcuts and report cross-category owners.
+- [x] Add an edition-aware typed command catalog and route existing global
+  hotkeys, shared shortcut rows, profile Apply, native tray actions, and the
+  overlay launcher/footer through it.
 - [ ] Preserve existing settings and favorite-output shortcuts during migration.
 
 ### M6.2 - favorites
@@ -247,3 +317,99 @@ profile is a named bundle whose omitted fields leave the current state alone.
   warning or failure.
 - Profile application is covered by fake platform backends; real hardware
   mutations remain attended checks.
+
+## M7 - compact UI and optional overlay
+
+M7 improves presentation without changing the safe display and audio
+boundaries. The first increment adds an opt-in dimmed right-sidebar overlay;
+the compact home surface and detachable floating widgets follow as separate
+increments.
+
+### M7.1 - sidebar overlay foundation
+
+- [x] Persist an overlay enable switch, dimming opacity, and sidebar width.
+- [x] Keep the overlay disabled by default for existing installations.
+- [x] Add a dedicated optional overlay hotkey without renumbering existing
+  hotkey IDs.
+- [x] Add a monitor-aware borderless overlay with a right-side feature hub.
+- [x] Close through Esc, the same shortcut, the close button, or backdrop click.
+- [x] Provide a direct **Open main window** action so the overlay never blocks
+  access to the complete Audio, Devices, Options, Profiles, or About panels.
+- [x] Add compact Display, Audio, Devices, Options, Profiles (Paid), and About
+  tabs. Route actions through the MainWindow coordinator and open the full
+  panel when an action needs the complete inventory or editor.
+
+### M7.2 - compact home surface
+
+- [x] Make the main window action-first with four display-mode tiles, audio
+  favorites, device status, and shortcut hints.
+- [x] Keep detailed settings pages reachable through secondary navigation.
+- [x] Preserve native resize, minimize, maximize, keyboard focus, and edition
+  gating; add an explicit normal-window pin toggle.
+
+### M7.3 - optional floating widgets
+
+- [x] Detach the Display surface into a draggable, resizable floating widget.
+- [x] Add lightweight floating Audio and Devices surfaces for favorites and
+  wireless controls.
+- [x] Persist its size, position, and pinned state with safe work-area clamping
+  when a monitor is removed.
+- [x] Add reset-layout and reattach actions.
+
+### M7 acceptance criteria
+
+- Overlay presentation alone never changes display topology, placement, or
+  rotation.
+- Free and Paid both expose the overlay; Profiles remain Paid-only.
+- Existing settings and shortcuts load unchanged with the overlay off.
+- Manual validation covers mixed DPI, negative-coordinate monitors, monitor
+  hot-plugging, keyboard-only use, and borderless-windowed applications.
+
+## M8 - feature-complete widget workspace
+
+M8 replaces the button-list sidebar with an Xbox-style workspace while keeping
+the normal window as a fallback. The first implementation slice is now in the
+product: the edition-aware feature catalog, typed overlay command/result
+contracts, monitor-scoped layout persistence, snapping/clamping geometry, and
+the right-launcher workspace shell are shared by Free and Paid.
+
+### M8.1 - parity contract and workspace shell
+
+- [x] Add one edition-aware feature descriptor catalog and parity gate.
+- [x] Add typed quick-switch commands, result severity, refresh scopes, and
+  smart-close dispositions.
+- [x] Add a dimmed monitor workspace with quick-workspace routing, launcher navigation, cards,
+  drag/resize/snap, z-order, hide/restore, feedback, and inspector hosting.
+- [x] Add `Ctrl+0`, `Ctrl+1` through `Ctrl+6`, Escape, backdrop-close, and
+  keyboard launcher navigation.
+- [x] Persist per-monitor card layouts and inspector width with safe migration
+  from the legacy sidebar-width field.
+- [x] Keep display mutations on the existing authoritative transition path;
+  workspace layout never changes topology, placement, or rotation.
+- [x] Remove the redundant Home launcher entry, enlarge feature-specific card
+  presets, render connected devices in the quick card, and reserve feedback
+  banners for meaningful results, warnings, and failures.
+- [x] Add layout schema v2 so preset sizes and user-resized sizes persist
+  correctly, restore drag movement, and keep Profiles/About out of the default
+  quick-widget composition.
+
+### M8.2 - shared feature views and coordinator extraction
+
+- [x] Extract immutable `QuickSwitchState` snapshots and an
+  `IQuickSwitchCoordinator` from the remaining `MainWindow` control state.
+- [x] Host the existing full Display, Audio, Devices, Options/Favorites,
+  Profiles, and About views directly inside the inspector instead of action
+  lists.
+- [x] Add complete app-volume, endpoint alias/order, profile management,
+  confirmation, and Undo controls to the overlay inspector.
+- [x] Add revision-aware cancellation so stale refresh results cannot replace a
+  newly selected inspector.
+
+### M8.3 - release validation
+
+- [ ] Complete attended keyboard, screen-reader, high-contrast, mixed-DPI,
+  monitor-removal, hot-plug, tray, and Free/Paid validation.
+- [x] Replace the compatibility sidebar only after inspector parity and the
+  automated gate pass together.
+- [x] Publish fresh Free/Paid Lite/Portable and Store-test artifacts.
+- [ ] Update the store screenshots to show the workspace.

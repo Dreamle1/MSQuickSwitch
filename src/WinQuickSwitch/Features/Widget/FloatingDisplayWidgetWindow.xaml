@@ -1,0 +1,69 @@
+<Window x:Class="WinQuickSwitch.Features.Widget.FloatingDisplayWidgetWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="WinQuickSwitch · Display"
+        Width="360"
+        Height="260"
+        MinWidth="280"
+        MinHeight="180"
+        ResizeMode="CanResizeWithGrip"
+        ShowInTaskbar="False"
+        WindowStartupLocation="Manual"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        PreviewKeyDown="Window_PreviewKeyDown"
+        SizeChanged="Window_SizeChanged"
+        LocationChanged="Window_LocationChanged">
+  <Border Margin="8"
+          Padding="14"
+          Background="{DynamicResource CardBrush}"
+          BorderBrush="{DynamicResource BorderBrush}"
+          BorderThickness="1"
+          CornerRadius="8">
+    <Grid>
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="*" />
+        <RowDefinition Height="Auto" />
+      </Grid.RowDefinitions>
+
+      <DockPanel Grid.Row="0">
+        <Button DockPanel.Dock="Right"
+                Width="30"
+                Height="30"
+                Padding="0"
+                Click="Close_Click"
+                Content="×"
+                FontSize="18"
+                ToolTip="Close floating display widget"
+                AutomationProperties.Name="Close floating display widget" />
+        <TextBlock VerticalAlignment="Center"
+                   FontSize="17"
+                   FontWeight="SemiBold"
+                   Foreground="{DynamicResource PrimaryTextBrush}"
+                   Text="Display" />
+      </DockPanel>
+
+      <ScrollViewer Grid.Row="1"
+                    Margin="0,10,0,0"
+                    VerticalScrollBarVisibility="Auto"
+                    HorizontalScrollBarVisibility="Disabled">
+        <ContentControl x:Name="FeatureContentHost" />
+      </ScrollViewer>
+
+      <DockPanel Grid.Row="2" Margin="0,10,0,0">
+        <Button DockPanel.Dock="Right"
+                Style="{StaticResource CompactButton}"
+                Click="ResetLayout_Click"
+                Content="Reset layout"
+                ToolTip="Reset size and position for this widget" />
+        <CheckBox x:Name="PinnedCheckBox"
+                  VerticalAlignment="Center"
+                  Checked="PinnedCheckBox_Changed"
+                  Unchecked="PinnedCheckBox_Changed"
+                  Content="Keep on top"
+                  ToolTip="Keep this floating widget above other windows" />
+      </DockPanel>
+    </Grid>
+  </Border>
+</Window>

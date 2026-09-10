@@ -91,6 +91,7 @@ internal sealed record ProfileCatalog(
     {
         List<ProfileDefinition> normalized = [];
         HashSet<string> profileIds = new(StringComparer.Ordinal);
+        HashSet<WidgetShortcut> shortcuts = [];
 
         foreach (ProfileDefinition profile in Profiles ?? [])
         {
@@ -101,6 +102,12 @@ internal sealed record ProfileCatalog(
                 !profileIds.Add(candidate.Id))
             {
                 continue;
+            }
+
+            if (candidate.Shortcut is WidgetShortcut shortcut &&
+                !shortcuts.Add(shortcut))
+            {
+                candidate = candidate with { Shortcut = null };
             }
 
             normalized.Add(candidate);

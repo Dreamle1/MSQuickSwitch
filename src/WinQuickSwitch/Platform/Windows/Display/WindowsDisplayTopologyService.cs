@@ -7,14 +7,22 @@ namespace WinQuickSwitch.Platform.Windows.Display;
 public sealed class WindowsDisplayTopologyService : IDisplayTopologyService
 {
     private const int ErrorSuccess = 0;
+    private const int ErrorInsufficientBuffer = 122;
     private const uint QueryAllPaths = 0x00000001;
+    private const uint QueryDatabaseCurrent = 0x00000004;
     private const uint PathActive = 0x00000001;
+    private const uint TopologyInternal = 0x00000001;
+    private const uint TopologyClone = 0x00000002;
+    private const uint TopologyExtend = 0x00000004;
+    private const uint TopologyExternal = 0x00000008;
 
     public DisplayTopologySnapshot GetSnapshot()
     {
         try
         {
-            return DisplayTopologyClassifier.Classify(ReadDisplayPaths());
+            IReadOnlyCollection<DisplayPathDescriptor> paths = ReadDisplayPaths();
+            DisplayMode? reportedMode = TryReadWindowsProjectionMode();
+            return DisplayTopologyClassifier.Classify(paths, reportedMode);
         }
         catch (Exception exception) when (
             exception is Win32Exception or
@@ -24,6 +32,54 @@ public sealed class WindowsDisplayTopologyService : IDisplayTopologyService
             return DisplayTopologyClassifier.Unavailable(
                 $"Current display mode is unavailable: {exception.Message}");
         }
+    }
+
+    internal static DisplayMode? MapTopologyId(uint topologyId) => topologyId switch
+    {
+        TopologyInternal => DisplayMode.PcScreenOnly,
+        TopologyClone => DisplayMode.Duplicate,
+        TopologyExtend => DisplayMode.Extend,
+        TopologyExternal => DisplayMode.SecondScreenOnly,
+        _ => null,
+    };
+
+    private static DisplayMode? TryReadWindowsProjectionMode()
+    {
+        for (int attempt = 0; attempt < 3; attempt++)
+        {
+            int result = GetDisplayConfigBufferSizes(
+                QueryDatabaseCurrent,
+                out uint pathCount,
+                out uint modeCount);
+
+            if (result != ErrorSuccess)
+            {
+                return null;
+            }
+
+            DisplayConfigPathInfo[] paths = new DisplayConfigPathInfo[pathCount];
+            DisplayConfigModeInfo[] modes = new DisplayConfigModeInfo[modeCount];
+
+            result = QueryDisplayConfigWithTopology(
+                QueryDatabaseCurrent,
+                ref pathCount,
+                paths,
+                ref modeCount,
+                modes,
+                out uint topologyId);
+
+            if (result == ErrorSuccess)
+            {
+                return MapTopologyId(topologyId);
+            }
+
+            if (result != ErrorInsufficientBuffer)
+            {
+                return null;
+            }
+        }
+
+        return null;
     }
 
     private static IReadOnlyCollection<DisplayPathDescriptor> ReadDisplayPaths()
@@ -83,8 +139,17 @@ public sealed class WindowsDisplayTopologyService : IDisplayTopologyService
         [Out] DisplayConfigModeInfo[] modeInfoArray,
         IntPtr currentTopologyId);
 
+    [DllImport("user32.dll", EntryPoint = "QueryDisplayConfig")]
+    private static extern int QueryDisplayConfigWithTopology(
+        uint flags,
+        ref uint numPathArrayElements,
+        [Out] DisplayConfigPathInfo[] pathInfoArray,
+        ref uint numModeInfoArrayElements,
+        [Out] DisplayConfigModeInfo[] modeInfoArray,
+        out uint currentTopologyId);
+
     [StructLayout(LayoutKind.Sequential)]
-    private struct DisplayConfigPathInfo
+    internal struct DisplayConfigPathInfo
     {
         public DisplayConfigPathSourceInfo SourceInfo;
         public DisplayConfigPathTargetInfo TargetInfo;
@@ -92,7 +157,7 @@ public sealed class WindowsDisplayTopologyService : IDisplayTopologyService
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    private struct DisplayConfigPathSourceInfo
+    internal struct DisplayConfigPathSourceInfo
     {
         public Luid AdapterId;
         public uint Id;
@@ -101,7 +166,7 @@ public sealed class WindowsDisplayTopologyService : IDisplayTopologyService
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    private struct DisplayConfigPathTargetInfo
+    internal struct DisplayConfigPathTargetInfo
     {
         public Luid AdapterId;
         public uint Id;
@@ -119,14 +184,14 @@ public sealed class WindowsDisplayTopologyService : IDisplayTopologyService
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    private struct DisplayConfigRational
+    internal struct DisplayConfigRational
     {
         public uint Numerator;
         public uint Denominator;
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    private struct Luid
+    internal struct Luid
     {
         public uint LowPart;
         public int HighPart;
@@ -136,7 +201,7 @@ public sealed class WindowsDisplayTopologyService : IDisplayTopologyService
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    private struct DisplayConfigModeInfo
+    internal struct DisplayConfigModeInfo
     {
         public uint InfoType;
         public uint Id;
@@ -145,7 +210,7 @@ public sealed class WindowsDisplayTopologyService : IDisplayTopologyService
     }
 
     [StructLayout(LayoutKind.Explicit, Size = 48)]
-    private struct DisplayConfigModeInfoUnion
+    internal struct DisplayConfigModeInfoUnion
     {
         [FieldOffset(0)]
         public DisplayConfigTargetMode TargetMode;
@@ -158,13 +223,13 @@ public sealed class WindowsDisplayTopologyService : IDisplayTopologyService
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    private struct DisplayConfigTargetMode
+    internal struct DisplayConfigTargetMode
     {
         public DisplayConfigVideoSignalInfo TargetVideoSignalInfo;
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    private struct DisplayConfigSourceMode
+    internal struct DisplayConfigSourceMode
     {
         public uint Width;
         public uint Height;
@@ -173,7 +238,7 @@ public sealed class WindowsDisplayTopologyService : IDisplayTopologyService
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    private struct DisplayConfigDesktopImageInfo
+    internal struct DisplayConfigDesktopImageInfo
     {
         public PointL PathSourceSize;
         public RectL DesktopImageRegion;
@@ -181,7 +246,7 @@ public sealed class WindowsDisplayTopologyService : IDisplayTopologyService
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    private struct DisplayConfigVideoSignalInfo
+    internal struct DisplayConfigVideoSignalInfo
     {
         public ulong PixelRate;
         public DisplayConfigRational HorizontalSyncFrequency;
@@ -193,21 +258,21 @@ public sealed class WindowsDisplayTopologyService : IDisplayTopologyService
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    private struct DisplayConfig2DRegion
+    internal struct DisplayConfig2DRegion
     {
         public uint Width;
         public uint Height;
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    private struct PointL
+    internal struct PointL
     {
         public int X;
         public int Y;
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    private struct RectL
+    internal struct RectL
     {
         public int Left;
         public int Top;

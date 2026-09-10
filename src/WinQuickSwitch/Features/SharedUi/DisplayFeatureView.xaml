@@ -1,0 +1,88 @@
+<UserControl x:Class="WinQuickSwitch.Features.SharedUi.DisplayFeatureView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:shared="clr-namespace:WinQuickSwitch.Features.SharedUi"
+             MinWidth="480"
+             AutomationProperties.Name="Display controls">
+  <StackPanel>
+    <shared:SharedRefreshErrorBanner />
+    <Grid>
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="Auto" />
+      </Grid.ColumnDefinitions>
+      <StackPanel>
+        <TextBlock x:Name="FeatureTitleText"
+                   FontSize="17"
+                   FontWeight="SemiBold"
+                   Text="Display" />
+        <TextBlock Margin="0,4,0,0"
+                   Foreground="{DynamicResource SecondaryTextBrush}"
+                   Text="Switch projection modes and inspect the active topology."
+                   TextWrapping="Wrap" />
+      </StackPanel>
+      <Button x:Name="RefreshButton"
+              Grid.Column="1"
+              MinWidth="78"
+              MinHeight="40"
+              Margin="8,0,0,0"
+              Command="{Binding RefreshCommand}"
+              Content="Refresh"
+              AutomationProperties.Name="Refresh display status" />
+    </Grid>
+
+    <UniformGrid Margin="0,14,0,0" Columns="2">
+      <ToggleButton Style="{StaticResource DisplayModeToggle}"
+                    IsChecked="{Binding IsPcScreenOnly, Mode=OneWay}"
+                    Command="{Binding ApplyPcScreenOnlyCommand}"
+                    Content="PC screen only"
+                    AutomationProperties.Name="PC screen only display mode" />
+      <ToggleButton Style="{StaticResource DisplayModeToggle}"
+                    IsChecked="{Binding IsDuplicate, Mode=OneWay}"
+                    Command="{Binding ApplyDuplicateCommand}"
+                    Content="Duplicate"
+                    AutomationProperties.Name="Duplicate display mode" />
+      <ToggleButton Style="{StaticResource DisplayModeToggle}"
+                    IsChecked="{Binding IsExtend, Mode=OneWay}"
+                    Command="{Binding ApplyExtendCommand}"
+                    Content="Extend"
+                    AutomationProperties.Name="Extend display mode" />
+      <ToggleButton Style="{StaticResource DisplayModeToggle}"
+                    IsChecked="{Binding IsSecondScreenOnly, Mode=OneWay}"
+                    Command="{Binding ApplySecondScreenOnlyCommand}"
+                    Content="Second screen only"
+                    AutomationProperties.Name="Second screen only display mode" />
+    </UniformGrid>
+
+    <TextBlock Margin="0,4,0,0"
+               Foreground="{DynamicResource SecondaryTextBrush}"
+               Text="{Binding StatusMessage}"
+               TextWrapping="Wrap" />
+
+    <Border Margin="0,12,0,0"
+            Padding="12"
+            Background="{DynamicResource PageBrush}"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="1"
+            CornerRadius="6">
+      <StackPanel>
+        <TextBlock FontWeight="SemiBold" Text="Topology" />
+        <TextBlock Margin="0,5,0,0"
+                   Text="{Binding TopologySummary}"
+                   TextWrapping="Wrap" />
+      </StackPanel>
+    </Border>
+
+    <WrapPanel Margin="0,12,0,0">
+      <Button Style="{StaticResource CompactButton}"
+              Command="{Binding OpenOverlayCommand}"
+              Content="Open workspace overlay" />
+      <Button Style="{StaticResource CompactButton}"
+              Command="{Binding OpenDisplaySettingsCommand}"
+              Content="Open Windows display settings" />
+      <Button Style="{StaticResource CompactButton}"
+              Command="{Binding OpenFloatingDisplayCommand}"
+              Content="Open floating Display widget" />
+    </WrapPanel>
+  </StackPanel>
+</UserControl>

@@ -1,0 +1,105 @@
+{
+  "schemaVersion": 1,
+  "features": [
+    {
+      "id": "shell",
+      "editions": [ "Paid", "Free" ],
+      "mainControls": [ "Pin", "Quit" ],
+      "overlayControls": [ "Open main WinQuickSwitch window", "Exit WinQuickSwitch" ],
+      "journalActions": [ "audio.watcher.start" ],
+      "performanceStages": [ "main.startup", "main.exit", "overlay.startup", "overlay.exit" ],
+      "performanceExclusions": [ "Tray Open and native context-menu timing remains an attended shell test." ]
+    },
+    {
+      "id": "display",
+      "editions": [ "Paid", "Free" ],
+      "mainControls": [ "Refresh display status", "PC screen only display mode", "Duplicate display mode", "Extend display mode", "Second screen only display mode", "Open Windows display settings", "Open floating Display widget" ],
+      "overlayControls": [ "Open Display controls" ],
+      "journalActions": [ "display.refresh", "display.apply", "settings.windows" ],
+      "performanceStages": [ "main.refresh.display", "main.action.display.pc-screen-only", "main.action.display.duplicate", "main.action.display.extend", "main.action.display.second-screen-only", "main.action.display.open-settings", "main.action.display.floating.open", "main.action.display.floating.close", "overlay.inspect.display" ]
+    },
+    {
+      "id": "audio",
+      "editions": [ "Paid", "Free" ],
+      "mainControls": [ "Volume mixer", "Sound settings", "Refresh", "Studio Speakers", "Desk Microphone", "Default", "Calls", "Both", "Add favorite", "Volume for Sample Browser", "Mute Sample Browser", "Open floating Audio widget" ],
+      "overlayControls": [ "Open Audio controls" ],
+      "journalActions": [ "audio.refresh", "audio.default", "audio.session.volume", "audio.session.mute", "settings.sound", "settings.volumeMixer" ],
+      "performanceStages": [ "main.refresh.audio", "main.action.audio.select-output", "main.action.audio.role.default", "main.action.audio.role.calls", "main.action.audio.role.both", "main.action.audio.favorite.add", "main.action.audio.favorite.remove", "main.action.audio.session.volume", "main.action.audio.session.mute", "main.action.audio.open-volume-mixer", "main.action.audio.open-sound-settings", "main.action.audio.floating.open", "main.action.audio.floating.close", "overlay.inspect.audio" ]
+    },
+    {
+      "id": "devices",
+      "editions": [ "Paid", "Free" ],
+      "mainControls": [ "Refresh devices", "Toggle Wi-Fi", "Toggle Bluetooth", "Travel Headset", "Wi-Fi settings", "Bluetooth settings", "Airplane mode", "Network settings", "Connected-device settings", "Open floating Devices widget" ],
+      "overlayControls": [ "Open Devices controls" ],
+      "journalActions": [ "devices.refresh", "radios.refresh", "radios.set", "settings.devices" ],
+      "performanceStages": [ "main.refresh.devices", "main.action.devices.wifi.off", "main.action.devices.wifi.on", "main.action.devices.bluetooth.off", "main.action.devices.bluetooth.on", "main.action.devices.wifi-settings", "main.action.devices.bluetooth-settings", "main.action.devices.airplane-mode", "main.action.devices.network-settings", "main.action.devices.connected-device-settings", "main.action.devices.floating.open", "main.action.devices.floating.close", "overlay.inspect.devices" ]
+    },
+    {
+      "id": "options",
+      "editions": [ "Paid", "Free" ],
+      "mainControls": [ "Show or hide keyboard shortcuts", "Show taskbar", "Auto-hide taskbar", "Taskbar settings", "Display settings", "Notifications", "Use dark theme", "Use the dimmed workspace overlay", "Pin the main window open", "Start WinQuickSwitch when I sign in", "Reset shortcuts", "Restore defaults" ],
+      "overlayControls": [ "Open Options" ],
+      "journalActions": [ "taskbar.refresh", "taskbar.autoHide", "settings.windows", "startup.set" ],
+      "performanceStages": [ "main.action.options.shortcuts.expand", "main.action.options.shortcuts.collapse", "main.action.options.taskbar.auto-hide", "main.action.options.taskbar.show", "main.action.options.taskbar-settings", "main.action.options.display-settings", "main.action.options.notifications", "main.action.options.startup.enable", "main.action.options.startup.disable", "main.action.options.pin.unpin", "main.action.options.pin.pin", "main.action.options.theme.light", "main.action.options.theme.dark", "main.action.options.overlay.enable", "main.action.options.overlay.disable", "overlay.inspect.options" ]
+    },
+    {
+      "id": "favorites",
+      "editions": [ "Paid", "Free" ],
+      "mainControls": [ "Favorite output shortcuts", "Favorite microphone shortcuts" ],
+      "overlayControls": [],
+      "journalActions": [],
+      "performanceStages": [ "main.action.audio.favorite.add", "main.action.audio.favorite.remove" ]
+    },
+    {
+      "id": "shortcuts",
+      "editions": [ "Paid", "Free" ],
+      "mainControls": [ "Set shortcut for Show or hide WinQuickSwitch", "Unset shortcut for Show or hide WinQuickSwitch" ],
+      "overlayControls": [],
+      "journalActions": [],
+      "performanceStages": [ "main.action.options.shortcuts.expand", "main.action.options.shortcuts.collapse" ],
+      "contractTests": [ "Widget shortcuts validate and format supported chords", "Global hotkeys register and resolve actions", "Global hotkeys register and resolve the overlay action" ]
+    },
+    {
+      "id": "tray",
+      "editions": [ "Paid", "Free" ],
+      "mainControls": [],
+      "overlayControls": [],
+      "journalActions": [],
+      "performanceExclusions": [ "Native tray callbacks are validated by contracts; tray-menu timing remains attended." ],
+      "contractTests": [ "Tray callbacks decode version 4 notifications" ]
+    },
+    {
+      "id": "persistence",
+      "editions": [ "Paid", "Free" ],
+      "mainControls": [],
+      "overlayControls": [],
+      "journalActions": [],
+      "performanceExclusions": [ "Persistence is exercised throughout the timed workload and validated by dedicated contracts." ],
+      "contractTests": [ "Widget settings persist without dependencies", "Overlay workspace settings normalize and round trip", "Floating widget settings persist" ]
+    },
+    {
+      "id": "profiles",
+      "editions": [ "Paid" ],
+      "mainControls": [ "Profile name", "Save current setup", "Apply", "Edit", "Copy", "Delete" ],
+      "overlayControls": [ "Open Profiles" ],
+      "journalActions": [ "profiles.load", "profiles.save" ],
+      "performanceStages": [ "main.action.profiles.edit", "main.action.profiles.cancel-edit", "main.action.profiles.apply", "main.action.profiles.undo", "main.action.profiles.copy", "overlay.inspect.profiles" ]
+    },
+    {
+      "id": "about",
+      "editions": [ "Paid", "Free" ],
+      "mainControls": [ "Open End User License Agreement", "Open privacy policy" ],
+      "overlayControls": [ "Open About" ],
+      "journalActions": [],
+      "performanceStages": [ "main.action.about.eula.open", "main.action.about.eula.close", "main.action.about.privacy.open", "main.action.about.privacy.close", "overlay.inspect.about" ]
+    },
+    {
+      "id": "workspace",
+      "editions": [ "Paid", "Free" ],
+      "mainControls": [ "Open display controls", "Open audio controls", "Open connected devices", "Open widget options", "Open About and disclaimer" ],
+      "overlayControls": [ "Add quick-access widget", "Back to workspace" ],
+      "journalActions": [],
+      "performanceStages": [ "main.navigate.display", "main.navigate.audio", "main.navigate.devices", "main.navigate.options", "main.navigate.about", "main.navigate.display-refresh", "main.navigate.audio-refresh", "main.navigate.devices-refresh", "overlay.back-to-workspace" ]
+    }
+  ]
+}

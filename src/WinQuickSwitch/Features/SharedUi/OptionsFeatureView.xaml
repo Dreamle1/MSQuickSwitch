@@ -1,0 +1,336 @@
+<UserControl x:Class="WinQuickSwitch.Features.SharedUi.OptionsFeatureView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:shared="clr-namespace:WinQuickSwitch.Features.SharedUi"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DesignWidth="720"
+             d:DesignHeight="860"
+             AutomationProperties.Name="Options controls">
+  <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+                VerticalScrollBarVisibility="Auto"
+                Focusable="False">
+    <StackPanel Margin="2">
+      <shared:SharedRefreshErrorBanner />
+      <TextBlock FontSize="17"
+                 FontWeight="SemiBold"
+                 Text="{Binding Title, FallbackValue=Options}" />
+      <TextBlock Margin="0,5,0,0"
+                 Foreground="{DynamicResource SecondaryTextBrush}"
+                 Text="{Binding Description}"
+                 TextWrapping="Wrap" />
+
+      <TextBlock Margin="0,14,0,0"
+                 FontSize="14"
+                 FontWeight="SemiBold"
+                 Text="Shortcuts" />
+      <Expander x:Name="GeneralShortcutsExpander"
+                Margin="0,6,0,0"
+                Header="Keyboard shortcuts"
+                IsExpanded="False"
+                AutomationProperties.Name="Show or hide keyboard shortcuts">
+        <StackPanel Margin="0,8,0,0">
+          <TextBlock Foreground="{DynamicResource SecondaryTextBrush}"
+                     Text="Choose Set, then press the desired key combination."
+                     TextWrapping="Wrap" />
+          <WrapPanel Margin="0,8,0,0">
+            <TextBlock Text="Volume change per shortcut (%)" VerticalAlignment="Center" Margin="0,0,12,0" />
+            <ComboBox MinWidth="72" ItemsSource="{Binding AudioVolumeSteps}"
+                      SelectedItem="{Binding AudioVolumeStepPercent, Mode=TwoWay}"
+                      AutomationProperties.Name="Volume shortcut step percent" />
+          </WrapPanel>
+          <TextBox x:Name="ShortcutSearchBox"
+                   Margin="0,8,0,0"
+                   Text="{Binding ShortcutSearchText, UpdateSourceTrigger=PropertyChanged}"
+                   ToolTip="Search command names, categories or assigned shortcuts"
+                   AutomationProperties.Name="Search command shortcuts" />
+          <TextBlock Margin="0,5,0,0"
+                     Text="{Binding ShortcutSearchSummary}"
+                     Foreground="{DynamicResource SecondaryTextBrush}"
+                     AutomationProperties.LiveSetting="Polite" />
+          <ItemsControl Margin="0,8,0,0"
+                        ItemsSource="{Binding ShortcutSections}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Expander Header="{Binding Title}"
+                          Margin="0,0,0,8"
+                          IsExpanded="{Binding IsExpanded, Mode=TwoWay}"
+                          Visibility="{Binding Visibility}"
+                          AutomationProperties.Name="{Binding AccessibleName}">
+                  <ItemsControl Margin="0,8,0,0" ItemsSource="{Binding Rows}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate>
+                <Grid Margin="0,0,0,7" Visibility="{Binding SearchVisibility}">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="180" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <TextBlock Margin="0,0,10,0"
+                             VerticalAlignment="Center"
+                             Text="{Binding Label}"
+                             TextTrimming="CharacterEllipsis"
+                             ToolTip="{Binding Label}" />
+                  <TextBox Grid.Column="1"
+                           Margin="0,0,6,0"
+                           IsReadOnly="True"
+                           Text="{Binding ShortcutText, Mode=OneWay}"
+                           ToolTip="{Binding EditorHelpText}"
+                           AutomationProperties.Name="{Binding EditorName}" />
+                  <Button Grid.Column="2"
+                          MinWidth="72"
+                          MinHeight="40"
+                          Margin="0,0,6,0"
+                          Command="{Binding CaptureCommand}"
+                          Content="Set"
+                          ToolTip="Capture a new shortcut"
+                          AutomationProperties.Name="{Binding Label, StringFormat=Set shortcut for {0}}" />
+                  <Button Grid.Column="3"
+                          MinWidth="72"
+                          MinHeight="40"
+                          Command="{Binding ClearCommand}"
+                          Content="Unset"
+                          ToolTip="Clear this shortcut"
+                          AutomationProperties.Name="{Binding Label, StringFormat=Unset shortcut for {0}}" />
+                </Grid>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </Expander>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Expander>
+
+      <Expander Margin="0,8,0,0"
+                Header="Favorite output shortcuts"
+                IsExpanded="{Binding AreOutputFavoritesExpanded}">
+        <StackPanel Margin="0,8,0,0">
+          <TextBlock Foreground="{DynamicResource SecondaryTextBrush}"
+                     Text="{Binding OutputFavoritesEmptyMessage}"
+                     TextWrapping="Wrap" />
+          <ItemsControl ItemsSource="{Binding OutputFavoriteRows}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Grid Margin="0,0,0,7">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="130" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <TextBlock Margin="0,0,8,0"
+                             VerticalAlignment="Center"
+                             Text="{Binding Name}"
+                             TextTrimming="CharacterEllipsis"
+                             ToolTip="{Binding Name}" />
+                  <TextBox Grid.Column="1"
+                           Margin="0,0,6,0"
+                           Text="{Binding Alias, UpdateSourceTrigger=LostFocus}"
+                           AutomationProperties.Name="{Binding Name, StringFormat=Alias for {0}}" />
+                  <Button Grid.Column="2"
+                          MinWidth="40"
+                          MinHeight="40"
+                          Margin="0,0,4,0"
+                          Command="{Binding MoveUpCommand}"
+                          Content="↑"
+                          ToolTip="Move favorite up"
+                          AutomationProperties.Name="Move favorite up" />
+                  <Button Grid.Column="3"
+                          MinWidth="40"
+                          MinHeight="40"
+                          Margin="0,0,4,0"
+                          Command="{Binding MoveDownCommand}"
+                          Content="↓"
+                          ToolTip="Move favorite down"
+                          AutomationProperties.Name="Move favorite down" />
+                  <Button Grid.Column="4"
+                          MinWidth="72"
+                          MinHeight="40"
+                          Command="{Binding CaptureShortcutCommand}"
+                          Content="{Binding ShortcutText, FallbackValue=Set}"
+                          ToolTip="Set this favorite shortcut"
+                          AutomationProperties.Name="{Binding Name, StringFormat=Set shortcut for favorite output {0}}" />
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Expander>
+
+      <Expander Margin="0,8,0,0"
+                Header="Favorite microphone shortcuts"
+                IsExpanded="{Binding AreInputFavoritesExpanded}">
+        <StackPanel Margin="0,8,0,0">
+          <TextBlock Foreground="{DynamicResource SecondaryTextBrush}"
+                     Text="{Binding InputFavoritesEmptyMessage}"
+                     TextWrapping="Wrap" />
+          <ItemsControl ItemsSource="{Binding InputFavoriteRows}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Grid Margin="0,0,0,7">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="130" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <TextBlock Margin="0,0,8,0"
+                             VerticalAlignment="Center"
+                             Text="{Binding Name}"
+                             TextTrimming="CharacterEllipsis"
+                             ToolTip="{Binding Name}" />
+                  <TextBox Grid.Column="1"
+                           Margin="0,0,6,0"
+                           Text="{Binding Alias, UpdateSourceTrigger=LostFocus}"
+                           AutomationProperties.Name="{Binding Name, StringFormat=Alias for {0}}" />
+                  <Button Grid.Column="2"
+                          MinWidth="40"
+                          MinHeight="40"
+                          Margin="0,0,4,0"
+                          Command="{Binding MoveUpCommand}"
+                          Content="↑"
+                          ToolTip="Move favorite up"
+                          AutomationProperties.Name="Move favorite up" />
+                  <Button Grid.Column="3"
+                          MinWidth="40"
+                          MinHeight="40"
+                          Margin="0,0,4,0"
+                          Command="{Binding MoveDownCommand}"
+                          Content="↓"
+                          ToolTip="Move favorite down"
+                          AutomationProperties.Name="Move favorite down" />
+                  <Button Grid.Column="4"
+                          MinWidth="72"
+                          MinHeight="40"
+                          Command="{Binding CaptureShortcutCommand}"
+                          Content="{Binding ShortcutText, FallbackValue=Set}"
+                          ToolTip="Set this favorite shortcut"
+                          AutomationProperties.Name="{Binding Name, StringFormat=Set shortcut for favorite microphone {0}}" />
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Expander>
+
+      <TextBlock Margin="0,14,0,0"
+                 FontSize="14"
+                 FontWeight="SemiBold"
+                 Text="Taskbar" />
+      <TextBlock Margin="0,4,0,0"
+                 Foreground="{DynamicResource SecondaryTextBrush}"
+                 Text="{Binding TaskbarDescription, FallbackValue=Show the taskbar or enable Windows auto-hide.}"
+                 TextWrapping="Wrap" />
+      <WrapPanel Margin="0,8,0,0">
+        <Button Style="{StaticResource ActionButton}"
+                Command="{Binding ShowTaskbarCommand}"
+                Content="Show taskbar" />
+        <Button Style="{StaticResource ActionButton}"
+                Command="{Binding AutoHideTaskbarCommand}"
+                Content="Auto-hide taskbar" />
+        <Button Style="{StaticResource ActionButton}"
+                Command="{Binding OpenTaskbarSettingsCommand}"
+                Content="Taskbar settings" />
+        <Button Style="{StaticResource ActionButton}"
+                Command="{Binding OpenDisplaySettingsCommand}"
+                Content="Display settings" />
+        <Button Style="{StaticResource ActionButton}"
+                Command="{Binding OpenNotificationsSettingsCommand}"
+                Content="Notifications" />
+      </WrapPanel>
+      <TextBlock Margin="0,2,0,0"
+                 Foreground="{DynamicResource SecondaryTextBrush}"
+                 Text="{Binding TaskbarStatusMessage}"
+                 TextWrapping="Wrap" />
+
+      <TextBlock Margin="0,14,0,0"
+                 FontSize="14"
+                 FontWeight="SemiBold"
+                 Text="Application" />
+      <CheckBox Margin="0,8,0,0"
+                IsChecked="{Binding IsDarkTheme, Mode=TwoWay}"
+                Command="{Binding SetDarkThemeCommand}"
+                CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=IsChecked}"
+                Content="Use dark theme" />
+      <CheckBox Margin="0,8,0,0"
+                IsChecked="{Binding IsOverlayEnabled, Mode=TwoWay}"
+                Command="{Binding SetOverlayEnabledCommand}"
+                CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=IsChecked}"
+                Content="Use the dimmed workspace overlay" />
+      <CheckBox Margin="0,8,0,0"
+                IsChecked="{Binding IsMainWindowPinned, Mode=TwoWay}"
+                Command="{Binding SetMainWindowPinnedCommand}"
+                CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=IsChecked}"
+                Content="Pin the main window open" />
+      <CheckBox Margin="0,8,0,0"
+                IsChecked="{Binding IsStartWithWindowsEnabled, Mode=TwoWay}"
+                Command="{Binding SetStartWithWindowsCommand}"
+                CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=IsChecked}"
+                Content="Start WinQuickSwitch when I sign in" />
+
+      <Grid Margin="0,12,0,0">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="180" />
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="60" />
+        </Grid.ColumnDefinitions>
+        <TextBlock VerticalAlignment="Center" Text="Overlay dimming" />
+        <Slider Grid.Column="1"
+                Margin="8,0"
+                Minimum="0"
+                Maximum="0.85"
+                SmallChange="0.05"
+                LargeChange="0.1"
+                Value="{Binding OverlayDimmingOpacity, Mode=TwoWay}"
+                AutomationProperties.Name="Overlay dimming"
+                AutomationProperties.HelpText="Adjust how much the background is dimmed while the workspace is open." />
+        <TextBlock Grid.Column="2"
+                   HorizontalAlignment="Right"
+                   VerticalAlignment="Center"
+                   Text="{Binding OverlayDimmingPercent}" />
+      </Grid>
+      <Grid Margin="0,8,0,0">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="180" />
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="80" />
+        </Grid.ColumnDefinitions>
+        <TextBlock VerticalAlignment="Center" Text="Inspector width" />
+        <Slider Grid.Column="1"
+                Margin="8,0"
+                Minimum="520"
+                Maximum="900"
+                SmallChange="20"
+                LargeChange="80"
+                Value="{Binding InspectorWidth, Mode=TwoWay}"
+                AutomationProperties.Name="Inspector width"
+                AutomationProperties.HelpText="Adjust the width of the complete feature inspector." />
+        <TextBlock Grid.Column="2"
+                   HorizontalAlignment="Right"
+                   VerticalAlignment="Center"
+                   Text="{Binding InspectorWidthText}" />
+      </Grid>
+
+      <WrapPanel Margin="0,14,0,0">
+        <Button Style="{StaticResource ActionButton}"
+                Command="{Binding ResetShortcutsCommand}"
+                Content="Reset shortcuts" />
+        <Button Style="{StaticResource ActionButton}"
+                Command="{Binding RestoreDefaultsCommand}"
+                Content="Restore defaults" />
+      </WrapPanel>
+
+      <TextBlock Margin="0,8,0,0"
+                 Foreground="{DynamicResource SecondaryTextBrush}"
+                 Text="{Binding StatusMessage, FallbackValue=Settings are saved automatically.}"
+                 TextWrapping="Wrap"
+                 AutomationProperties.LiveSetting="Polite" />
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.IO;
 using System.Runtime.InteropServices;
 using WinQuickSwitch.Features.Display;
 
@@ -13,17 +14,38 @@ public sealed class WindowsDisplayModeService : IDisplayModeService
     internal const uint SdcApply = 0x00000080;
 
     private readonly IDisplayConfigNative _native;
+    private readonly IExtendedDisplayLayoutRestorer _layoutRestorer;
+    private readonly IDisplaySwitchProcess _displaySwitchProcess;
+    private readonly string _displaySwitchPath;
 
     public WindowsDisplayModeService()
-        : this(NativeDisplayConfig.Instance)
+        : this(
+            NativeDisplayConfig.Instance,
+            new WindowsExtendedDisplayLayoutRestorer(),
+            new HiddenProcessRunner(),
+            GetDefaultDisplaySwitchPath())
     {
     }
 
-    internal WindowsDisplayModeService(IDisplayConfigNative native)
+    internal WindowsDisplayModeService(
+        IDisplayConfigNative native,
+        IExtendedDisplayLayoutRestorer layoutRestorer,
+        IDisplaySwitchProcess displaySwitchProcess,
+        string displaySwitchPath)
     {
         ArgumentNullException.ThrowIfNull(native);
+        ArgumentNullException.ThrowIfNull(layoutRestorer);
+        ArgumentNullException.ThrowIfNull(displaySwitchProcess);
+        ArgumentException.ThrowIfNullOrWhiteSpace(displaySwitchPath);
+
         _native = native;
+        _layoutRestorer = layoutRestorer;
+        _displaySwitchProcess = displaySwitchProcess;
+        _displaySwitchPath = displaySwitchPath;
     }
+
+    public bool CanRestoreExtendedLayout =>
+        _layoutRestorer.HasCapturedLayout;
 
     public async Task<DisplayModeResult> ApplyAsync(
         DisplayMode mode,
@@ -34,9 +56,35 @@ public sealed class WindowsDisplayModeService : IDisplayModeService
 
         try
         {
-            int errorCode = await Task.Run(
-                () => _native.Apply(flags),
-                CancellationToken.None);
+            if (mode != DisplayMode.Extend)
+            {
+                await RunOffCallingThread(
+                    _layoutRestorer.TryCaptureCurrent,
+                    CancellationToken.None);
+                cancellationToken.ThrowIfCancellationRequested();
+            }
+
+            int errorCode;
+
+            if (mode == DisplayMode.Extend)
+            {
+                int? restoreResult = await RunOffCallingThread(
+                    _layoutRestorer.ApplyCaptured,
+                    CancellationToken.None);
+
+                errorCode = restoreResult == 0
+                    ? 0
+                    : await _displaySwitchProcess.RunAsync(
+                        _displaySwitchPath,
+                        "/extend",
+                        cancellationToken);
+            }
+            else
+            {
+                errorCode = await RunOffCallingThread(
+                    () => _native.Apply(flags),
+                    CancellationToken.None);
+            }
             cancellationToken.ThrowIfCancellationRequested();
 
             return errorCode == 0
@@ -57,6 +105,8 @@ public sealed class WindowsDisplayModeService : IDisplayModeService
         catch (Exception exception) when (
             exception is Win32Exception or
                 InvalidOperationException or
+                IOException or
+                UnauthorizedAccessException or
                 EntryPointNotFoundException or
                 DllNotFoundException)
         {
@@ -78,6 +128,22 @@ public sealed class WindowsDisplayModeService : IDisplayModeService
                 mode,
                 "Unknown display mode."),
         };
+
+    private static string GetDefaultDisplaySwitchPath()
+    {
+        string systemDirectory =
+            Environment.GetFolderPath(Environment.SpecialFolder.System);
+        return Path.Combine(systemDirectory, "DisplaySwitch.exe");
+    }
+
+    private static Task<T> RunOffCallingThread<T>(
+        Func<T> action,
+        CancellationToken cancellationToken) =>
+        Task.Factory.StartNew(
+            action,
+            cancellationToken,
+            TaskCreationOptions.LongRunning,
+            TaskScheduler.Default);
 }
 
 internal interface IDisplayConfigNative
