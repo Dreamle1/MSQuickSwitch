@@ -67,6 +67,12 @@ the experiment. The proposal, provider risks, privacy boundaries, build gating,
 performance budgets, testing, and rollout gates are documented in the
 [Free Lite advertising plan](FREE_LITE_ADVERTISING_PLAN.md).
 
+The first monetization experiment should be the simpler first-party
+[Free Lite to Paid upgrade placement](FREE_TO_PAID_UPGRADE_PLAN.md): bundled
+local content, no advertising SDK or click tracking, and a Microsoft Store
+handoff only after an explicit user action. External advertising remains
+deferred until this house placement is evaluated.
+
 The current no-network acceptance criterion remains authoritative until a
 provider passes the WPF compatibility, embedded-format, privacy, policy, and
 performance gates. A future approved ad-enabled Free Lite build would receive

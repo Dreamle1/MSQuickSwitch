@@ -13,6 +13,13 @@ The recommendation is to approve **Phase A only**: a disposable compatibility
 and provider-policy spike. Liftoff Monetize/Vungle is a candidate to evaluate,
 not an approved production dependency.
 
+Before Phase A, implement and evaluate the simpler first-party
+[Free Lite to Paid upgrade placement](FREE_TO_PAID_UPGRADE_PLAN.md). That house
+promotion uses bundled content and a user-initiated Microsoft Store link, with
+no advertising SDK or background network activity. External-provider work
+remains paused until the house-placement result shows whether further
+monetization complexity is justified.
+
 Three facts make a provider commitment premature:
 
 1. Liftoff's current Windows SDK documentation lists Win32, WinUI 3, and
@@ -287,6 +294,18 @@ provider failure, and 20-cycle retained-resource trends. Paid performance must
 remain unchanged and still pass its current gates.
 
 ## 8. Rollout phases
+
+### Phase 0 - first-party Paid upgrade placement
+
+- Plan and validate one static **Upgrade to Paid** card in the normal Free Lite
+  main window.
+- Use bundled content, no tracking, no provider, and no background network
+  activity; open the Paid Microsoft Store listing only after a user click.
+- Measure accessibility, performance, user confusion, and aggregate Paid Store
+  acquisition trends before adding third-party risk.
+
+Exit: decide whether the house placement is sufficient. Do not begin the
+external-provider spike merely because the placement has shipped.
 
 ### Phase A - provider/WPF compatibility spike
 
