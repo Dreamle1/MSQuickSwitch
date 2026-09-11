@@ -243,6 +243,257 @@ recorded.
   enabled and disabled.
 - Verify hidden-state CPU, timers, handles, threads, and processes are unchanged.
 
+## Luna implementation stages
+
+Implement these stages sequentially after this planning PR is approved. Use a
+new implementation branch from the approved base; do not implement production
+changes on the planning branch. Each stage is one reviewable commit, must keep
+all earlier tests green, and must stop at its exit gate before the next stage
+begins. Later stages may adjust files owned by earlier stages only when their
+new responsibility requires it.
+
+### Stage 0 - human product-identity checkpoint
+
+Owner: product owner; no Luna code changes.
+
+- Copy the Paid edition's 12-character Product ID from Partner Center.
+- Verify both the Store URI and browser URL open the live Paid listing.
+- Confirm the Paid listing accurately describes the proposed benefits.
+- Approve the card copy and confirm the experiment is Free Lite only.
+
+Exit: record the verified public Product ID and approved copy in the issue or
+implementation task. Luna must never guess the ID from the package identity,
+package family name, or application ID. Stages 1 and 2 may be developed with a
+fake value, but Stage 3 cannot complete without this checkpoint.
+
+### Stage 1 - distribution and build gating
+
+Responsibility: establish a safe build identity before any promotion behavior
+exists.
+
+Primary ownership:
+
+- `src/WinQuickSwitch/Features/Product/ProductConfiguration.cs`
+- `src/WinQuickSwitch/WinQuickSwitch.csproj`
+- `src/WinQuickSwitch/Properties/PublishProfiles/Lite.pubxml`
+- `src/WinQuickSwitch/Properties/PublishProfiles/Portable.pubxml`
+- `tools/Build-StorePackage.ps1`
+- product-configuration tests in `tests/WinQuickSwitch.Tests/Program.cs`
+
+Add an explicit `Lite`, `Portable`, or `Store` distribution to product
+configuration and a build-time promotion flag. The only eligible combination
+is `Free + Lite + promotion enabled`. Build validation must reject promotion
+enablement for Paid, Portable, or Store. Do not render UI or add Store-launch
+behavior in this stage.
+
+Required proof:
+
+- Free Lite can be eligible when explicitly enabled.
+- Free Portable, Free Store, and every Paid build are ineligible.
+- Invalid combinations fail build/configuration validation.
+- Existing Free/Paid feature and release-artifact tests remain green.
+
+Exit: distribution can be observed and tested without inspecting an artifact's
+file name. Suggested commit: `feat: add Free Lite distribution gating`.
+
+### Stage 2 - local promotion state and persistence
+
+Responsibility: implement deterministic promotion eligibility and user choice,
+without WPF UI or operating-system launching.
+
+Primary ownership:
+
+- new product-owned promotion models under
+  `src/WinQuickSwitch/Features/Product/`
+- `src/WinQuickSwitch/Features/Widget/WidgetSettings.cs`
+- `src/WinQuickSwitch/Features/Widget/JsonWidgetSettingsStore.cs`
+- focused state/persistence tests in `tests/WinQuickSwitch.Tests/Program.cs`
+
+Add `ShowPaidUpgradeSuggestion` and `PaidUpgradeDismissedUntilUtc` as
+backward-compatible local settings. Implement the 30-day dismissal with an
+injected clock and a promotion model that depends only on product
+configuration, local settings, and time. It must not depend on the shared
+quick-switch coordinator or hardware/application inventories.
+
+Required proof:
+
+- Dismissal persists, expires after 30 days, and tolerates clock boundaries.
+- Permanent disable survives restart; restore changes only promotion state.
+- Old settings migrate without losing unrelated values.
+- The saved JSON contains no new device, endpoint, profile, shortcut, session,
+  or hardware data.
+
+Exit: all visibility decisions are unit-testable without constructing a WPF
+window. Suggested commit: `feat: persist paid upgrade suggestion state`.
+
+### Stage 3 - isolated Store launcher
+
+Responsibility: add a user-initiated, allowlisted handoff boundary.
+
+Primary ownership:
+
+- new `IStoreProductLauncher` under `src/WinQuickSwitch/Features/Product/`
+- new Windows implementation under
+  `src/WinQuickSwitch/Platform/Windows/Store/`
+- a fake implementation for unit and Sandbox tests
+- focused launcher tests in `tests/WinQuickSwitch.Tests/Program.cs`
+
+The production implementation uses only the verified Product ID, tries the
+`ms-windows-store` URI after an explicit command, and returns a typed failure
+that permits the browser fallback. It must never probe Store availability at
+startup, add tracking parameters, or accept arbitrary URLs from UI state.
+
+Required proof:
+
+- The fake records the exact Product ID without launching another process.
+- Store and fallback URIs are exact and contain no dynamic user/app data.
+- Both launch failures are recoverable and leave the app usable.
+- Nothing calls the launcher during construction, startup, refresh, or hide.
+
+Exit: the real launcher passes an attended click-through to the correct Paid
+listing; automated tests use only the fake. Suggested commit:
+`feat: add isolated Store product launcher`.
+
+### Stage 4 - main-window upgrade card
+
+Responsibility: render the approved card in the one authorized surface.
+
+Primary ownership:
+
+- new `PaidUpgradePromotionView.xaml` and code-behind under
+  `src/WinQuickSwitch/Features/Product/`
+- the normal-window host in `src/WinQuickSwitch/MainWindow.xaml`
+- composition/lifecycle changes in `src/WinQuickSwitch/MainWindow.xaml.cs`
+  or `src/WinQuickSwitch/MainWindow.SharedUi.cs`
+- focused UI contract tests
+
+Add a third, auto-sized main-window grid row below the feature viewer and host
+the card there. Keep the card outside reusable feature views. Bind it to the
+Stage 2 model and Stage 3 launcher, and remove it from layout when ineligible or
+dismissed. The CTA and **Not now** are the only actions.
+
+Required proof:
+
+- Exactly one card appears in eligible Free Lite.
+- It is absent from Paid, Free Portable, Free Store, overlay, widgets, tray,
+  notifications, Profiles, and startup/error dialogs.
+- It does not steal initial focus or reconstruct on refresh/theme changes.
+- Keyboard navigation, screen-reader names, text wrapping, light/dark/high
+  contrast, narrow layout, and 100/150/200 percent DPI are usable.
+
+Exit: fake-launcher UI tests pass and screenshots show no overflow or feature
+content regression. Suggested commit: `feat: add Free Lite paid upgrade card`.
+
+### Stage 5 - Options preference integration
+
+Responsibility: expose predictable disable/restore controls without leaking the
+promotion into other surfaces.
+
+Primary ownership:
+
+- `src/WinQuickSwitch/Features/SharedUi/OptionsFeatureView.xaml`
+- `src/WinQuickSwitch/Features/SharedUi/OptionsFeatureViewModel.cs`
+- `src/WinQuickSwitch/Features/SharedUi/QuickSwitchState.cs`
+- the smallest required command/composition changes in
+  `src/WinQuickSwitch/MainWindow.SharedUi.cs`
+- focused Options/state tests
+
+Add **Show Paid upgrade suggestion** only for the eligible Free Lite normal
+main-window Options surface. The shared view factory already knows its surface;
+use that surface context so the preference does not appear in overlay or
+floating Options instances. Do not route promotion state through display,
+audio, device, or profile refreshes.
+
+Required proof:
+
+- Disable hides the card immediately and persists indefinitely.
+- Re-enable clears the permanent disable while preserving a still-active
+  temporary dismissal; it must not silently reset the 30-day choice.
+- The setting is absent from all excluded products and surfaces.
+- Updating it does not reconstruct feature views or affect widget geometry.
+
+Exit: the behavior is consistent from click through restart. Suggested commit:
+`feat: add paid upgrade option control`.
+
+### Stage 6 - Sandbox E2E and visual coverage
+
+Responsibility: make every approved and excluded surface observable without
+opening the live Store.
+
+Primary ownership:
+
+- `src/WinQuickSwitch/E2E/SandboxE2eRuntime.cs`
+- `tools/WindowsSandbox/FeatureCoverage.json`
+- `tools/WindowsSandbox/Run-SandboxUiSuite.ps1`
+- `tools/WindowsSandbox/Launch-WinQuickSwitchSandbox.ps1`
+- Sandbox contract tests
+
+Teach Sandbox scenarios the distribution and promotion flags, inject the fake
+launcher, and cover visible, clicked, dismissed, restarted, disabled, and
+restored states. Capture Free Lite light/dark screenshots plus absence evidence
+for Paid, Free Portable, Free Store, overlay, and widgets. Automated runs must
+never open Microsoft Store or a browser.
+
+Exit: the complete Sandbox suite passes and produces reviewable screenshots for
+both presence and absence contracts. Suggested commit:
+`test: cover Free Lite promotion in Sandbox`.
+
+### Stage 7 - performance, privacy, and binary gates
+
+Responsibility: prove the local card keeps the zero-background-cost contract.
+
+Primary ownership:
+
+- `tools/WindowsSandbox/Run-SandboxPerformanceComparison.ps1`
+- `tools/WindowsSandbox/Test-PerformanceAnalysis.ps1`
+- `tools/Test-ReleaseArtifacts.ps1`
+- the minimum architecture/privacy documentation updates required by results
+
+Compare otherwise identical enabled and disabled Free Lite builds over the
+20-run protocol. Inspect pre-click connections, settings, binaries,
+dependencies, handles, threads, timers, child processes, idle CPU, startup, and
+retained memory. Add artifact checks that excluded builds cannot enable or
+route to the card; source-string absence alone is not sufficient if shared code
+is intentionally compiled into multiple outputs.
+
+Exit: every budget in this plan passes, pre-click additional network activity
+is exactly zero, and Paid/excluded Free outputs are proven behaviorally
+promotion-free. Suggested commit:
+`test: add promotion performance and privacy gates`.
+
+### Stage 8 - attended validation and limited release readiness
+
+Responsibility: prepare evidence for the human rollout decision, not silently
+publish the feature.
+
+Primary ownership:
+
+- release checklist and implementation log
+- Store/privacy copy only after legal/product review
+- versioned artifact evidence generated by the existing release tools
+
+Run the real Store handoff once on supported Windows, validate offline/failure
+behavior, repeat the theme/DPI/accessibility checks, and build every Free/Paid
+and Lite/Portable/Store artifact. Produce a promotion-disabled rollback build.
+Do not publish to users without explicit product-owner approval.
+
+Exit: H0-H3 evidence and every go/no-go gate are ready for review. Suggested
+commit: `docs: record Free Lite house placement validation`.
+
+### Luna execution rules
+
+- Work on one numbered stage at a time and report its commit, changed files,
+  tests, and remaining human checks before starting the next.
+- Never combine Stage 1 gating with UI work; excluded-build safety must be
+  reviewable first.
+- Never use a guessed Store ID or open the real Store from automated tests.
+- Do not introduce `IAdvertisingService`, an ad SDK, WebView2, tracking, remote
+  content, or background refresh as part of these stages.
+- Preserve unrelated user changes and do not rewrite shared files outside the
+  listed responsibility without explaining why.
+- A failed exit gate stops the sequence. Fix and rerun that stage before
+  continuing.
+
 ## Rollout
 
 ### H0 - identity and copy readiness
