@@ -58,6 +58,28 @@ scheduled profile behavior is also Paid-only.
 - Public standalone Lite/Portable artifacts are Free-only until a separate
   licensing mechanism exists for Paid artifacts.
 
+### Proposed future Free Lite monetization
+
+Advertising is being considered only as a future, narrowly scoped Free Lite
+experiment. It is **not implemented or enabled**. Paid must remain completely
+ad-free; Free Portable and Microsoft Store packages also remain ad-free during
+the experiment. The proposal, provider risks, privacy boundaries, build gating,
+performance budgets, testing, and rollout gates are documented in the
+[Free Lite advertising plan](FREE_LITE_ADVERTISING_PLAN.md).
+
+The first monetization experiment should be the simpler first-party
+[Free Lite to Paid upgrade placement](FREE_TO_PAID_UPGRADE_PLAN.md): bundled
+local content, no advertising SDK or click tracking, and a Microsoft Store
+handoff only after an explicit user action. External advertising remains
+deferred until this house placement is evaluated.
+
+The current no-network acceptance criterion remains authoritative until a
+provider passes the WPF compatibility, embedded-format, privacy, policy, and
+performance gates. A future approved ad-enabled Free Lite build would receive
+only a disclosed, provider-specific network exception while its normal main
+window is visible. Paid and every ad-disabled build would retain the no-network
+requirement.
+
 ## Goals
 
 1. Reach the most-used controls in one or two clicks.
